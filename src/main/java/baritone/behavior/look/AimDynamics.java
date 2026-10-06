@@ -135,6 +135,20 @@ public final class AimDynamics {
     }
 
     /**
+     * How far apart two rotations are, in degrees: the short way around on yaw, and the larger of the two
+     * axes, so a movement counts as much as a turn.
+     * <p>
+     * This is how "is this still the same thing I was aiming at, or has it genuinely changed?" is answered,
+     * both for the spin-up and for the reaction pause.
+     */
+    public static float separation(Rotation a, Rotation b) {
+        return Math.max(
+                Math.abs(Rotation.normalizeYaw(a.getYaw() - b.getYaw())),
+                Math.abs(a.getPitch() - b.getPitch())
+        );
+    }
+
+    /**
      * One tick of the wandering offsets the aim adds so it is never perfectly still: a low pass toward the
      * freshly drawn noise, so the offset drifts instead of shivering.
      * <p>

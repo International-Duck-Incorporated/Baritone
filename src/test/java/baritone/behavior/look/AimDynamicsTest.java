@@ -207,6 +207,17 @@ public class AimDynamicsTest {
     }
 
     @Test
+    public void distanceBetweenRotationsIsMeasuredTheShortWay() {
+        assertEquals(20.0f, AimDynamics.separation(new Rotation(170f, 0f), new Rotation(-170f, 0f)), 0.01f);
+        assertEquals(180.0f, AimDynamics.separation(new Rotation(90f, 0f), new Rotation(-90f, 0f)), 0.01f);
+        assertEquals(0.0f, AimDynamics.separation(new Rotation(-45f, 0f), new Rotation(315f, 0f)), 0.01f);
+        // a movement counts as much as a turn: the larger of the two axes
+        assertEquals(60.0f, AimDynamics.separation(new Rotation(0f, 0f), new Rotation(10f, 60f)), 0.01f);
+        // pitch is not cyclic: only yaw wraps, so a pitch difference is just a difference
+        assertEquals(145.0f, AimDynamics.separation(new Rotation(0f, -100f), new Rotation(0f, 45f)), 0.01f);
+    }
+
+    @Test
     public void theWanderingOffsetDriftsInsteadOfShivering() {
         // Fed a constant direction of noise the offset should approach it smoothly, and the gain belongs
         // to the caller rather than being baked into the smoothing.

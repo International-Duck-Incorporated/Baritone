@@ -100,6 +100,13 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
      */
     private Rotation glanceCamera;
 
+    /**
+     * The rotation the aim was asked for last tick, used to notice a genuine change of direction. While
+     * Baritone is pathing the target is re-set every tick, so "has the target changed?" is not the same
+     * question as "is the hand aiming somewhere else now?".
+     */
+    private Rotation lastWanted;
+
     public LookBehavior(Baritone baritone) {
         super(baritone);
         this.processor = new AimProcessor(baritone.getPlayerContext());
@@ -132,6 +139,7 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
             // target starts from wherever the player is actually looking instead of from a stale angle.
             this.aimRotation = null;
             this.aimAge = 0;
+            this.lastWanted = null;
             this.reaction.clear();
             // Nothing is being aimed at, so this is where a person would get bored and have a look about.
             this.updateIdleLook(event.getState());
@@ -155,7 +163,12 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
                 } else {
                     // On a fresh target the hand is wherever the player is currently looking.
                     final Rotation from = this.aimRotation != null ? this.aimRotation : this.prevRotation;
-                    if (this.aimRotation == null) {
+                    if (this.aimRotation == null || this.isNewDirection(wanted)) {
+                        // Either there is nothing to continue from, or the thing being aimed at has genuinely
+                        // changed direction rather than drifted a little. Both are the start of a turn, and a
+                        // turn spins up: without this, a reversal half way along a path - the turn other
+                        // players are most likely to be watching - opened at the full speed ceiling, because
+                        // the target is re-set every tick while pathing and the hand never looked fresh.
                         this.aimAge = 0;
                     }
                     if (standingStill() && this.reaction.holding(wanted)) {
@@ -169,6 +182,7 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
                         this.aimRotation = this.humanStep(from, wanted);
                         this.aimAge++;
                     }
+                    this.lastWanted = wanted;
                 }
                 ctx.player().setYRot(this.aimRotation.getYaw());
                 ctx.player().setXRot(this.aimRotation.getPitch());
@@ -279,6 +293,15 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
      */
     private boolean canGlanceSomewhere() {
         return baritone.getPathingBehavior().isPathing() && standingStill();
+    }
+
+    /**
+     * Whether the rotation being aimed at is a different direction from the one aimed at last tick, rather
+     * than the same thing drifting a little as the player walks toward it.
+     */
+    private boolean isNewDirection(Rotation wanted) {
+        return this.lastWanted == null
+                || AimDynamics.separation(this.lastWanted, wanted) > ReactionDelay.NEW_DIRECTION_ANGLE;
     }
 
     /**
