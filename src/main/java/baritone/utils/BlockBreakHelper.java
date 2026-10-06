@@ -25,6 +25,8 @@ import net.minecraft.world.item.component.SwingAnimation;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 
+import java.util.Random;
+
 /**
  * @author Brady
  * @since 8/25/2018
@@ -33,7 +35,19 @@ public final class BlockBreakHelper {
     // base ticks between block breaks caused by tick logic
     private static final int BASE_BREAK_DELAY = 1;
 
+    /**
+     * Ticks to wait before starting the next block after one breaks instantly.
+     * <p>
+     * A person does not begin the next block in the same tick the last one vanished: there is a beat while
+     * they register it and move on. Multi-tick breaks were already paced by {@code blockBreakSpeed}, but an
+     * instant break never set a timer, so a field of crops or a patch of grass went down at exactly one
+     * block per tick, forever. Nothing a person does looks like that.
+     */
+    private static final int RETARGET_DELAY_MIN = 1;
+    private static final int RETARGET_DELAY_MAX = 3;
+
     private final IPlayerContext ctx;
+    private final Random retargetRand = new Random();
     private boolean wasHitting;
     private int breakDelayTimer = 0;
 
@@ -50,6 +64,13 @@ public final class BlockBreakHelper {
         }
     }
 
+    /**
+     * How long to pause after an instant break before starting the next block.
+     */
+    int retargetDelay() {
+        return RETARGET_DELAY_MIN + this.retargetRand.nextInt(RETARGET_DELAY_MAX - RETARGET_DELAY_MIN + 1);
+    }
+
     public void tick(boolean isLeftClick) {
         if (breakDelayTimer > 0) {
             breakDelayTimer--;
@@ -64,6 +85,8 @@ public final class BlockBreakHelper {
                 ctx.playerController().syncHeldItem();
                 ctx.playerController().clickBlock(((BlockHitResult) trace).getBlockPos(), ((BlockHitResult) trace).getDirection());
                 ctx.player().swing(InteractionHand.MAIN_HAND, SwingAnimation.DEFAULT, false);
+                // and then take a beat before the next one, rather than chaining them tick after tick
+                breakDelayTimer = Math.max(breakDelayTimer, this.retargetDelay());
             } else {
                 if (ctx.playerController().onPlayerDamageBlock(((BlockHitResult) trace).getBlockPos(), ((BlockHitResult) trace).getDirection())) {
                     ctx.player().swing(InteractionHand.MAIN_HAND, SwingAnimation.DEFAULT, false);
