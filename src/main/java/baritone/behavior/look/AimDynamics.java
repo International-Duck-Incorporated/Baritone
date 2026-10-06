@@ -48,6 +48,24 @@ public final class AimDynamics {
     public static final float MAX_PITCH_STEP = 9.0f;
 
     /**
+     * Largest yaw change per tick for the idle glance, in degrees: half the flick ceiling, 180 deg/s.
+     * <p>
+     * The flick ceiling is a speed for <em>aiming</em> - the hand is being told where to go and it goes there
+     * - and the idle glance is not aiming at anything. Driving the glance at the full budget made an idle bot
+     * twitch its head aside at up to 11.7 degrees in one tick, measured over twelve hundred ticks of a paused
+     * bot, which is 585 deg/s: a speed for someone flicking a mouse across a desk, and far quicker than a
+     * person turns their head to look at something while they wait. At this ceiling a full 28 degree glance
+     * takes eight ticks, four tenths of a second, and peaks at 180 deg/s, which is what an unhurried look
+     * around actually costs.
+     */
+    public static final float IDLE_YAW_STEP = 9.0f;
+
+    /**
+     * The same for the glance's pitch: a glance is mostly a yaw movement.
+     */
+    public static final float IDLE_PITCH_STEP = 4.5f;
+
+    /**
      * Fraction of the remaining angle covered per tick. A real movement covers most of the distance early
      * and then settles, rather than travelling at a constant speed and stopping dead.
      */

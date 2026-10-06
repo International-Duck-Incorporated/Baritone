@@ -114,8 +114,14 @@ public class HumanlikeLookFuzzTest {
             // the glance, which needs Baritone in control, the player still, and nothing being clicked - the
             // last of those because the trace Baritone breaks and places along follows the rotation this code
             // last sent the server, and the first because a person playing manually is not ours to animate
-            final Rotation sent = glance[0].next(camera, inControl && standingStill && !interacting, (from, to) ->
-                    AimDynamics.step(from, to, AimDynamics.MAX_YAW_STEP, AimDynamics.MAX_PITCH_STEP, sensitivity));
+            final Rotation sent = glance[0].next(camera, inControl && standingStill && !interacting, (from, to) -> {
+                final Rotation next = AimDynamics.step(from, to, AimDynamics.IDLE_YAW_STEP, AimDynamics.IDLE_PITCH_STEP,
+                        sensitivity);
+                // the glance is never allowed the aiming speed, at any sensitivity
+                assertTrue("a glance moved " + AimDynamics.separation(from, next) + " deg in one tick",
+                        AimDynamics.separation(from, next) <= AimDynamics.IDLE_YAW_STEP + 1e-3f);
+                return next;
+            });
             if (sent != null) {
                 applied = sent;
                 glanceCamera[0] = 1;
@@ -308,7 +314,7 @@ public class HumanlikeLookFuzzTest {
         // dropped where it stands rather than carried into the click.
         final Rotation camera = new Rotation(40.0f, -10.0f);
         final IdleGlance.Stepper step = (from, to) -> AimDynamics.step(from, to,
-                AimDynamics.MAX_YAW_STEP, AimDynamics.MAX_PITCH_STEP, 0.5);
+                AimDynamics.IDLE_YAW_STEP, AimDynamics.IDLE_PITCH_STEP, 0.5);
 
         final IdleGlance idle = new IdleGlance();
         int waited = 0;
@@ -341,7 +347,7 @@ public class HumanlikeLookFuzzTest {
             final boolean inControl = pathing || rand.nextInt(10) > 4;
             final Rotation glanceSent = walking ? null
                     : glance.next(camera, inControl, (from, to) -> AimDynamics.step(from, to,
-                            AimDynamics.MAX_YAW_STEP, AimDynamics.MAX_PITCH_STEP, 0.5));
+                            AimDynamics.IDLE_YAW_STEP, AimDynamics.IDLE_PITCH_STEP, 0.5));
             final float before = wander.yaw();
             if (walking && pathing) {
                 wander.advance();

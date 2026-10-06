@@ -492,12 +492,18 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
     }
 
     /**
-     * One tick of movement with the full speed budget. The idle glance uses this: it is a small
-     * absent-minded movement already and does not need a spin-up of its own.
+     * One tick of movement for the idle glance, with no spin-up of its own: it is a small absent-minded
+     * movement, not a turn.
+     * <p>
+     * The speed budget is the glance's own and not the aim's. The flick ceiling is what a hand does when it
+     * is told to point at something; a bot standing about with nothing to do should not be moving its head at
+     * a deliberate aiming speed, and measured over a paused minute it was - 11.7 degrees in a single tick,
+     * 585 deg/s, at the peak of every glance. {@link AimDynamics#IDLE_YAW_STEP} is where that came from and
+     * what replaced it.
      */
     private Rotation idleStep(Rotation from, Rotation to) {
-        // the full budget, no ramp: a glance is a small absent-minded movement, not a turn
-        return AimDynamics.step(from, to, AimDynamics.MAX_YAW_STEP, AimDynamics.MAX_PITCH_STEP, sensitivity(ctx));
+        return AimDynamics.step(from, to, AimDynamics.IDLE_YAW_STEP, AimDynamics.IDLE_PITCH_STEP,
+                sensitivity(ctx));
     }
 
     /**
