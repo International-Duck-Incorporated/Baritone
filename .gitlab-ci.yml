@@ -34,4 +34,10 @@ build:
     paths:
       - dist/
       - mapping/
+      # the test report as well as the results, so a pipeline can be checked for having actually run the
+      # tests rather than having merely executed the task
+      - build/reports/tests/test/
+    reports:
+      # lets GitLab show pass/fail per test in the pipeline view instead of hiding it in the job log
+      junit: build/test-results/test/*.xml
     expire_in: 1 week
