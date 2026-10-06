@@ -26,7 +26,9 @@ import baritone.api.event.events.*;
 import baritone.api.event.events.type.EventState;
 import baritone.api.utils.IPlayerContext;
 import baritone.api.utils.Rotation;
+import baritone.behavior.look.AimDynamics;
 import baritone.behavior.look.ForkableRandom;
+import baritone.behavior.look.IdleGlance;
 import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
 
 import java.util.ArrayDeque;
@@ -67,58 +69,14 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
     private Rotation aimRotation;
 
     /**
-     * Ticks since the current turn started, indexing {@link #TURN_RAMP}. Reset whenever a new target
-     * appears so that every turn gets its own spin-up.
+     * Ticks since the current turn started, indexing {@link AimDynamics#TURN_RAMP}. Reset whenever a new
+     * target appears so that every turn gets its own spin-up.
      */
     private int aimAge;
 
-    // ---------------------------------------------------------------------------------------------
-    // Human aim dynamics.
-    //
-    // The whole rotation delta used to be applied in the tick the target changed, so a 180 degree path
-    // reversal or a freshly chosen block face teleported the crosshair. A hand cannot do that, and it
-    // is the single most obvious thing about a bot from the outside.
-    //
-    // These numbers are hardcoded on purpose rather than exposed as settings: the point is that a turn
-    // costs the same amount of time for everybody, and that nothing about it is tunable to taste.
-    // ---------------------------------------------------------------------------------------------
+    // The aim's speed, easing, spin-up and tremor numbers all live in AimDynamics, together with the
+    // maths that uses them, so they can be reasoned about and tested without a game running.
 
-    /**
-     * Largest yaw change per tick, in degrees. 18 deg/tick is 360 deg/s, which is the peak speed of a
-     * deliberate human flick; ordinary corrections never get near it because of {@link #AIM_EASE}.
-     */
-    private static final float MAX_YAW_STEP = 18.0f;
-
-    /** Pitch is a slower joint than yaw and drags behind it, so it gets a lower ceiling. */
-    private static final float MAX_PITCH_STEP = 9.0f;
-
-    /**
-     * Fraction of the remaining angle covered per tick. A real movement covers most of the distance
-     * early and then settles, rather than travelling at a constant speed and stopping dead.
-     */
-    private static final float AIM_EASE = 0.5f;
-
-    /**
-     * Fraction of full speed available on the first, second, third... tick of a turn.
-     * <p>
-     * A hand does not go from still to its top speed in a single tick; the muscles spin up. Without
-     * this a 180 degree turn opened at the full 18 deg/tick immediately and only ever slowed down from
-     * there, which is a velocity profile nothing with a wrist produces. Holding the first tick to half
-     * speed and the second to most of it is enough to read as a real movement: accelerate, peak, ease
-     * off into the target.
-     */
-    private static final float[] TURN_RAMP = {0.5f, 0.8f, 1.0f};
-
-    /**
-     * Low pass applied to {@link Settings#randomLooking} in {@link AbstractAimProcessor#tick()}.
-     */
-    private static final float TREMOR_SMOOTHING = 0.3f;
-
-    /**
-     * Puts back the amplitude that {@link #TREMOR_SMOOTHING} costs, so the randomLooking settings keep
-     * meaning what they always meant.
-     */
-    private static final float TREMOR_GAIN = 2.4f;
 
     /**
      * Squared horizontal speed below which the player counts as standing still. Baritone standing at a
@@ -323,8 +281,7 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
      * exactly on target instead of hunting around it forever.
      */
     private Rotation humanStep(Rotation from, Rotation to) {
-        final float ramp = TURN_RAMP[Math.min(this.aimAge, TURN_RAMP.length - 1)];
-        return this.step(from, to, MAX_YAW_STEP * ramp, MAX_PITCH_STEP * ramp);
+        return AimDynamics.humanStep(from, to, this.aimAge, sensitivity(ctx));
     }
 
     /**
@@ -332,35 +289,18 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
      * absent-minded movement already and does not need a spin-up of its own.
      */
     private Rotation idleStep(Rotation from, Rotation to) {
-        return this.step(from, to, MAX_YAW_STEP, MAX_PITCH_STEP);
-    }
-
-    private Rotation step(Rotation from, Rotation to, float maxYaw, float maxPitch) {
-        return new Rotation(
-                this.steppedAngle(from.getYaw(), to.getYaw(), maxYaw),
-                this.steppedAngle(from.getPitch(), to.getPitch(), maxPitch)
-        ).clamp();
-    }
-
-    private float steppedAngle(float current, float target, float maxStep) {
-        final float delta = Rotation.normalizeYaw(target - current);
-        final float minStep = Math.abs(mouseToAngle(ctx, 1));
-        if (minStep <= 0.0f || Math.abs(delta) <= minStep) {
-            // Less than one pixel of mouse movement left: land it, don't creep toward it forever.
-            return Rotation.normalizeYaw(target);
-        }
-        final float step = Math.max(-maxStep, Math.min(maxStep, delta * AIM_EASE));
-        final double pixels = Math.round(step / minStep);
-        return Rotation.normalizeYaw(current + (float) (pixels * minStep));
+        // the full budget, no ramp: a glance is a small absent-minded movement, not a turn
+        return AimDynamics.step(from, to, AimDynamics.MAX_YAW_STEP, AimDynamics.MAX_PITCH_STEP, sensitivity(ctx));
     }
 
     /**
-     * Converts whole mouse pixels to degrees, using the same sensitivity math the game does.
+     * The player's mouse sensitivity, which is what turns mouse pixels into degrees.
+     * <p>
+     * Static, and taking the context as an argument, because the aim processor below is a static nested
+     * class: it holds its own context and cannot reach anything that belongs to this instance.
      */
-    private static float mouseToAngle(IPlayerContext ctx, double mouseDelta) {
-        // casting float literals to double gets us the precise values used by mc
-        final double f = ctx.minecraft().options.sensitivity().get() * (double) 0.6f + (double) 0.2f;
-        return (float) (mouseDelta * f * f * f * 8.0d) * 0.15f; // yes, one double and one float scaling factor
+    private static double sensitivity(IPlayerContext ctx) {
+        return ctx.minecraft().options.sensitivity().get();
     }
 
     public Optional<Rotation> getEffectiveRotation() {
@@ -425,8 +365,8 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
                 desiredPitch = nudgeToLevel(desiredPitch);
             }
 
-            desiredYaw += this.randomYawOffset * TREMOR_GAIN;
-            desiredPitch += this.randomPitchOffset * TREMOR_GAIN;
+            desiredYaw += this.randomYawOffset * AimDynamics.TREMOR_GAIN;
+            desiredPitch += this.randomPitchOffset * AimDynamics.TREMOR_GAIN;
 
             return new Rotation(
                     this.calculateMouseMove(prev.getYaw(), desiredYaw),
@@ -451,8 +391,8 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
             // shiver: uncorrelated jitter is something no person produces and the eye reads it as a
             // machine. Low pass them so the offset wanders the way an unsteady wrist does, and scale the
             // result back up so the settings keep the amplitude they always had.
-            this.randomYawOffset += (rawYaw113 - this.randomYawOffset) * TREMOR_SMOOTHING;
-            this.randomPitchOffset += (rawPitchOffset - this.randomPitchOffset) * TREMOR_SMOOTHING;
+            this.randomYawOffset = AimDynamics.smoothOffset(this.randomYawOffset, (float) rawYaw113);
+            this.randomPitchOffset = AimDynamics.smoothOffset(this.randomPitchOffset, (float) rawPitchOffset);
         }
 
         @Override
@@ -513,136 +453,7 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
         }
 
         private float mouseToAngle(double mouseDelta) {
-            return LookBehavior.mouseToAngle(ctx, mouseDelta);
-        }
-    }
-
-    /**
-     * One tick of hand movement, from where the aim is to where it is going.
-     */
-    @FunctionalInterface
-    private interface Stepper {
-
-        Rotation step(Rotation from, Rotation to);
-    }
-
-    /**
-     * Decides when to look around, where at, and when to come back.
-     * <p>
-     * Deliberately free of any Minecraft type beyond {@link Rotation}: the rules are the interesting part
-     * and they are worth being able to test on their own. Everything it does is bounded, and every path
-     * out of it ends with the aim back where it started, so a glance can never leave the head stuck
-     * pointing at a wall.
-     */
-    private static final class IdleGlance {
-
-        /**
-         * Ticks to wait between glances: three to eight seconds. Long enough that a bot standing at a
-         * closed door does not look like it is scanning for something.
-         */
-        private static final int COOLDOWN_MIN = 60;
-        private static final int COOLDOWN_MAX = 160;
-
-        /**
-         * How long a glance is held once it has arrived: 0.4 to 1.5 seconds.
-         */
-        private static final int HOLD_MIN = 8;
-        private static final int HOLD_MAX = 30;
-
-        /**
-         * How far a glance may wander from where the player was already looking: a glance, not a survey.
-         */
-        private static final float MAX_YAW = 28.0f;
-        private static final float MAX_PITCH = 7.0f;
-
-        /**
-         * How far the view may move away from where a glance started before the glance gives up. Movement
-         * here means somebody moved the mouse themselves, and the polite thing is to get out of the way.
-         */
-        private static final float TAKEN_OVER = 20.0f;
-
-        /**
-         * Safety net: a glance may never outlive this many ticks, however confused the state gets.
-         */
-        private static final int MAX_AGE = 100;
-
-        private final Random rand = new Random();
-
-        private int cooldown = COOLDOWN_MIN;
-        private int hold;
-        private int age;
-        private Rotation aim;    // where the glance is pointed, null when none is running
-        private Rotation home;   // where it started, and where it goes back to
-        private Rotation sent;   // what the server was last told
-
-        /**
-         * @param camera where the player is actually looking right now
-         * @param allowed whether an idle glance is appropriate this tick
-         * @param step one tick of hand movement
-         * @return the rotation to send to the server, or null when this tick is not ours to take
-         */
-        Rotation next(Rotation camera, boolean allowed, Stepper step) {
-            if (!allowed) {
-                if (this.aim != null) {
-                    // Baritone has started doing something, or the player is moving again. Drop the
-                    // glance where it stands; whatever happens next owns the aim from here.
-                    this.reset();
-                }
-                return null;
-            }
-            if (this.aim == null) {
-                if (--this.cooldown > 0) {
-                    return null;
-                }
-                this.home = camera;
-                this.aim = new Rotation(
-                        Rotation.normalizeYaw(camera.getYaw() + (this.rand.nextFloat() * 2.0f - 1.0f) * MAX_YAW),
-                        Rotation.clampPitch(camera.getPitch() + (this.rand.nextFloat() * 2.0f - 1.0f) * MAX_PITCH)
-                );
-                this.hold = HOLD_MIN + this.rand.nextInt(HOLD_MAX - HOLD_MIN + 1);
-                this.age = 0;
-                this.sent = camera;
-            } else if (Math.abs(Rotation.normalizeYaw(camera.getYaw() - this.home.getYaw())) > TAKEN_OVER
-                    || Math.abs(camera.getPitch() - this.home.getPitch()) > TAKEN_OVER) {
-                this.reset();
-                return null;
-            }
-
-            this.age++;
-            if (this.age > MAX_AGE) {
-                this.reset();
-                return null;
-            }
-
-            final Rotation wanted = step.step(this.sent, this.aim);
-            if (this.reached(wanted)) {
-                if (this.hold > 0) {
-                    this.hold--;
-                } else if (this.aim != this.home) {
-                    this.aim = this.home;   // nothing else to see here, head back
-                } else {
-                    // Home again. Going quiet for a while is the point: this should read as somebody
-                    // glancing up from what they were doing, not as a surveillance camera sweeping.
-                    this.reset();
-                    return null;
-                }
-            }
-            this.sent = wanted;
-            return wanted;
-        }
-
-        private boolean reached(Rotation rotation) {
-            return Rotation.normalizeYaw(this.aim.getYaw() - rotation.getYaw()) == 0.0f
-                    && Math.abs(this.aim.getPitch() - rotation.getPitch()) < 1e-4f;
-        }
-
-        private void reset() {
-            this.aim = null;
-            this.home = null;
-            this.sent = null;
-            this.hold = 0;
-            this.age = 0;
-            this.cooldown = COOLDOWN_MIN + this.rand.nextInt(COOLDOWN_MAX - COOLDOWN_MIN + 1);
+            return AimDynamics.mouseToAngle(sensitivity(ctx), mouseDelta);
         }
     }
 
