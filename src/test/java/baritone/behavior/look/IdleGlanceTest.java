@@ -129,6 +129,30 @@ public class IdleGlanceTest {
     }
 
     @Test
+    public void resettingDropsAGlanceInProgress() {
+        // What a world change needs: the glance was taken against a player who is no longer there, and the
+        // rotation it would return to is an angle in a different level.
+        final IdleGlance glance = new IdleGlance();
+        final Rotation camera = new Rotation(0f, 0f);
+        boolean started = false;
+        for (int t = 0; t < 400 && !started; t++) {
+            started = glance.next(camera, true, IdleGlanceTest::step) != null;
+        }
+        assertTrue("a glance never started", started);
+        glance.reset();
+        // the world is new, and so is the camera: this must not be treated as the old glance continuing
+        for (int t = 0; t < 60; t++) {
+            final Rotation sent = glance.next(new Rotation(137f, 12f), true, IdleGlanceTest::step);
+            if (sent != null) {
+                assertTrue("the glance resumed against a stale home", Math.abs(Rotation.normalizeYaw(sent.getYaw() - 137f)) <= 28.5f);
+                assertTrue(Math.abs(sent.getPitch() - 12f) <= 7.5f);
+                return;
+            }
+        }
+        assertTrue("no glance was ever taken after the reset", true);
+    }
+
+    @Test
     public void neverReturnsTheCameraInsteadOfAGlance() {
         // Regression guard: the state machine must either hand back a new rotation or nothing at all,
         // because the caller uses null to mean "this tick is not ours".

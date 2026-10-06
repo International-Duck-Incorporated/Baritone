@@ -254,6 +254,19 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
     public void onWorldEvent(WorldEvent event) {
         this.serverRotation = null;
         this.target = null;
+        // Everything below belongs to the world that has just gone. The Baritone instance outlives it - it
+        // is one per client, not one per level - so without this the next target would be eased toward from
+        // wherever the aim happened to be in the previous dimension, and the sweep would be visible. The
+        // glance's own state would come back to an angle in a level that no longer exists.
+        this.aimRotation = null;
+        this.aimAge = 0;
+        this.lastWanted = null;
+        this.wanderCamera = null;
+        this.glanceCamera = null;
+        this.idleGlance.reset();
+        this.reaction.clear();
+        this.smoothYawBuffer.clear();
+        this.smoothPitchBuffer.clear();
     }
 
     public void pig() {

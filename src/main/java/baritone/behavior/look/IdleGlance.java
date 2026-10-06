@@ -147,7 +147,13 @@ public final class IdleGlance {
                 && Math.abs(this.aim.getPitch() - rotation.getPitch()) < 1e-4f;
     }
 
-    private void reset() {
+    /**
+     * Drops any glance in progress and starts the cooldown again.
+     * <p>
+     * Public because a glance does not survive its world: the player it was taken against is gone, and the
+     * rotation it would come back to is an angle in a level that no longer exists.
+     */
+    public void reset() {
         this.aim = null;
         this.home = null;
         this.sent = null;
