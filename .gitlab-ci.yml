@@ -1,14 +1,37 @@
-image: java:8
+# Build Baritone on GitLab CI.
+#
+# Two things this config got wrong before, both of which made the pipeline fail on
+# every branch without ever compiling anything:
+#
+#  - the image was `java:8`, and this project needs JDK 25 (gradle.properties, and
+#    both GitHub workflows use 25)
+#  - the JDK has to ship jmods: buildSrc's ProguardTask points ProGuard at
+#    <java.home>/jmods/{java.base,java.desktop,jdk.unsupported}.jmod. Adoptium/Temurin
+#    tarballs do not include a jmods directory, so on those the build dies at
+#    :fabric:proguard with "Can't read .../jmods/java.base.jmod". Zulu does ship them,
+#    which is why the GitHub workflow's `distribution: 'zulu'` works.
+image: azul/zulu-openjdk:25
+
+variables:
+  # build.gradle derives the version from `git describe`, which a shallow clone breaks
+  GIT_DEPTH: 0
+  GRADLE_OPTS: "-Dorg.gradle.daemon=false"
+
+cache:
+  key: "$CI_COMMIT_REF_SLUG"
+  paths:
+    - .gradle/
 
 before_script:
-  - which java
-  - which javac
+  - java -version
+  - chmod +x gradlew
 
 build:
   script:
+    # builds the common code and every loader (fabric, forge, neoforge)
     - ./gradlew build
-    - ./gradlew build -Pbaritone.forge_build
   artifacts:
     paths:
-      - dist/*
+      - dist/
+      - mapping/
     expire_in: 1 week
