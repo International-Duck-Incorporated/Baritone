@@ -314,6 +314,10 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
      */
     private void updateHeadWander() {
         if (!this.canWander()) {
+            // Standing still, mining, or not ours to drive: fade the sway out rather than switching it off,
+            // so that starting or stopping a walk does not step the head by a degree on one tick. The
+            // offsets are taken back off every tick anyway, so this only ever smooths the two ends.
+            this.headWander.recentre();
             return;
         }
         this.headWander.advance();

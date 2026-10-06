@@ -150,6 +150,35 @@ public class HeadWanderTest {
     }
 
     @Test
+    public void theSwayFadesInAndOutRatherThanSwitching() {
+        // When the head changes hands the sway is faded, not switched, or starting and stopping a walk
+        // would step the head by up to a degree on a single tick.
+        final HeadWander wander = new HeadWander();
+        wander.advance();
+        assertTrue("the sway did not start small", Math.abs(wander.yaw()) < 0.1f);
+        for (int t = 0; t < 200; t++) {
+            wander.advance();
+        }
+        float loudest = 0f;
+        for (int t = 0; t < 200; t++) {
+            wander.advance();
+            loudest = Math.max(loudest, Math.abs(wander.yaw()));
+        }
+        assertTrue("the sway never became audible", loudest > HeadWander.MAX_YAW * 0.5f);
+
+        // fading out: recentring while it is loud must not step either
+        float previous = wander.yaw();
+        for (int t = 0; t < 100; t++) {
+            wander.recentre();
+            final float now = wander.yaw();
+            assertTrue("recentring stepped the head by " + Math.abs(now - previous),
+                    Math.abs(now - previous) <= 0.2f);
+            previous = now;
+        }
+        assertEquals("the sway never fully faded", 0f, wander.yaw(), 0f);
+    }
+
+    @Test
     public void pitchWandersLessThanYaw() {
         // a head bobs; it does not nod, and pitch is what the player would actually notice
         assertTrue("the pitch sway is not smaller than the yaw sway",
