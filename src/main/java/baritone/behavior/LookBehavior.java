@@ -26,8 +26,10 @@ import baritone.api.event.events.*;
 import baritone.api.event.events.type.EventState;
 import baritone.api.utils.IPlayerContext;
 import baritone.api.utils.Rotation;
+import baritone.api.utils.input.Input;
 import baritone.behavior.look.AimDynamics;
 import baritone.behavior.look.ForkableRandom;
+import baritone.behavior.look.HeadWander;
 import baritone.behavior.look.IdleGlance;
 import baritone.behavior.look.ReactionDelay;
 import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
@@ -89,6 +91,11 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
     private final IdleGlance idleGlance = new IdleGlance();
 
     /**
+     * The small amount the head drifts off the bearing while walking. See {@link #updateHeadWander}.
+     */
+    private final HeadWander headWander = new HeadWander();
+
+    /**
      * The beat before the hand starts moving toward a newly chosen target. Only ever allowed to hold while
      * the player is standing still; see {@link #standingStill()}.
      */
@@ -99,6 +106,11 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
      * back before the frame is drawn. See {@link #updateIdleLook}.
      */
     private Rotation glanceCamera;
+
+    /**
+     * The player's own rotation before the walking wander was applied, or null when it is not applied.
+     */
+    private Rotation wanderCamera;
 
     /**
      * The rotation the aim was asked for last tick, used to notice a genuine change of direction. While
@@ -133,6 +145,11 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
 
     @Override
     public void onPlayerUpdate(PlayerUpdateEvent event) {
+        if (event.getState() == EventState.PRE) {
+            this.updateHeadWander();
+        } else {
+            this.unwindHeadWander();
+        }
 
         if (this.target == null) {
             // Nothing has been aimed at since the last tick: forget where the hand was, so that the next
@@ -259,8 +276,11 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
     private void updateIdleLook(EventState state) {
         switch (state) {
             case PRE: {
-                // the raw player rotation, not ctx.playerRotations(): under freeLook that returns the
-                // server-side view, and what this needs to know about is the camera
+                // the player's own rotation, read straight from the player: ctx.playerRotations() returns
+                // exactly this (LocalPlayer.getYRot/getXRot) and is what the movement code reads, so the
+                // glance goes into the same variable the movement code will read. That is fine for a glance
+                // - it only runs while the player is standing still, where nothing downstream reads the
+                // facing - and it is why the walking wander, which does run while walking, does not go here.
                 final Rotation camera = new Rotation(ctx.player().getYRot(), ctx.player().getXRot());
                 final Rotation wanted = this.idleGlance.next(camera, this.canGlanceSomewhere(), this::idleStep);
                 if (wanted == null) {
@@ -282,6 +302,73 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
             default:
                 break;
         }
+    }
+
+    /**
+     * Walks the head slightly off the bearing. See {@link #canWander}.
+     * <p>
+     * Applied on the same terms as the idle glance: during PRE, so the client's rotation packet carries it
+     * to the server, and taken back off during POST before the frame is drawn. Everyone else sees a head
+     * that moves a little as its owner walks; the person at the keyboard sees nothing. Nothing downstream
+     * can see it either, which is what makes it safe to do while a path is being walked.
+     */
+    private void updateHeadWander() {
+        if (!this.canWander()) {
+            return;
+        }
+        this.headWander.advance();
+        // Both angles are taken from the player and put back, exactly, for the same reason the glance does
+        // it: an offset that is only taken off later accumulates. Applied to the yaw alone, the pitch would
+        // be added again on top of itself every tick and walk the view up into the sky at six degrees a
+        // second.
+        this.wanderCamera = new Rotation(ctx.player().getYRot(), ctx.player().getXRot());
+        ctx.player().setYRot(this.wanderCamera.getYaw() + this.headWander.yaw());
+        ctx.player().setXRot(this.wanderCamera.getPitch() + this.headWander.pitch());
+    }
+
+    private void unwindHeadWander() {
+        if (this.wanderCamera != null) {
+            ctx.player().setYRot(this.wanderCamera.getYaw());
+            ctx.player().setXRot(this.wanderCamera.getPitch());
+            this.wanderCamera = null;
+        }
+    }
+
+    /**
+     * Whether the head is ours to move.
+     * <p>
+     * Three conditions and all three are load bearing. The player has to be walking, because this is the
+     * walking drift and standing still already has the idle glance. Baritone has to be the one driving,
+     * because a head that moves on its own while a person is walking somewhere is not human, it is broken.
+     * And nothing may be being broken or placed this tick: while a block is under the crosshair the aim is
+     * what decides which block that is, so a degree of drift there could move Baritone's own pickaxe off
+     * the vein it is mining. Walking is the one time nothing is looking and a head can wander freely.
+     */
+    private boolean canWander() {
+        return this.target != null
+                && this.isWalking()
+                && baritone.getPathingBehavior().isPathing()
+                && !this.interacting();
+    }
+
+    /**
+     * Whether an interaction - breaking or placing - is under way this tick.
+     */
+    private boolean interacting() {
+        return baritone.getInputOverrideHandler().isInputForcedDown(Input.CLICK_LEFT)
+                || baritone.getInputOverrideHandler().isInputForcedDown(Input.CLICK_RIGHT);
+    }
+
+    /**
+     * Whether the player is moving along the ground at a walking pace.
+     */
+    private boolean isWalking() {
+        if (!ctx.player().onGround() || ctx.player().isInWater() || ctx.player().isFallFlying()) {
+            return false;
+        }
+        final double dx = ctx.player().getDeltaMovement().x;
+        final double dz = ctx.player().getDeltaMovement().z;
+        return dx * dx + dz * dz > IDLE_SPEED_SQ;
     }
 
     /**

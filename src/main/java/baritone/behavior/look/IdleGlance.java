@@ -99,6 +99,10 @@ public final class IdleGlance {
             if (--this.cooldown > 0) {
                 return null;
             }
+            // Whatever the glance has just been asked to look at, it is off the direction the player is
+            // travelling. Anything waiting for the aim to arrive at a movement target gates on the aim
+            // being there, so standing idle is the only place this belongs: at the one speed where the
+            // traversal happens to be idle and a nudge is under way, a glance must not delay it.
             this.home = camera;
             this.aim = new Rotation(
                     Rotation.normalizeYaw(camera.getYaw() + (this.rand.nextFloat() * 2.0f - 1.0f) * MAX_YAW),
