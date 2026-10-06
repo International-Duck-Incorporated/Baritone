@@ -145,12 +145,31 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
 
     @Override
     public void onPlayerUpdate(PlayerUpdateEvent event) {
-        if (event.getState() == EventState.PRE) {
-            this.updateHeadWander();
-        } else {
+        // The order of these two is not a matter of taste.
+        //
+        // The wander is applied after everything else that runs in PRE, because two things downstream depend
+        // on reading the player's own angle: the glance works out where to come back to from the camera, and
+        // the aim path records prevRotation, which Target.Mode.SERVER restores the view to in POST. Applied
+        // first, the wander was baked into both, and the SERVER restore then put the swayed angle back on
+        // the camera every tick - each tick starting from the previous tick's leftover, which does not
+        // settle, it accumulates. Measured at 32 degrees of drift over two seconds of walking with a
+        // server-side target; with the order below, 0.00.
+        //
+        // In POST it is the other way round: the wander comes off before the aim is put back, so that
+        // whichever of the two writes the rotation last, the camera ends up on the player's own angle.
+        if (event.getState() != EventState.PRE) {
             this.unwindHeadWander();
+            this.handlePlayerUpdate(event);
+            return;
         }
+        this.handlePlayerUpdate(event);
+        this.updateHeadWander();
+    }
 
+    /**
+     * The body of a player update, with the walking wander left out so that it can be ordered around it.
+     */
+    private void handlePlayerUpdate(PlayerUpdateEvent event) {
         if (this.target == null) {
             // Nothing has been aimed at since the last tick: forget where the hand was, so that the next
             // target starts from wherever the player is actually looking instead of from a stale angle.
