@@ -99,9 +99,11 @@ public final class IdleGlance {
             if (--this.cooldown > 0) {
                 return null;
             }
-            // A glance is only ever taken while the player is standing still, which is the one time the aim
-            // is not needed by anything: no traversal is under way, and the movement look gate cannot see
-            // this rotation because it runs before PRE.
+            // A glance is only taken while the player is standing still and nothing is being clicked. Both
+            // matter, and not for the same reason: the movement code chooses its keys from the rotation the
+            // server was last told, so a glance is visible to it, and Baritone's own ray trace follows that
+            // same rotation, so a glance taken while a block was being broken would aim its pickaxe most of
+            // a block off. Standing still with nothing clicked, nothing is reading the angle at all.
             this.home = camera;
             this.aim = new Rotation(
                     Rotation.normalizeYaw(camera.getYaw() + (this.rand.nextFloat() * 2.0f - 1.0f) * MAX_YAW),

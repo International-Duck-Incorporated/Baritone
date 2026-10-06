@@ -341,8 +341,14 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
      * <p>
      * Applied on the same terms as the idle glance: during PRE, so the client's rotation packet carries it
      * to the server, and taken back off during POST before the frame is drawn. Everyone else sees a head
-     * that moves a little as its owner walks; the person at the keyboard sees nothing. Nothing downstream
-     * can see it either, which is what makes it safe to do while a path is being walked.
+     * that moves a little as its owner walks; the person at the keyboard sees nothing.
+     * <p>
+     * The lagging player rotation is not invisible to Baritone itself, though the two channels are worth
+     * keeping apart. What runs early - the movement state machines, the key selection - reads
+     * {@code ctx.playerRotations()}, which under free look is the last rotation sent to the server, so that
+     * one does carry the sway, at its full degree, and that is intended. What reads the player's own angle
+     * is this method's own bookkeeping: {@code prevRotation}, and the glance's idea of where it started.
+     * Those two have to see the real camera, which is why this runs last in PRE and first in POST.
      */
     private void updateHeadWander() {
         if (!this.canWander()) {
@@ -376,23 +382,21 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
      * Three conditions and all three are load bearing. The player has to be walking, because this is the
      * walking drift and standing still already has the idle glance. Baritone has to be the one driving,
      * because a head that moves on its own while a person is walking somewhere is not human, it is broken.
-     * And nothing may be being broken or placed this tick: while a block is under the crosshair the aim is
-     * what decides which block that is, so a degree of drift there could move Baritone's own pickaxe off
-     * the vein it is mining. Walking is the one time nothing is looking and a head can wander freely.
+     * And nothing may be being clicked this tick, for the reason given on {@link #interacting()}: the trace
+     * Baritone aims its own pickaxe and blocks along follows the rotation it last told the server, and a
+     * block being broken is not the place for a degree of drift.
+     * <p>
+     * What this does *not* promise is that the walk itself is untouched. Under free look, the movement code
+     * chooses which keys to press from {@code playerRotations()}, which is the server rotation, so the sway
+     * is in there at its full one degree. That is the intended shape of it - a walk that wobbles slightly -
+     * and HeadWanderTest bounds what it can add up to: 0.38 blocks of sideways deviation over a walk of four
+     * thousand three hundred.
      */
     private boolean canWander() {
         return this.target != null
                 && this.isWalking()
                 && baritone.getPathingBehavior().isPathing()
                 && !this.interacting();
-    }
-
-    /**
-     * Whether an interaction - breaking or placing - is under way this tick.
-     */
-    private boolean interacting() {
-        return baritone.getInputOverrideHandler().isInputForcedDown(Input.CLICK_LEFT)
-                || baritone.getInputOverrideHandler().isInputForcedDown(Input.CLICK_RIGHT);
     }
 
     /**
@@ -415,7 +419,7 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
      * head about.
      */
     private boolean canGlanceSomewhere() {
-        return baritone.getPathingBehavior().isPathing() && standingStill();
+        return baritone.getPathingBehavior().isPathing() && standingStill() && !this.interacting();
     }
 
     /**
@@ -425,6 +429,22 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
     private boolean isNewDirection(Rotation wanted) {
         return this.lastWanted == null
                 || AimDynamics.separation(this.lastWanted, wanted) > ReactionDelay.NEW_DIRECTION_ANGLE;
+    }
+
+    /**
+     * Whether Baritone is driving a click this tick.
+     * <p>
+     * Both behaviours that move the head are gated on this, and the reason is the ray trace rather than the
+     * aim. {@code BaritonePlayerContext.objectMouseOver()} traces along {@code playerRotations()}, which
+     * under free look is {@code serverRotation} - the last rotation sent to the server - so a rotation this
+     * code has applied and sent is what Baritone's own pickaxe and blocks are aimed along until the next
+     * packet. A degree of drift there moves the trace a few centimetres; the glance's twenty-eight would
+     * move it most of a block. Standing still with nothing being clicked, none of that applies and the head
+     * is free.
+     */
+    private boolean interacting() {
+        return baritone.getInputOverrideHandler().isInputForcedDown(Input.CLICK_LEFT)
+                || baritone.getInputOverrideHandler().isInputForcedDown(Input.CLICK_RIGHT);
     }
 
     /**
