@@ -105,8 +105,10 @@ public class HumanlikeLookFuzzTest {
             aimAge[0] = 0;
             lastWanted[0] = null;
             reaction[0].clear();
-            // the glance, which needs Baritone to be driving and the player to be still
-            final Rotation sent = glance[0].next(camera, pathing && standingStill, (from, to) ->
+            // the glance, which needs Baritone to be driving, the player to be still, and nothing to be
+            // being clicked - the last of those because the trace Baritone breaks and places along follows
+            // the rotation this code last sent the server
+            final Rotation sent = glance[0].next(camera, pathing && standingStill && !interacting, (from, to) ->
                     AimDynamics.step(from, to, AimDynamics.MAX_YAW_STEP, AimDynamics.MAX_PITCH_STEP, sensitivity));
             if (sent != null) {
                 applied = sent;
@@ -206,6 +208,15 @@ public class HumanlikeLookFuzzTest {
                     assertTrue("the sway grew while a glance was driving the head", lastOutcome.swayDecayed);
                 }
 
+                // Nothing moves the head while a click is being forced. This is the harness asserting its own
+                // wiring against the product's rule rather than the product itself - the two are written out
+                // separately on purpose, so that they can disagree here if either one drifts. The focused case
+                // for the rule is aGlanceStandsDownWhileSomethingIsBeingClicked.
+                if (interacting) {
+                    assertFalse("a glance drove the head while a click was forced", glanceActive == 1);
+                    assertFalse("the sway was advanced while a click was forced", lastOutcome.swayAdvanced);
+                }
+
                 // walking or not, the sway must not be able to push the walk off its line
                 sideways += BLOCKS_PER_TICK * Math.sin(Math.toRadians(sway));
                 assertTrue("the walk strayed " + Math.abs(sideways) + " blocks sideways",
@@ -269,6 +280,34 @@ public class HumanlikeLookFuzzTest {
             aim = next;
         }
         assertTrue("the aim never moved toward a target that would not settle", moved > 200f);
+    }
+
+    @Test
+    public void aGlanceStandsDownWhileSomethingIsBeingClicked() {
+        // Baritone aims the pickaxe and the block out along the rotation it last sent the server, so a glance
+        // taken while something is being clicked is a glance Baritone itself is mining along - twenty-eight
+        // degrees of it, most of a block. This is the rule at the level it is decided, and the two shapes it
+        // has to hold in: a glance that has not started must not start, and one already running must be
+        // dropped where it stands rather than carried into the click.
+        final Rotation camera = new Rotation(40.0f, -10.0f);
+        final IdleGlance.Stepper step = (from, to) -> AimDynamics.step(from, to,
+                AimDynamics.MAX_YAW_STEP, AimDynamics.MAX_PITCH_STEP, 0.5);
+
+        final IdleGlance idle = new IdleGlance();
+        int waited = 0;
+        while (idle.next(camera, true, step) == null && waited < 400) {
+            waited++;
+        }
+        assertTrue("the idle glance never fired in " + waited + " ticks of standing still", waited < 400);
+
+        // the click starts mid-glance: it is dropped, not driven on
+        assertNull("the glance was carried into a click", idle.next(camera, false, step));
+
+        // and however long the click lasts - long enough to cover the longest cooldown twice over - the
+        // glance does not start up again behind it
+        for (int t = 0; t < 5000; t++) {
+            assertNull("the glance started while something was being clicked", idle.next(camera, false, step));
+        }
     }
 
     @Test
