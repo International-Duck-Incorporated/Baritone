@@ -66,6 +66,12 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
      */
     private Rotation aimRotation;
 
+    /**
+     * Ticks since the current turn started, indexing {@link #TURN_RAMP}. Reset whenever a new target
+     * appears so that every turn gets its own spin-up.
+     */
+    private int aimAge;
+
     // ---------------------------------------------------------------------------------------------
     // Human aim dynamics.
     //
@@ -91,6 +97,17 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
      * early and then settles, rather than travelling at a constant speed and stopping dead.
      */
     private static final float AIM_EASE = 0.5f;
+
+    /**
+     * Fraction of full speed available on the first, second, third... tick of a turn.
+     * <p>
+     * A hand does not go from still to its top speed in a single tick; the muscles spin up. Without
+     * this a 180 degree turn opened at the full 18 deg/tick immediately and only ever slowed down from
+     * there, which is a velocity profile nothing with a wrist produces. Holding the first tick to half
+     * speed and the second to most of it is enough to read as a real movement: accelerate, peak, ease
+     * off into the target.
+     */
+    private static final float[] TURN_RAMP = {0.5f, 0.8f, 1.0f};
 
     /**
      * Low pass applied to {@link Settings#randomLooking} in {@link AbstractAimProcessor#tick()}.
@@ -149,6 +166,7 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
             // Nothing has been aimed at since the last tick: forget where the hand was, so that the next
             // target starts from wherever the player is actually looking instead of from a stale angle.
             this.aimRotation = null;
+            this.aimAge = 0;
             // Nothing is being aimed at, so this is where a person would get bored and have a look about.
             this.updateIdleLook(event.getState());
             return;
@@ -171,7 +189,11 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
                 } else {
                     // On a fresh target the hand is wherever the player is currently looking.
                     final Rotation from = this.aimRotation != null ? this.aimRotation : this.prevRotation;
+                    if (this.aimRotation == null) {
+                        this.aimAge = 0;
+                    }
                     this.aimRotation = this.humanStep(from, wanted);
+                    this.aimAge++;
                 }
                 ctx.player().setYRot(this.aimRotation.getYaw());
                 ctx.player().setXRot(this.aimRotation.getPitch());
@@ -251,7 +273,7 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
                 // the raw player rotation, not ctx.playerRotations(): under freeLook that returns the
                 // server-side view, and what this needs to know about is the camera
                 final Rotation camera = new Rotation(ctx.player().getYRot(), ctx.player().getXRot());
-                final Rotation wanted = this.idleGlance.next(camera, this.canGlanceSomewhere(), this::humanStep);
+                final Rotation wanted = this.idleGlance.next(camera, this.canGlanceSomewhere(), this::idleStep);
                 if (wanted == null) {
                     return;
                 }
@@ -301,9 +323,22 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
      * exactly on target instead of hunting around it forever.
      */
     private Rotation humanStep(Rotation from, Rotation to) {
+        final float ramp = TURN_RAMP[Math.min(this.aimAge, TURN_RAMP.length - 1)];
+        return this.step(from, to, MAX_YAW_STEP * ramp, MAX_PITCH_STEP * ramp);
+    }
+
+    /**
+     * One tick of movement with the full speed budget. The idle glance uses this: it is a small
+     * absent-minded movement already and does not need a spin-up of its own.
+     */
+    private Rotation idleStep(Rotation from, Rotation to) {
+        return this.step(from, to, MAX_YAW_STEP, MAX_PITCH_STEP);
+    }
+
+    private Rotation step(Rotation from, Rotation to, float maxYaw, float maxPitch) {
         return new Rotation(
-                this.steppedAngle(from.getYaw(), to.getYaw(), MAX_YAW_STEP),
-                this.steppedAngle(from.getPitch(), to.getPitch(), MAX_PITCH_STEP)
+                this.steppedAngle(from.getYaw(), to.getYaw(), maxYaw),
+                this.steppedAngle(from.getPitch(), to.getPitch(), maxPitch)
         ).clamp();
     }
 
