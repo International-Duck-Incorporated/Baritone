@@ -414,12 +414,27 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
     /**
      * Whether an idle glance is appropriate right now.
      * <p>
-     * Every one of these is a reason to keep still instead. In particular this requires Baritone to be
-     * executing a path: if it is not driving, then the person is, and it has no business moving their
-     * head about.
+     * Every one of these is a reason to keep still instead, and the first is the one that took longest to
+     * get right. Requiring a path to be *executing* sound like the honest version of "Baritone is the one
+     * driving", but it left out every state where Baritone is in charge and deliberately not moving: a
+     * player who pauses it, a build waiting on blocks, a search still thinking. In those the bot used to
+     * stand exactly as it was put, head and all, for as long as the state lasted - minutes of it, under a
+     * held pause - which is the most statue-like thing in the whole mod, and the states a person fidgets in
+     * most are the ones where they have been told to wait.
+     * <p>
+     * What the question actually is: is anyone else driving the body? A process in control this tick means
+     * Baritone is, whether it is executing, calculating or waiting. If none is, the person is playing, and
+     * there is no business animating their head.
      */
     private boolean canGlanceSomewhere() {
-        return baritone.getPathingBehavior().isPathing() && standingStill() && !this.interacting();
+        return this.baritoneIsInControl() && standingStill() && !this.interacting();
+    }
+
+    /**
+     * Whether Baritone has some process in control of the body this tick, executing a path or not.
+     */
+    private boolean baritoneIsInControl() {
+        return baritone.getPathingControlManager().mostRecentInControl().isPresent();
     }
 
     /**

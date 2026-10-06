@@ -72,15 +72,22 @@ public class AimDynamicsTest {
 
     @Test
     public void noSingleTickMovesFasterThanAFlick() {
-        Rotation aim = new Rotation(0f, 0f);
-        final Rotation to = new Rotation(170f, 80f);
-        for (int t = 0; t < 60; t++) {
-            final Rotation next = AimDynamics.humanStep(aim, to, t, SENSITIVITY);
-            assertTrue("yaw jumped " + Math.abs(Rotation.normalizeYaw(next.getYaw() - aim.getYaw())) + " deg in one tick",
-                    Math.abs(Rotation.normalizeYaw(next.getYaw() - aim.getYaw())) <= AimDynamics.MAX_YAW_STEP + 1e-3f);
-            assertTrue("pitch jumped " + Math.abs(next.getPitch() - aim.getPitch()) + " deg in one tick",
-                    Math.abs(next.getPitch() - aim.getPitch()) <= AimDynamics.MAX_PITCH_STEP + 1e-3f);
-            aim = next;
+        // Every sensitivity, because the whole-mouse-pixel snap is what decides whether the ceiling is
+        // respected: a pixel of 0.45 degrees against a cap of 18 rounds up to 18.07, and this used to be
+        // assertion-passing only at the sensitivities whose pixel happened to divide the cap.
+        for (double sensitivity : new double[]{0.0, 0.05, 0.5, 0.87, 1.0}) {
+            Rotation aim = new Rotation(0f, 0f);
+            final Rotation to = new Rotation(170f, 80f);
+            for (int t = 0; t < 60; t++) {
+                final Rotation next = AimDynamics.humanStep(aim, to, t, sensitivity);
+                assertTrue("yaw jumped " + Math.abs(Rotation.normalizeYaw(next.getYaw() - aim.getYaw()))
+                                + " deg in one tick at sensitivity " + sensitivity,
+                        Math.abs(Rotation.normalizeYaw(next.getYaw() - aim.getYaw())) <= AimDynamics.MAX_YAW_STEP + 1e-3f);
+                assertTrue("pitch jumped " + Math.abs(next.getPitch() - aim.getPitch())
+                                + " deg in one tick at sensitivity " + sensitivity,
+                        Math.abs(next.getPitch() - aim.getPitch()) <= AimDynamics.MAX_PITCH_STEP + 1e-3f);
+                aim = next;
+            }
         }
     }
 

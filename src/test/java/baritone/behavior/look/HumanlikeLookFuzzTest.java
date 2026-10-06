@@ -65,11 +65,17 @@ public class HumanlikeLookFuzzTest {
     /**
      * One tick of the caller's PRE logic: the aim, the glance, the reaction and the sway, wired exactly as
      * LookBehavior wires them and behind the same gates.
+     * <p>
+     * The two head-movers take different first gates, and they are not interchangeable. The glance asks
+     * whether Baritone is in control at all - executing, calculating, or deliberately waiting - because in
+     * all three the body is Baritone's and the bot used to stand frozen in the last two. The sway asks
+     * whether a path is actually executing, because a sway is a walking thing and walking is what
+     * executing means.
      *
      * @return the rotation the server would be told about, or null when nothing moved the head
      */
     private static Rotation tick(Random rand, double sensitivity, double speedSquared, Rotation wanted,
-                                 Rotation camera, boolean pathing, boolean interacting,
+                                 Rotation camera, boolean pathing, boolean inControl, boolean interacting,
                                  Rotation[] aim, int[] aimAge, Rotation[] lastWanted,
                                  IdleGlance[] glance, ReactionDelay[] reaction, HeadWander[] wander,
                                  int[] glanceCamera, float[] sway) {
@@ -105,10 +111,10 @@ public class HumanlikeLookFuzzTest {
             aimAge[0] = 0;
             lastWanted[0] = null;
             reaction[0].clear();
-            // the glance, which needs Baritone to be driving, the player to be still, and nothing to be
-            // being clicked - the last of those because the trace Baritone breaks and places along follows
-            // the rotation this code last sent the server
-            final Rotation sent = glance[0].next(camera, pathing && standingStill && !interacting, (from, to) ->
+            // the glance, which needs Baritone in control, the player still, and nothing being clicked - the
+            // last of those because the trace Baritone breaks and places along follows the rotation this code
+            // last sent the server, and the first because a person playing manually is not ours to animate
+            final Rotation sent = glance[0].next(camera, inControl && standingStill && !interacting, (from, to) ->
                     AimDynamics.step(from, to, AimDynamics.MAX_YAW_STEP, AimDynamics.MAX_PITCH_STEP, sensitivity));
             if (sent != null) {
                 applied = sent;
@@ -163,6 +169,9 @@ public class HumanlikeLookFuzzTest {
 
             for (int t = 0; t < TICKS; t++) {
                 final boolean pathing = rand.nextInt(10) > 2;
+                // in control is the glance's gate and has to be visited on its own: executing implies it,
+                // and the states this widened gate exists for are the ones where nothing is executing
+                final boolean inControl = pathing || rand.nextInt(10) > 4;
                 final boolean interacting = rand.nextInt(10) > 8;
                 // walking, stopping, and standing around, with the speed crossing the idle threshold
                 final double speedSquared = rand.nextInt(100) < 45 ? 0.0 : 0.05 + rand.nextDouble() * 0.1;
@@ -177,8 +186,8 @@ public class HumanlikeLookFuzzTest {
                 final int[] glanceRef2 = {glanceActive};
                 final float[] swayRef = {sway};
 
-                final Rotation applied = tick(rand, sensitivity, speedSquared, wanted, camera, pathing, interacting,
-                        aimRef, ageRef, lastRef, glanceRef, reactionRef, wanderRef, glanceRef2, swayRef);
+                final Rotation applied = tick(rand, sensitivity, speedSquared, wanted, camera, pathing, inControl,
+                        interacting, aimRef, ageRef, lastRef, glanceRef, reactionRef, wanderRef, glanceRef2, swayRef);
 
                 aim = aimRef[0];
                 aimAge = ageRef[0];
@@ -206,6 +215,14 @@ public class HumanlikeLookFuzzTest {
                     assertFalse("the sway was advanced while a glance was driving the head",
                             lastOutcome.swayAdvanced);
                     assertTrue("the sway grew while a glance was driving the head", lastOutcome.swayDecayed);
+                }
+
+                // Nobody's head but ours, and only while Baritone is in charge of the body: the glance's
+                // first gate is control, not execution, so this is where a harness that quietly went back to
+                // asking about paths would show up.
+                if (!inControl) {
+                    assertFalse("a glance drove the head while no Baritone process was in control",
+                            glanceActive == 1);
                 }
 
                 // Nothing moves the head while a click is being forced. This is the harness asserting its own
@@ -321,8 +338,9 @@ public class HumanlikeLookFuzzTest {
         for (int t = 0; t < 5000; t++) {
             final boolean walking = rand.nextBoolean();
             final boolean pathing = rand.nextInt(10) > 2;
+            final boolean inControl = pathing || rand.nextInt(10) > 4;
             final Rotation glanceSent = walking ? null
-                    : glance.next(camera, pathing, (from, to) -> AimDynamics.step(from, to,
+                    : glance.next(camera, inControl, (from, to) -> AimDynamics.step(from, to,
                             AimDynamics.MAX_YAW_STEP, AimDynamics.MAX_PITCH_STEP, 0.5));
             final float before = wander.yaw();
             if (walking && pathing) {

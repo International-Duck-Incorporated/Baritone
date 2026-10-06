@@ -120,6 +120,12 @@ public final class AimDynamics {
     /**
      * A single angle's worth of {@link #step}: eases toward the target, never further than {@code maxStep},
      * and takes the last sub-pixel remainder in full so it can actually arrive.
+     * <p>
+     * The pixel snap can land up to half a pixel past the ceiling - a cap of 18 degrees against a pixel of
+     * 0.45 rounds up to 18.07 - so the snapped step is held to the ceiling afterwards. The ceiling is what
+     * says a hand cannot be quicker than this, and it is the number the tests assert, so it is the number
+     * that has to hold; half a pixel either way is otherwise invisible and the ordinary, uncapped step is
+     * still exactly on the pixel grid.
      */
     public static float steppedAngle(float current, float target, float maxStep, double sensitivity) {
         // the delta has to be wrapped, or a turn across the 180 degree boundary goes the long way round
@@ -130,8 +136,8 @@ public final class AimDynamics {
             return Rotation.normalizeYaw(target);
         }
         final float step = Math.max(-maxStep, Math.min(maxStep, delta * AIM_EASE));
-        final double pixels = Math.round(step / minStep);
-        return Rotation.normalizeYaw(current + (float) (pixels * minStep));
+        final float snapped = Math.round(step / minStep) * minStep;
+        return Rotation.normalizeYaw(current + Math.max(-maxStep, Math.min(maxStep, snapped)));
     }
 
     /**
