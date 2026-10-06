@@ -29,6 +29,7 @@ import baritone.api.utils.Rotation;
 import baritone.behavior.look.AimDynamics;
 import baritone.behavior.look.ForkableRandom;
 import baritone.behavior.look.IdleGlance;
+import baritone.behavior.look.ReactionDelay;
 import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
 
 import java.util.ArrayDeque;
@@ -88,6 +89,12 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
     private final IdleGlance idleGlance = new IdleGlance();
 
     /**
+     * The beat before the hand starts moving toward a newly chosen target. Only ever allowed to hold while
+     * the player is standing still; see {@link #standingStill()}.
+     */
+    private final ReactionDelay reaction = new ReactionDelay();
+
+    /**
      * Where the camera was before an idle glance took the angles for this tick, so it can be handed
      * back before the frame is drawn. See {@link #updateIdleLook}.
      */
@@ -125,6 +132,7 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
             // target starts from wherever the player is actually looking instead of from a stale angle.
             this.aimRotation = null;
             this.aimAge = 0;
+            this.reaction.clear();
             // Nothing is being aimed at, so this is where a person would get bored and have a look about.
             this.updateIdleLook(event.getState());
             return;
@@ -150,8 +158,17 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
                     if (this.aimRotation == null) {
                         this.aimAge = 0;
                     }
-                    this.aimRotation = this.humanStep(from, wanted);
-                    this.aimAge++;
+                    if (standingStill() && this.reaction.holding(wanted)) {
+                        // Notice, then move. Deliberately only while the player is not going anywhere:
+                        // the movement code reads the facing to decide which keys to press, so letting the
+                        // aim lag mid-walk would steer. Standing still, the only thing it costs is a beat
+                        // before the turn, and the turn still gets its full spin-up afterwards.
+                        this.aimRotation = from;
+                        this.aimAge = 0;
+                    } else {
+                        this.aimRotation = this.humanStep(from, wanted);
+                        this.aimAge++;
+                    }
                 }
                 ctx.player().setYRot(this.aimRotation.getYaw());
                 ctx.player().setXRot(this.aimRotation.getPitch());
@@ -261,9 +278,18 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
      * head about.
      */
     private boolean canGlanceSomewhere() {
-        if (!baritone.getPathingBehavior().isPathing()) {
-            return false;
-        }
+        return baritone.getPathingBehavior().isPathing() && standingStill();
+    }
+
+    /**
+     * Whether the player is stationary on dry ground.
+     * <p>
+     * This is what separates the two halves of the look behaviour. Standing still, nothing downstream cares
+     * where the aim is, so the hand may hesitate and wander. Walking, swimming or falling, the movement code
+     * picks which keys to press from the direction the player is facing, so an aim that lags the direction
+     * it was asked for steers the player, and both of those behaviours have to stay out of the way.
+     */
+    private boolean standingStill() {
         if (!ctx.player().onGround() || ctx.player().isInWater() || ctx.player().isFallFlying()) {
             return false;
         }
