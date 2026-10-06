@@ -55,6 +55,7 @@ public final class ReactionDelay {
 
     private Rotation lastTarget;
     private int hold;
+    private int heldFor;
 
     /**
      * Advances one tick.
@@ -63,14 +64,23 @@ public final class ReactionDelay {
      * @return whether the hand should stay still for this tick
      */
     public boolean holding(Rotation target) {
-        if (this.lastTarget == null || separation(this.lastTarget, target) > NEW_DIRECTION_ANGLE) {
+        if (this.lastTarget == null
+                || AimDynamics.separation(this.lastTarget, target) > NEW_DIRECTION_ANGLE) {
             this.hold = HOLD_MIN + this.rand.nextInt(HOLD_MAX - HOLD_MIN + 1);
         }
         this.lastTarget = target;
-        if (this.hold > 0) {
+        if (this.hold > 0 && this.heldFor < HOLD_MAX) {
             this.hold--;
+            this.heldFor++;
             return true;
         }
+        // Out of hold, or out of patience: the hand moves this tick, whatever the target is doing. A stream
+        // of new directions - two targets a tick apart, alternating - would otherwise re-arm the pause every
+        // single tick and leave the aim frozen where it started, and anything waiting for the aim to arrive
+        // (a block being placed, a face being broken) would wait forever. Holding is never allowed to stop
+        // progress; the worst it can cost is a couple of ticks per movement.
+        this.hold = 0;
+        this.heldFor = 0;
         return false;
     }
 
@@ -80,16 +90,6 @@ public final class ReactionDelay {
     public void clear() {
         this.lastTarget = null;
         this.hold = 0;
-    }
-
-    /**
-     * How far apart two rotations are, in degrees, measured the short way around and taking the larger of
-     * the yaw and pitch differences.
-     */
-    public static float separation(Rotation a, Rotation b) {
-        return Math.max(
-                Math.abs(Rotation.normalizeYaw(a.getYaw() - b.getYaw())),
-                Math.abs(a.getPitch() - b.getPitch())
-        );
+        this.heldFor = 0;
     }
 }

@@ -104,9 +104,28 @@ public class ReactionDelayTest {
         holdLength(delay, yaw(170f), 50);
         assertFalse("crossing the wrap point was mistaken for a new direction",
                 delay.holding(yaw(-170f)));
-        assertEquals(20.0f, ReactionDelay.separation(yaw(170f), yaw(-170f)), 0.01f);
-        assertEquals(180.0f, ReactionDelay.separation(yaw(90f), yaw(-90f)), 0.01f);
-        assertEquals(0.0f, ReactionDelay.separation(yaw(-45f), yaw(315f)), 0.01f);
+        assertEquals(20.0f, AimDynamics.separation(yaw(170f), yaw(-170f)), 0.01f);
+        assertEquals(180.0f, AimDynamics.separation(yaw(90f), yaw(-90f)), 0.01f);
+        assertEquals(0.0f, AimDynamics.separation(yaw(-45f), yaw(315f)), 0.01f);
+    }
+
+    @Test
+    public void aTargetThatWillNotSettleCannotFreezeTheAim() {
+        // Two targets alternating every tick, far enough apart to re-arm the pause every time. The hand has
+        // to keep moving regardless: anything that waits for the aim to arrive - placing a block, breaking a
+        // face - would otherwise wait forever.
+        final ReactionDelay delay = new ReactionDelay();
+        final Rotation a = yaw(90f);
+        final Rotation b = yaw(-90f);
+        int run = 0;
+        for (int t = 0; t < 500; t++) {
+            if (delay.holding(t % 2 == 0 ? a : b)) {
+                run++;
+                assertTrue("the hand was held still for " + run + " ticks in a row", run <= ReactionDelay.HOLD_MAX);
+            } else {
+                run = 0;
+            }
+        }
     }
 
     @Test
@@ -128,7 +147,7 @@ public class ReactionDelayTest {
         for (int i = 0; i < 2000; i++) {
             final Rotation target = yaw(rand.nextFloat() * 360f - 180f);
             final boolean newDirection = previous == null
-                    || ReactionDelay.separation(previous, target) > ReactionDelay.NEW_DIRECTION_ANGLE;
+                    || AimDynamics.separation(previous, target) > ReactionDelay.NEW_DIRECTION_ANGLE;
             int held = 0;
             while (held < 100 && delay.holding(target)) {
                 held++;
