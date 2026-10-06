@@ -31,6 +31,8 @@ build:
     # builds the common code and every loader (fabric, forge, neoforge)
     - ./gradlew build
   artifacts:
+    # always, not just on success: a pipeline that fails on a test is the one whose report is worth having
+    when: always
     paths:
       - dist/
       - mapping/
@@ -38,6 +40,8 @@ build:
       # tests rather than having merely executed the task
       - build/reports/tests/test/
     reports:
-      # lets GitLab show pass/fail per test in the pipeline view instead of hiding it in the job log
-      junit: build/test-results/test/*.xml
+      # lets GitLab show pass/fail per test in the pipeline view instead of hiding it in the job log.
+      # Deliberately a broad glob: a narrower one that matches nothing fails the job at upload time, which
+      # would turn a green build into a red one for a reason nobody would look for here.
+      junit: build/test-results/**/*.xml
     expire_in: 1 week
