@@ -168,7 +168,7 @@ public abstract class Movement implements IMovement, MovementHelper {
                 if (reachable.isPresent()) {
                     Rotation rotTowardsBlock = reachable.get();
                     state.setTarget(new MovementState.MovementTarget(rotTowardsBlock, true));
-                    if (ctx.isLookingAt(blockPos) || ctx.playerRotations().isReallyCloseTo(rotTowardsBlock)) {
+                    if (ctx.isLookingAt(blockPos) || baritone.getLookBehavior().hasArrivedAt(rotTowardsBlock)) {
                         state.setInput(Input.CLICK_LEFT, true);
                     }
                     return false;

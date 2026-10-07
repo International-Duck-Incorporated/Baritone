@@ -544,7 +544,7 @@ public final class BuilderProcess extends BaritoneProcessHelper implements IBuil
                 // and is unable since it's unsneaked in the intermediary tick
                 baritone.getInputOverrideHandler().setInputForceState(Input.SNEAK, true);
             }
-            if (ctx.isLookingAt(pos) || ctx.playerRotations().isReallyCloseTo(rot)) {
+            if (ctx.isLookingAt(pos) || baritone.getLookBehavior().hasArrivedAt(rot)) {
                 baritone.getInputOverrideHandler().setInputForceState(Input.CLICK_LEFT, true);
             }
             return new PathingCommand(null, PathingCommandType.CANCEL_AND_SET_GOAL);
@@ -556,7 +556,7 @@ public final class BuilderProcess extends BaritoneProcessHelper implements IBuil
             baritone.getLookBehavior().updateTarget(rot, true);
             ctx.player().getInventory().setSelectedSlot(toPlace.get().hotbarSelection);
             baritone.getInputOverrideHandler().setInputForceState(Input.SNEAK, true);
-            if ((ctx.isLookingAt(toPlace.get().placeAgainst) && ((BlockHitResult) ctx.objectMouseOver()).getDirection().equals(toPlace.get().side)) || ctx.playerRotations().isReallyCloseTo(rot)) {
+            if ((ctx.isLookingAt(toPlace.get().placeAgainst) && ((BlockHitResult) ctx.objectMouseOver()).getDirection().equals(toPlace.get().side)) || baritone.getLookBehavior().hasArrivedAt(rot)) {
                 baritone.getInputOverrideHandler().setInputForceState(Input.CLICK_RIGHT, true);
             }
             return new PathingCommand(null, PathingCommandType.CANCEL_AND_SET_GOAL);

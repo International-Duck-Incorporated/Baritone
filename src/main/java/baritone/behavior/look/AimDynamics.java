@@ -201,6 +201,34 @@ public final class AimDynamics {
      * This is how "is this still the same thing I was aiming at, or has it genuinely changed?" is answered,
      * both for the spin-up and for the reaction pause.
      */
+    /**
+     * How far the hand may be from what it is aiming at and still count as having arrived, in degrees.
+     * <p>
+     * Not a precision, a scale. The hand never lands exactly on its target: it eases toward it and it is
+     * shaken by the tremor while it does, so once a turn is over the aim holds a fraction of a degree off
+     * the angle it was asked for - measured over twenty thousand settled ticks, 0.20 degrees on average and
+     * 0.75 at worst with the aim easing, 0.03 and 0.08 when a click is being aimed and the hand is
+     * hurrying. The tremor is the whole of it: with {@code randomLooking113} at its default the shaken aim
+     * sits 0.42 degrees from its target on average, and inside a hundredth of a degree on 1.4 percent of
+     * ticks - which is the point. Every gate that asked the angles to coincide to a hundredth of a degree
+     * (see {@link Rotation#isReallyCloseTo}) used to be answered by luck, one tick in seventy, because that
+     * test was written when the aim was set straight to its target. This is the question those gates meant:
+     * is the hand done travelling, or is it still on its way.
+     */
+    public static final float ARRIVED_ANGLE = 2.0f;
+
+    /**
+     * Whether a hand that has arrived at {@code aim} has finished travelling to {@code wanted}.
+     * <p>
+     * The two arguments are one rotation in two parts, the same way the steering pair is: {@code wanted} is
+     * what the hand is being asked for this tick, tremor, nudge and all, and {@code aim} is what it is
+     * holding. A settled hand is within a fraction of a degree of the second; a hand in the middle of a turn
+     * is a whole step or more away from it.
+     */
+    public static boolean arrived(Rotation aim, Rotation wanted) {
+        return separation(aim, wanted) <= ARRIVED_ANGLE;
+    }
+
     public static float separation(Rotation a, Rotation b) {
         return Math.max(
                 Math.abs(Rotation.normalizeYaw(a.getYaw() - b.getYaw())),

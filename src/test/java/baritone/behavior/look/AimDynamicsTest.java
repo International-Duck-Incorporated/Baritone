@@ -20,7 +20,10 @@ package baritone.behavior.look;
 import baritone.api.utils.Rotation;
 import org.junit.Test;
 
+import java.util.Random;
+
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -305,6 +308,87 @@ public class AimDynamicsTest {
             }
             assertTrue("45 deg at sensitivity " + sensitivity + " took " + ticks + " ticks", ticks > 2 && ticks < 40);
         }
+    }
+
+    /** The default of {@code randomLooking113}, which is what shakes the aim and what these tests model. */
+    private static final double TREMOR_SETTING = 2.0;
+
+    /** A thousand seconds of a settled aim. */
+    private static final int SETTLED_RUN = 20000;
+
+    /**
+     * One tick's draw of the aim shake, as {@code LookBehavior.tick} makes it: a flat draw scaled by the
+     * setting, with small draws spread out rather than left bunched at nothing, plus the tiny second draw
+     * from {@code randomLooking}. Modelled rather than called because the behaviour that makes it needs a
+     * Minecraft client; the shape is the part that matters here.
+     */
+    private static double tremorDraw(Random rand) {
+        double raw = rand.nextDouble() - 0.5;
+        if (Math.abs(raw) < 0.1) {
+            raw *= 4;
+        }
+        return raw * TREMOR_SETTING + (rand.nextDouble() - 0.5) * 0.01;
+    }
+
+    /**
+     * The gate the clicking code asks, run against a hand that is eased and shaken exactly the way the
+     * behaviour eases and shakes it.
+     * <p>
+     * This is the test that would have caught the gates going dead. Every one of them asked whether the
+     * player's rotation was within a hundredth of a degree of the target - true while the aim was set
+     * straight to the target, as it was when they were written, and answered by luck once a tick in seventy
+     * after the aim learned to ease and to shake. A blocked movement would then wait for the ray to come
+     * right, which it cannot when the thing it wants to look at is behind another block, and the movement
+     * would time out instead of breaking through.
+     */
+    @Test
+    public void theArrivalGateSurvivesTheTremor() {
+        final Rotation target = new Rotation(-90f, 20f);
+        final Random rand = new Random(11);
+        Rotation aim = target;
+        double offset = 0.0;
+        int settled = 0;
+        int arrived = 0;
+        int exact = 0;
+        float worst = 0.0f;
+        for (int t = 0; t < SETTLED_RUN; t++) {
+            offset = AimDynamics.smoothOffset((float) offset, (float) tremorDraw(rand));
+            final Rotation wanted = new Rotation(
+                    target.getYaw() + (float) offset * AimDynamics.TREMOR_GAIN,
+                    target.getPitch());
+            aim = AimDynamics.humanStep(aim, wanted, 40, SENSITIVITY);
+            // what the aim processor would answer if the gate asked it what to do with this target: a step
+            // toward it, which for a settled hand is where the hand already is and one mouse step at most
+            final Rotation probed = AimDynamics.humanStep(aim, wanted, 40, SENSITIVITY, AimDynamics.CLICK_EASE);
+            if (t > 40) {
+                settled++;
+                if (AimDynamics.arrived(aim, probed)) {
+                    arrived++;
+                }
+                if (AimDynamics.separation(aim, target) < 0.01f) {
+                    exact++;
+                }
+                worst = Math.max(worst, AimDynamics.separation(aim, probed));
+            }
+        }
+        assertEquals("the gate missed a settled hand on " + (settled - arrived) + " ticks", settled, arrived);
+        assertTrue("a settled hand was " + worst + " degrees from its aim", worst <= AimDynamics.ARRIVED_ANGLE);
+        // for the record, the question the gates used to ask: the angles coincide on almost no tick at all
+        assertTrue("the hundredth of a degree test was answered " + exact + " times", exact < settled / 20);
+    }
+
+    @Test
+    public void aHandOnItsWayHasNotArrivedAndASettledOneHas() {
+        final Rotation wanted = new Rotation(45f, 0f);
+        // a hand that has arrived sits at the spread the tremor leaves it at
+        assertTrue(AimDynamics.arrived(new Rotation(45f, 0f), wanted));
+        assertTrue(AimDynamics.arrived(new Rotation(44.58f, 0f), wanted));
+        assertTrue(AimDynamics.arrived(new Rotation(45f, 0.5f), wanted));
+        // a hand that is still travelling is a step away, and the step is eighteen degrees
+        assertFalse(AimDynamics.arrived(new Rotation(27f, 0f), wanted));
+        assertFalse(AimDynamics.arrived(new Rotation(45f, -18f), wanted));
+        // and the tolerance is a scale for the tremor, not a licence to click from anywhere
+        assertFalse(AimDynamics.arrived(new Rotation(42f, 0f), wanted));
     }
 
     @Test

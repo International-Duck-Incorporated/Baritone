@@ -139,6 +139,15 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
     }
 
     @Override
+    public boolean hasArrivedAt(Rotation rotation) {
+        // One question with two sides to it, and the aim processor answers the second: what would the hand
+        // do this tick if it were aiming here? When the hand has arrived, that is the rotation it is already
+        // holding, a fraction of a degree away - and while it is still travelling it is a step away, because
+        // the step toward the target is what the processor returns.
+        return AimDynamics.arrived(ctx.playerRotations(), this.processor.peekRotation(rotation));
+    }
+
+    @Override
     public void onTick(TickEvent event) {
         if (event.getType() == TickEvent.Type.IN) {
             this.processor.tick();

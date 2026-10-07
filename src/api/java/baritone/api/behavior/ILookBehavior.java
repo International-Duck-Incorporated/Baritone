@@ -40,6 +40,20 @@ public interface ILookBehavior extends IBehavior {
     void updateTarget(Rotation rotation, boolean blockInteract);
 
     /**
+     * Whether the hand has finished travelling to the specified rotation and is holding it.
+     * <p>
+     * This is the question the code that clicks actually has - has the aim arrived, or is it still on its
+     * way - and it cannot be answered by comparing the player's rotation with the target, because the two
+     * are never equal: the hand eases toward the target and the tremor shakes it on the way, so a settled
+     * aim sits a fraction of a degree off the angle it was asked for. Callers used to write that comparison
+     * with a hundredth of a degree of tolerance and get an answer once every seventy ticks.
+     *
+     * @param rotation The rotation the caller is asking about, which is what its target was set to
+     * @return Whether the aim is holding that rotation
+     */
+    boolean hasArrivedAt(Rotation rotation);
+
+    /**
      * The aim processor instance for this {@link ILookBehavior}, which is responsible for applying additional,
      * deterministic transformations to the target rotation set by {@link #updateTarget}.
      *
