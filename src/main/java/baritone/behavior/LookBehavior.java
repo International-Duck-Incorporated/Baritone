@@ -228,11 +228,19 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
             case POST: {
                 // Reset the player's rotations back to their original values
                 if (this.prevRotation != null) {
-                    this.smoothYawBuffer.addLast(this.target.rotation.getYaw());
+                    // What goes in the buffer is the rotation the server was just told about, which is where
+                    // the hand has got to - not the angle it is aiming for. The setting says as much - an
+                    // average of the last few server-side rotations - and it used to be the target, which
+                    // was the same thing back when the aim arrived in the tick it was asked for. Now that
+                    // the hand takes time, averaging the destination draws a straight line from where the
+                    // view was to the block being mined, on top of a hand that is moving the way a hand
+                    // moves, and the two do not agree: the camera arrives before the arm does.
+                    final Rotation smoothed = this.aimRotation != null ? this.aimRotation : this.target.rotation;
+                    this.smoothYawBuffer.addLast(smoothed.getYaw());
                     while (this.smoothYawBuffer.size() > Baritone.settings().smoothLookTicks.value) {
                         this.smoothYawBuffer.removeFirst();
                     }
-                    this.smoothPitchBuffer.addLast(this.target.rotation.getPitch());
+                    this.smoothPitchBuffer.addLast(smoothed.getPitch());
                     while (this.smoothPitchBuffer.size() > Baritone.settings().smoothLookTicks.value) {
                         this.smoothPitchBuffer.removeFirst();
                     }
