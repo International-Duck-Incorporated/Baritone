@@ -29,6 +29,7 @@ import baritone.cache.CachedChunk;
 import baritone.pathing.movement.CalculationContext;
 import baritone.pathing.movement.MovementHelper;
 import baritone.utils.BaritoneProcessHelper;
+import baritone.utils.Cadence;
 import baritone.utils.BlockStateInterface;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.core.BlockPos;
@@ -60,7 +61,11 @@ public final class MineProcess extends BaritoneProcessHelper implements IMinePro
     private BlockPos branchPoint;
     private GoalRunAway branchPointRunaway;
     private int desiredQuantity;
-    private int tickCount;
+    /**
+     * The clock behind {@code mineGoalUpdateInterval}: a tick of slack on either side of the setting, drawn
+     * afresh each time round. See {@link Cadence.Repeat}.
+     */
+    private final Cadence.Repeat rescan = new Cadence.Repeat(new Random());
 
     public MineProcess(Baritone baritone) {
         super(baritone);
@@ -104,7 +109,7 @@ public final class MineProcess extends BaritoneProcessHelper implements IMinePro
         updateLoucaSystem();
         int mineGoalUpdateInterval = Baritone.settings().mineGoalUpdateInterval.value;
         List<BlockPos> curr = new ArrayList<>(knownOreLocations);
-        if (mineGoalUpdateInterval != 0 && tickCount++ % mineGoalUpdateInterval == 0) { // big brain
+        if (this.rescan.due(mineGoalUpdateInterval)) {
             CalculationContext context = new CalculationContext(baritone, true);
             Baritone.getExecutor().execute(() -> rescan(curr, context));
         }

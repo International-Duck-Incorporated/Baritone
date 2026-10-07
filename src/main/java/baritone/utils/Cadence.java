@@ -165,4 +165,49 @@ public final class Cadence {
         final int drawn = ticks - JITTER + rand.nextInt(JITTER * 2 + 1);
         return Math.max(1, drawn);
     }
+
+    /**
+     * An interval that comes round again, with {@link #jitter}'s tick of slack drawn afresh each time round
+     * rather than the same grid repeating.
+     * <p>
+     * The three menus that rescan for something to do - mining, getting to a block, and farming - all kept
+     * time as {@code tickCount++ % interval == 0}, which is a scan on exactly every fifth tick of the
+     * process's life (the setting defaults to five) for as long as it holds control, forever. That is a
+     * decision on a metronome: the bot can only ever change its mind on one tick in five, and the moment it
+     * notices something better should be whenever it notices it. Drawing the slack each time round leaves
+     * the average where the setting put it and lets the phase wander, so the scans land on whatever ticks
+     * attention would.
+     * <p>
+     * Free of Minecraft and of the setting that feeds it, so the drift can be tested. {@code CadenceTest}
+     * covers it: the first scan is immediate - a process that has just taken control should look at the
+     * world, not wait a fifth of a second first - and {@code 0} asks for nothing at all, which is the
+     * spelling these settings use for disabled.
+     */
+    public static final class Repeat {
+
+        private final Random rand;
+        private int countdown;
+
+        public Repeat(Random rand) {
+            this.rand = rand;
+        }
+
+        /**
+         * One tick of the clock.
+         *
+         * @param ticks the interval the calling setting asks for, in ticks, or {@code 0} for never
+         * @return whether the interval has come round this tick
+         */
+        public boolean due(int ticks) {
+            if (ticks <= 0) {
+                return false;
+            }
+            if (this.countdown <= 1) {
+                this.countdown = jitter(this.rand, ticks);
+                return true;
+            }
+            this.countdown--;
+            return false;
+        }
+    }
 }

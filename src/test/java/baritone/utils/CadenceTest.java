@@ -194,6 +194,82 @@ public class CadenceTest {
         assertTrue(seen.contains(3) && seen.contains(4) && seen.contains(5));
     }
 
+    /** A thousand seconds of a process holding control: the mining rescan's own default interval is five. */
+    private static final int LONG_RUN = 20000;
+
+    private static final int RESCAN = 5;
+
+    @Test
+    public void theScanHappensAtOnceAndThenOnItsOwnClock() {
+        final Cadence.Repeat repeat = new Cadence.Repeat(new Random(1));
+        assertTrue("a process that has just taken control waited before looking at the world", repeat.due(RESCAN));
+        int waited = 0;
+        while (!repeat.due(RESCAN) && waited < 100) {
+            waited++;
+        }
+        // the gap between one scan and the next is the setting with a tick of slack: the ticks counted here
+        // are the ones the scan did not happen on, so one fewer than the gap at each end
+        assertTrue("the next scan was " + (waited + 1) + " ticks after the last", waited >= RESCAN - 2 && waited <= RESCAN);
+    }
+
+    @Test
+    public void theIntervalWandersInsteadOfRepeatingOnAGrid() {
+        final Cadence.Repeat repeat = new Cadence.Repeat(new Random(2));
+        final Set<Integer> residues = new HashSet<>();
+        final Set<Integer> gaps = new HashSet<>();
+        int fires = 0;
+        int since = 0;
+        for (int t = 0; t < LONG_RUN; t++) {
+            since++;
+            if (repeat.due(RESCAN)) {
+                if (fires > 0) {
+                    gaps.add(since);
+                }
+                residues.add(t % RESCAN);
+                fires++;
+                since = 0;
+            }
+        }
+        // the setting is still the average, tick either way, and the count over a thousand seconds is the
+        // one the setting asks for rather than something the slack has quietly changed
+        assertEquals("gaps were " + gaps, 3, gaps.size());
+        assertTrue(gaps.contains(RESCAN - 1) && gaps.contains(RESCAN) && gaps.contains(RESCAN + 1));
+        assertTrue("fired " + fires + " times over " + LONG_RUN + " ticks", fires > LONG_RUN / RESCAN * 9 / 10);
+        assertTrue("fired " + fires + " times over " + LONG_RUN + " ticks", fires < LONG_RUN / RESCAN * 11 / 10);
+        // and the point of all of it: the scans are not all on the same tick of the interval, so the bot is
+        // not only ever able to change its mind on one tick in five. Measured over 20000 ticks: every one of
+        // the five residues, from a grid that used to hold exactly one.
+        assertEquals("the scans landed on " + residues.size() + " ticks of the interval", RESCAN, residues.size());
+    }
+
+    @Test
+    public void zeroAsksForNothingAtAll() {
+        final Cadence.Repeat repeat = new Cadence.Repeat(new Random(3));
+        for (int t = 0; t < 200; t++) {
+            assertFalse("something happened on a disabled interval", repeat.due(0));
+            assertFalse("something happened on a negative interval", repeat.due(-1));
+        }
+        // and having been asked for nothing, the clock still knows how to start
+        assertTrue(repeat.due(RESCAN));
+    }
+
+    @Test
+    public void anIntervalOfOneTickStillFiresEveryTick() {
+        final Cadence.Repeat repeat = new Cadence.Repeat(new Random(4));
+        for (int t = 0; t < 100; t++) {
+            assertTrue("a one tick interval skipped a tick", repeat.due(1));
+        }
+    }
+
+    @Test
+    public void theSameSeedScansAtTheSameTicks() {
+        final Cadence.Repeat first = new Cadence.Repeat(new Random(6));
+        final Cadence.Repeat second = new Cadence.Repeat(new Random(6));
+        for (int t = 0; t < 5000; t++) {
+            assertEquals(first.due(RESCAN), second.due(RESCAN));
+        }
+    }
+
     @Test
     public void anIntervalOfOneTickIsLeftAlone() {
         // rightClickSpeed and friends can be set to one tick, meaning "as fast as the game will let me".

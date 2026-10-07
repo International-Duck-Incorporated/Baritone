@@ -34,6 +34,7 @@ import baritone.api.utils.RotationUtils;
 import baritone.api.utils.input.Input;
 import baritone.pathing.movement.MovementHelper;
 import baritone.utils.BaritoneProcessHelper;
+import baritone.utils.Cadence;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.entity.Entity;
@@ -52,6 +53,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
+import java.util.Random;
 import java.util.function.Predicate;
 
 public final class FarmProcess extends BaritoneProcessHelper implements IFarmProcess {
@@ -59,7 +61,11 @@ public final class FarmProcess extends BaritoneProcessHelper implements IFarmPro
     private boolean active;
 
     private List<BlockPos> locations;
-    private int tickCount;
+    /**
+     * The clock behind {@code mineGoalUpdateInterval}: a tick of slack on either side of the setting, drawn
+     * afresh each time round. See {@link Cadence.Repeat}.
+     */
+    private final Cadence.Repeat rescan = new Cadence.Repeat(new Random());
 
     private int range;
     private BlockPos center;
@@ -194,7 +200,7 @@ public final class FarmProcess extends BaritoneProcessHelper implements IFarmPro
 
     @Override
     public PathingCommand onTick(boolean calcFailed, boolean isSafeToCancel) {
-        if (Baritone.settings().mineGoalUpdateInterval.value != 0 && tickCount++ % Baritone.settings().mineGoalUpdateInterval.value == 0) {
+        if (this.rescan.due(Baritone.settings().mineGoalUpdateInterval.value)) {
             ArrayList<Block> scan = new ArrayList<>();
             for (Harvest harvest : Harvest.values()) {
                 scan.add(harvest.block);

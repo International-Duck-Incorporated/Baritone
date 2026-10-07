@@ -30,6 +30,7 @@ import baritone.api.utils.input.Input;
 import baritone.pathing.movement.CalculationContext;
 import baritone.pathing.movement.MovementHelper;
 import baritone.utils.BaritoneProcessHelper;
+import baritone.utils.Cadence;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.inventory.InventoryMenu;
 import net.minecraft.world.level.block.Block;
@@ -45,7 +46,11 @@ public final class GetToBlockProcess extends BaritoneProcessHelper implements IG
     private List<BlockPos> blacklist; // locations we failed to calc to
     private BlockPos start;
 
-    private int tickCount = 0;
+    /**
+     * The clock behind {@code mineGoalUpdateInterval}: a tick of slack on either side of the setting, drawn
+     * afresh each time round. See {@link Cadence.Repeat}.
+     */
+    private final Cadence.Repeat rescan = new Cadence.Repeat(new Random());
     private int arrivalTickCount = 0;
 
     public GetToBlockProcess(Baritone baritone) {
@@ -107,7 +112,7 @@ public final class GetToBlockProcess extends BaritoneProcessHelper implements IG
             }
         }
         int mineGoalUpdateInterval = Baritone.settings().mineGoalUpdateInterval.value;
-        if (mineGoalUpdateInterval != 0 && tickCount++ % mineGoalUpdateInterval == 0) { // big brain
+        if (this.rescan.due(mineGoalUpdateInterval)) {
             List<BlockPos> current = new ArrayList<>(knownLocations);
             CalculationContext context = new GetToBlockCalculationContext(true);
             Baritone.getExecutor().execute(() -> rescan(current, context));
