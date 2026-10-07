@@ -157,6 +157,26 @@ public final class Cadence {
     }
 
     /**
+     * Ticks between deciding on a different hotbar slot and having it in hand: two to five.
+     * <p>
+     * The slot used to change on the tick the need for it was noticed - the pickaxe gave way to the shovel
+     * on the very tick the gravel came into reach, and the throwaway block was in hand on the tick the gap
+     * was found - which is a reaction of nothing at all, on something that is visible to everyone as the
+     * held item changing. A person sees the block, finds the key, and presses it: a hundred to two hundred
+     * and fifty milliseconds, and the click comes after the item is in the hand, never before. See
+     * {@code HotbarSwitch}, which spends this.
+     */
+    public static final int HOTBAR_SWITCH_MIN = 2;
+    public static final int HOTBAR_SWITCH_MAX = 5;
+
+    /**
+     * @return the beat, in ticks, between deciding on a slot and pressing its key; inclusive of both ends
+     */
+    public static int hotbarSwitch(Random rand) {
+        return HOTBAR_SWITCH_MIN + rand.nextInt(HOTBAR_SWITCH_MAX - HOTBAR_SWITCH_MIN + 1);
+    }
+
+    /**
      * Ticks a bot stands still after a fall lands: two to four, with a tick of slack either side, and
      * more for a drop that actually hurt.
      * <p>

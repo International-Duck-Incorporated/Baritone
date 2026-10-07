@@ -21,6 +21,7 @@ import baritone.Baritone;
 import baritone.api.event.events.TickEvent;
 import baritone.api.utils.Helper;
 import baritone.utils.Cadence;
+import baritone.utils.HotbarSwitch;
 import baritone.utils.ToolSet;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.Direction;
@@ -59,16 +60,49 @@ public final class InventoryBehavior extends Behavior implements Helper {
      */
     private int swapInterval = -1;
 
+    /**
+     * The beat between deciding on a hotbar slot and pressing its key. Everything that wants something
+     * in the hand asks through {@link #hold}; the key is pressed here, in {@link #onTick}, and the mouse
+     * buttons wait on {@link #switchingHands()} in the meantime.
+     */
+    private final HotbarSwitch hand = new HotbarSwitch(this.cadenceRand);
+
     public InventoryBehavior(Baritone baritone) {
         super(baritone);
     }
 
+    /**
+     * Asks for a hotbar slot to be in the hand: the best tool for a block, a block to throw down, the
+     * builder's next material. It gets there a beat later ({@link Cadence#hotbarSwitch}), and nothing
+     * is clicked until it has.
+     *
+     * @param slot the hotbar slot, 0 to 8
+     */
+    public void hold(int slot) {
+        this.hand.ask(slot, ctx.player().getInventory().getSelectedSlot());
+    }
+
+    /**
+     * Whether a slot has been asked for and is not in the hand yet. The two mouse buttons wait on this,
+     * because the item that would be used is not the one that was decided on.
+     */
+    public boolean switchingHands() {
+        return this.hand.switching();
+    }
+
     @Override
     public void onTick(TickEvent event) {
-        if (!Baritone.settings().allowInventory.value) {
+        if (event.getType() == TickEvent.Type.OUT) {
             return;
         }
-        if (event.getType() == TickEvent.Type.OUT) {
+        // The key, when the beat is up. After the pathing behaviour's tick, where the asks are made, and
+        // before the input handler's, where the clicks are: the behaviours tick in the order they were
+        // registered, and this one is between those two.
+        final int press = this.hand.tick(ctx.player().getInventory().getSelectedSlot());
+        if (press >= 0) {
+            ctx.player().getInventory().setSelectedSlot(press);
+        }
+        if (!Baritone.settings().allowInventory.value) {
             return;
         }
         if (ctx.player().containerMenu != ctx.player().inventoryMenu) {
@@ -228,7 +262,7 @@ public final class InventoryBehavior extends Behavior implements Helper {
             // acceptableThrowawayItems to the CalculationContext
             if (desired.test(item)) {
                 if (select) {
-                    p.getInventory().setSelectedSlot(i);
+                    this.hold(i);
                 }
                 return true;
             }
@@ -243,7 +277,7 @@ public final class InventoryBehavior extends Behavior implements Helper {
                 ItemStack item = inv.get(i);
                 if (item.isEmpty() || item.getItem().components().has(DataComponents.TOOL)) {
                     if (select) {
-                        p.getInventory().setSelectedSlot(i);
+                        this.hold(i);
                     }
                     return true;
                 }
@@ -263,7 +297,7 @@ public final class InventoryBehavior extends Behavior implements Helper {
                         if (!requestSwapWithHotBar(i, 7)) {
                             return false;
                         }
-                        p.getInventory().setSelectedSlot(7);
+                        this.hold(7);
                     }
                     return true;
                 }

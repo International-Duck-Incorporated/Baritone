@@ -658,7 +658,9 @@ public interface MovementHelper extends ActionCosts, Helper {
      */
     static void switchToBestToolFor(IPlayerContext ctx, BlockState b, ToolSet ts, boolean preferSilkTouch) {
         if (Baritone.settings().autoTool.value && !Baritone.settings().assumeExternalAutoTool.value) {
-            ctx.player().getInventory().setSelectedSlot(ts.getBestSlot(b.getBlock(), preferSilkTouch));
+            // asked for rather than set: the key is pressed a beat later, and the click waits for it
+            ((Baritone) BaritoneAPI.getProvider().getBaritoneForPlayer(ctx.player())).getInventoryBehavior()
+                    .hold(ts.getBestSlot(b.getBlock(), preferSilkTouch));
         }
     }
 

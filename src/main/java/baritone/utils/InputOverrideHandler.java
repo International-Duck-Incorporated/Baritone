@@ -105,8 +105,12 @@ public final class InputOverrideHandler extends Behavior implements IInputOverri
         if (isInputForcedDown(Input.CLICK_LEFT)) {
             setInputForceState(Input.CLICK_RIGHT, false);
         }
-        blockBreakHelper.tick(isInputForcedDown(Input.CLICK_LEFT));
-        blockPlaceHelper.tick(isInputForcedDown(Input.CLICK_RIGHT));
+        // Neither button while the hand is between slots: the item that would be used is not the one that
+        // was decided on. The beat before the click still runs underneath - the two overlap, the way a
+        // person's key press and their crosshair settling do - so a switch costs its own beat and no more.
+        final boolean handReady = !baritone.getInventoryBehavior().switchingHands();
+        blockBreakHelper.tick(isInputForcedDown(Input.CLICK_LEFT), handReady);
+        blockPlaceHelper.tick(isInputForcedDown(Input.CLICK_RIGHT), handReady);
 
         if (inControl()) {
             if (ctx.player().input.getClass() != PlayerMovementInput.class) {

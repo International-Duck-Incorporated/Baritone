@@ -86,6 +86,16 @@ public final class BlockBreakHelper {
     }
 
     public void tick(boolean isLeftClick) {
+        this.tick(isLeftClick, true);
+    }
+
+    /**
+     * @param isLeftClick whether the button is being asked for this tick
+     * @param handReady   whether the item in the hand is the one that was decided on - false while a
+     *                    hotbar switch is on its way, see {@code HotbarSwitch}, during which the button
+     *                    is not pressed and whatever was being broken is let go of
+     */
+    public void tick(boolean isLeftClick, boolean handReady) {
         // The callers only ask for this once the trace lands on the block, so the tick the request starts is
         // the tick the crosshair arrived, and the swing comes a beat after that rather than in the same
         // tick. A run of blocks clicked without the crosshair ever leaving a face pays the beat once.
@@ -99,7 +109,7 @@ public final class BlockBreakHelper {
         HitResult trace = ctx.objectMouseOver();
         boolean isBlockTrace = trace != null && trace.getType() == HitResult.Type.BLOCK;
 
-        if (isLeftClick && isBlockTrace) {
+        if (isLeftClick && isBlockTrace && handReady) {
             ctx.playerController().setHittingBlock(wasHitting);
             if (ctx.playerController().hasBrokenBlock()) {
                 ctx.playerController().syncHeldItem();

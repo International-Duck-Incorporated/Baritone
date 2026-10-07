@@ -41,6 +41,17 @@ public class BlockPlaceHelper {
     }
 
     public void tick(boolean rightClickRequested) {
+        this.tick(rightClickRequested, true);
+    }
+
+    /**
+     * @param rightClickRequested whether the button is being asked for this tick
+     * @param handReady           whether the item in the hand is the one that was decided on - false while
+     *                            a hotbar switch is on its way, see {@code HotbarSwitch}, during which the
+     *                            button is not pressed: a right click with the wrong item in hand is not a
+     *                            missed place, it is a bucket emptied or a pearl thrown
+     */
+    public void tick(boolean rightClickRequested, boolean handReady) {
         // The same beat the pickaxe gets, between arriving on a face and clicking it, and not spent while
         // the player is off the ground. See Cadence.Settle: MovementParkour places a block to land on.
         if (this.sightSettle.waiting(rightClickRequested, ctx.player().onGround())) {
@@ -51,7 +62,7 @@ public class BlockPlaceHelper {
             return;
         }
         HitResult mouseOver = ctx.objectMouseOver();
-        if (!rightClickRequested || ctx.player().isHandsBusy() || mouseOver == null || mouseOver.getType() != HitResult.Type.BLOCK) {
+        if (!rightClickRequested || !handReady || ctx.player().isHandsBusy() || mouseOver == null || mouseOver.getType() != HitResult.Type.BLOCK) {
             return;
         }
         // not exactly rightClickSpeed ticks apart, every time: see Cadence.jitter
