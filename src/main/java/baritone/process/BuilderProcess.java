@@ -35,6 +35,7 @@ import baritone.pathing.movement.Movement;
 import baritone.pathing.movement.MovementHelper;
 import baritone.utils.BaritoneProcessHelper;
 import baritone.utils.BlockStateInterface;
+import baritone.utils.Cadence;
 import baritone.utils.PathingCommandContext;
 import baritone.utils.schematic.MapArtSchematic;
 import baritone.utils.schematic.SchematicSystem;
@@ -70,6 +71,9 @@ import static baritone.api.pathing.movement.ActionCosts.COST_INF;
 
 public final class BuilderProcess extends BaritoneProcessHelper implements IBuilderProcess {
 
+    /** Ticks the builder lets the hand rest after a block goes down, before taking the next one on. */
+    private static final int PLACE_REST = 5;
+
     private static final Set<Property<?>> ORIENTATION_PROPS =
             ImmutableSet.of(
                     RotatedPillarBlock.AXIS, HorizontalDirectionalBlock.FACING,
@@ -84,7 +88,13 @@ public final class BuilderProcess extends BaritoneProcessHelper implements IBuil
     private ISchematic realSchematic;
     private ISchematic schematic;
     private Vec3i origin;
-    private int ticks;
+    /**
+     * Times the rest between one block placed and the next. Five ticks - a quarter of a second - is the
+     * number this code has always used; what changes is that {@link Cadence.Run} draws the rest afresh each
+     * time instead of resetting a counter to the same figure, so a wall goes up at an unsteady rate rather
+     * than on a metronome, while the average stays exactly where the setting left it.
+     */
+    private final Cadence.Run placeRest = new Cadence.Run(new Random());
     private boolean paused;
     private int layer;
     private int numRepeats;
@@ -443,10 +453,10 @@ public final class BuilderProcess extends BaritoneProcessHelper implements IBuil
         }
         approxPlaceable = approxPlaceable(36);
         if (baritone.getInputOverrideHandler().isInputForcedDown(Input.CLICK_LEFT)) {
-            ticks = 5;
-        } else {
-            ticks--;
+            // a block went down this tick, so the hand gets a moment before the next one is chosen
+            this.placeRest.run(PLACE_REST);
         }
+        this.placeRest.advance();
         baritone.getInputOverrideHandler().clearAllKeys();
         if (paused) {
             return new PathingCommand(null, PathingCommandType.CANCEL_AND_SET_GOAL);
@@ -551,7 +561,7 @@ public final class BuilderProcess extends BaritoneProcessHelper implements IBuil
         }
         List<BlockState> desirableOnHotbar = new ArrayList<>();
         Optional<Placement> toPlace = searchForPlacables(bcc, desirableOnHotbar);
-        if (toPlace.isPresent() && isSafeToCancel && ctx.player().onGround() && ticks <= 0) {
+        if (toPlace.isPresent() && isSafeToCancel && ctx.player().onGround() && !this.placeRest.running()) {
             Rotation rot = toPlace.get().rot;
             baritone.getLookBehavior().updateTarget(rot, true);
             ctx.player().getInventory().setSelectedSlot(toPlace.get().hotbarSelection);

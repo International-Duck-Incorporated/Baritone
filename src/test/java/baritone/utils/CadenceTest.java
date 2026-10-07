@@ -34,6 +34,8 @@ import static org.junit.Assert.assertTrue;
  */
 public class CadenceTest {
 
+    private static final int REST = 5;
+
     @Test
     public void thePauseIsNeverZero() {
         assertTrue("a zero pause means breaking blocks every tick", Cadence.RETARGET_DELAY_MIN >= 1);
@@ -268,6 +270,74 @@ public class CadenceTest {
         for (int t = 0; t < 5000; t++) {
             assertEquals(first.due(RESCAN), second.due(RESCAN));
         }
+    }
+
+    @Test
+    public void aRestLastsAboutAsLongAsItWasAskedFor() {
+        final Cadence.Run run = new Cadence.Run(new Random(1));
+        run.run(0);
+        assertFalse("a rest of nothing was still running", run.running());
+        run.run(-1);
+        assertFalse("a rest of less than nothing was still running", run.running());
+        run.run(REST);
+        assertTrue("the rest never started", run.running());
+        int lasted = 0;
+        while (run.running() && lasted < 100) {
+            lasted++;
+            run.advance();
+        }
+        // the rest covers the tick it was asked for, so it spans the setting either side of exact
+        assertTrue("the rest lasted " + lasted + " ticks", lasted >= REST - 1 && lasted <= REST + 1);
+        // and once it is over, it stays over until it is asked for again
+        for (int t = 0; t < 20; t++) {
+            run.advance();
+            assertFalse("a finished rest ran on by itself", run.running());
+        }
+    }
+
+    @Test
+    public void backToBackRestsAreNotAllTheSameLength() {
+        final Cadence.Run run = new Cadence.Run(new Random(2));
+        final Set<Integer> lengths = new HashSet<>();
+        int total = 0;
+        final int rests = 400;
+        for (int i = 0; i < rests; i++) {
+            run.run(REST);
+            int lasted = 0;
+            while (run.running()) {
+                lasted++;
+                run.advance();
+            }
+            lengths.add(lasted);
+            total += lasted;
+            run.advance(); // whatever the caller does between rests
+        }
+        // the builder asks for the same five ticks every time, and never gets it twice running: what a
+        // person watching a wall go up reads is the unevenness, not the average, and the average is exactly
+        // where the old counter left it
+        assertTrue("every rest was " + lengths, lengths.size() > 1);
+        for (int length : lengths) {
+            assertTrue("a rest lasted " + length + " ticks", length >= REST - 1 && length <= REST + 1);
+        }
+        final double mean = (double) total / rests;
+        assertTrue("the rests averaged " + mean, Math.abs(mean - REST) < 0.3);
+    }
+
+    @Test
+    public void aRestAsksToBeMeasuredFromTheLastThingThatHappened() {
+        // the builder re-asks on every tick a block goes down, which it does while a click is held: the
+        // rest runs from the latest block, so a held click does not build up a rest it then has to serve
+        final Cadence.Run run = new Cadence.Run(new Random(7));
+        run.run(REST);
+        run.advance();
+        run.advance();
+        run.run(REST);
+        int lasted = 0;
+        while (run.running()) {
+            lasted++;
+            run.advance();
+        }
+        assertTrue("the rest was " + lasted + " ticks after being renewed", lasted >= REST - 1 && lasted <= REST + 1);
     }
 
     @Test

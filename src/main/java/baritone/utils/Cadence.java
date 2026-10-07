@@ -210,4 +210,51 @@ public final class Cadence {
             return false;
         }
     }
+
+    /**
+     * A rest that is timed from the moment it is asked for, rather than an interval that comes round again.
+     * <p>
+     * {@link Repeat} answers "is it time to look again", which a process asks every tick for as long as it
+     * holds control. This answers the narrower question a loop asks once it has actually done something: the
+     * builder stands still for a beat after a block goes down, and that beat has to be timed from the block.
+     * There is no grid to drift off, because the block did not land on a grid in the first place - but the
+     * length is {@link #jitter}ed like every other interval in here, so no two rests are the same, while the
+     * average stays on the number the caller passed.
+     */
+    public static final class Run {
+
+        private final Random rand;
+        private int countdown;
+
+        public Run(Random rand) {
+            this.rand = rand;
+        }
+
+        /**
+         * Starts a rest of about {@code ticks} ticks from this moment. A rest that is already running is
+         * replaced rather than added to - the clock is the time since the last thing that happened, not since
+         * the first.
+         *
+         * @param ticks how long to rest for; {@code 0} or less means do not rest at all
+         */
+        public void run(int ticks) {
+            this.countdown = ticks <= 0 ? 0 : jitter(this.rand, ticks);
+        }
+
+        /**
+         * One tick of the clock. Call it once per tick, after anything that can call {@link #run}.
+         */
+        public void advance() {
+            if (this.countdown > 0) {
+                this.countdown--;
+            }
+        }
+
+        /**
+         * @return whether the rest is still going, i.e. whether the caller should hold off this tick
+         */
+        public boolean running() {
+            return this.countdown > 0;
+        }
+    }
 }
