@@ -159,6 +159,41 @@ public class MovementOptionTest {
     }
 
     @Test
+    public void theCameraStepsButTheWalkDoesNot() {
+        // What makes this shape something the bot can hold rather than something it keeps re-deciding, and
+        // the reason the snap is worth having at all. Two properties, both of them about a walk going on
+        // from tick to tick:
+        //
+        // The angle the camera is told to hold is a fixed point of its own rule. Holding it asks for it
+        // again, so a bot that has settled keeps pressing the same keys and looking the same way, instead
+        // of chasing an angle that moves as it approaches.
+        //
+        // And at the fences between two of the camera's steps - where the target jumps by a whole step, the
+        // one place this could have been a twitch - the walk is the direction asked for on both sides. The
+        // camera turning a step is paid for entirely by a different combination of the same keys, so the
+        // bot does not so much as lean while its head moves.
+        for (float ideal = -180f; ideal < 180f; ideal += 11.25f) {
+            for (int step = -4; step <= 4; step++) {
+                for (float side = -0.25f; side <= 0.25f; side += 0.5f) {
+                    final float fence = ideal + 22.5f + 45f * step;
+                    final float facing = Rotation.normalizeYaw(fence + side);
+                    final float held = MovementOption.lookYaw(facing, ideal);
+                    assertEquals("holding the camera angle does not ask for the same angle again",
+                            held, MovementOption.lookYaw(held, ideal), 1e-3f);
+                    final Optional<MovementOption> pressed = MovementOption.closest(
+                            (float) Math.sin(held * DEG), (float) Math.cos(held * DEG),
+                            (float) Math.sin(ideal * DEG), (float) Math.cos(ideal * DEG));
+                    assertTrue("nothing was pressed at all", pressed.isPresent());
+                    final float walked = (float) Math.toDegrees(Math.atan2(
+                            pressed.get().motionX(), pressed.get().motionZ()));
+                    assertEquals("the walk crossed the fence with the camera",
+                            0f, Rotation.normalizeYaw(walked - ideal), 1e-3f);
+                }
+            }
+        }
+    }
+
+    @Test
     public void theStraightestCombinationWins() {
         // Between two options the closer one is taken, which is what makes the direction change gradual as
         // the player turns: as the facing sweeps, the combination changes at the halfway marks rather than
