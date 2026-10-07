@@ -51,7 +51,6 @@ import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 
@@ -673,14 +672,13 @@ public interface MovementHelper extends ActionCosts, Helper {
     }
 
     static void moveTowardsWithoutRotation(IPlayerContext ctx, MovementState state, float idealYaw) {
-        MovementOption.getOptions(
+        MovementOption.closest(
                 Mth.sin(ctx.playerRotations().getYaw() * DEG_TO_RAD_F),
                 Mth.cos(ctx.playerRotations().getYaw() * DEG_TO_RAD_F),
-                Baritone.settings().allowSprint.value
-        ).min(Comparator.comparing(option -> option.distanceToSq(
                 Mth.sin(idealYaw * DEG_TO_RAD_F),
-                Mth.cos(idealYaw * DEG_TO_RAD_F)
-        ))).ifPresent(selection -> selection.setInputs(state));
+                Mth.cos(idealYaw * DEG_TO_RAD_F),
+                Baritone.settings().allowSprint.value
+        ).ifPresent(selection -> selection.setInputs(state));
     }
 
     static void moveTowardsWithoutRotation(IPlayerContext ctx, MovementState state, BlockPos dest) {

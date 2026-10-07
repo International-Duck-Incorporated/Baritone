@@ -20,6 +20,8 @@ package baritone.pathing.movement;
 import baritone.api.utils.input.Input;
 import net.minecraft.util.Mth;
 
+import java.util.Comparator;
+import java.util.Optional;
 import java.util.stream.Stream;
 
 public record MovementOption(Input input1, Input input2, float motionX, float motionZ) {
@@ -42,6 +44,28 @@ public record MovementOption(Input input1, Input input2, float motionX, float mo
         return Mth.abs(motionX() - otherX) + Mth.abs(motionZ() - otherZ);
     }
     
+    /**
+     * The key combination whose movement comes closest to the direction that was asked for.
+     * <p>
+     * The options are the player's own frame - forward, back, and the six strafes - so the direction each
+     * of them moves in has to be turned from the direction the player is currently facing, and the one
+     * picked is the one that lands nearest to where the movement wants to go. This is how the bot changes
+     * walking direction without turning: it presses a different combination of the same four keys, which
+     * is the only way a keyboard has ever changed a person's mind about which way to walk. Extracted from
+     * the caller so that "the keys always go the way the movement asked" is a thing that can be tested.
+     *
+     * @param motionX  the world direction the player is currently moving in, x component
+     * @param motionZ  the same, z component
+     * @param idealX   the world direction the movement wants to go in, x component
+     * @param idealZ   the same, z component
+     * @param canSprint whether the sprinter's longer stride is available, which shifts the choice slightly
+     * @return the combination to press, or empty if there are somehow no options at all
+     */
+    public static Optional<MovementOption> closest(float motionX, float motionZ, float idealX, float idealZ, boolean canSprint) {
+        return getOptions(motionX, motionZ, canSprint)
+                .min(Comparator.comparing(option -> option.distanceToSq(idealX, idealZ)));
+    }
+
     public static Stream<MovementOption> getOptions(float motionX, float motionZ, boolean canSprint) {
         return Stream.of(
                 new MovementOption(Input.MOVE_FORWARD, canSprint ? motionX * SPRINT_MULTIPLIER : motionX, canSprint ? motionZ * SPRINT_MULTIPLIER : motionZ),
