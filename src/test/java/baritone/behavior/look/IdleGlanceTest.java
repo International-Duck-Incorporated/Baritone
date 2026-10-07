@@ -52,11 +52,14 @@ public class IdleGlanceTest {
 
     @Test
     public void aGlanceIsBoundedAndAlwaysComesHome() {
-        final IdleGlance glance = new IdleGlance();
+        final IdleGlance glance = new IdleGlance(new Random(1));
         final Rotation camera = new Rotation(35f, 4f);
         Rotation previous = null;
         int active = 0, gestures = 0, streak = 0, longest = 0;
-        float maxYawDeviation = 0f, maxPitchDeviation = 0f, maxStep = 0f;
+        int wandering = 0, atTheHand = 0;
+        float maxYawDeviation = 0f, maxStep = 0f;
+        float gesturePitch = 0f, gestureLowest = 0f, deepestWander = 0f, deepestHand = 0f;
+        boolean lookedUp = false;
         for (int t = 0; t < 6000; t++) {
             final Rotation sent = glance.next(camera, true, IdleGlanceTest::step);
             if (sent == null) {
@@ -68,14 +71,34 @@ public class IdleGlanceTest {
                             camera.getYaw(), previous.getYaw(), 1e-4f);
                     assertEquals("the glance stopped away from home (pitch)",
                             camera.getPitch(), previous.getPitch(), 1e-4f);
+                    // Two gestures, one bound each: a look around is a yaw gesture with a few degrees of
+                    // pitch in it, and a look at the hand is a pitch gesture of thirty degrees or so.
+                    // Which of the two a finished glance was is read off how far it took the pitch.
+                    if (gesturePitch > 7.5f) {
+                        atTheHand++;
+                        // how far below level it went, which is where the rule lives: the hand is down
+                        // there, and the camera the glance started from is not part of it
+                        deepestHand = Math.min(deepestHand, gestureLowest);
+                    } else {
+                        wandering++;
+                        deepestWander = Math.max(deepestWander, gesturePitch);
+                    }
+                    gesturePitch = 0f;
+                    gestureLowest = 0f;
                 }
                 previous = null;
                 longest = Math.max(longest, streak);
                 streak = 0;
                 continue;
             }
+            final float pitchDeviation = Math.abs(sent.getPitch() - camera.getPitch());
             maxYawDeviation = Math.max(maxYawDeviation, Math.abs(Rotation.normalizeYaw(sent.getYaw() - camera.getYaw())));
-            maxPitchDeviation = Math.max(maxPitchDeviation, Math.abs(sent.getPitch() - camera.getPitch()));
+            gesturePitch = Math.max(gesturePitch, pitchDeviation);
+            gestureLowest = Math.min(gestureLowest, sent.getPitch());
+            if (sent.getPitch() - camera.getPitch() > 7.5f) {
+                // the deep half of a glance is the hand, which is below the eye - never the sky
+                lookedUp = true;
+            }
             if (previous != null) {
                 maxStep = Math.max(maxStep, Math.abs(Rotation.normalizeYaw(sent.getYaw() - previous.getYaw())));
             }
@@ -87,13 +110,21 @@ public class IdleGlanceTest {
             }
         }
         assertTrue("a glance strayed more than 28 deg in yaw: " + maxYawDeviation, maxYawDeviation <= 28.5f);
-        assertTrue("a glance strayed more than 7 deg in pitch: " + maxPitchDeviation, maxPitchDeviation <= 7.5f);
+        assertTrue("a look around went " + deepestWander + " deg off in pitch", deepestWander <= 7.5f);
+        assertTrue("a look at the hand went down to " + deepestHand + " deg", deepestHand >= -38.5f);
+        assertTrue("a glance looked up at nothing", !lookedUp);
         assertTrue("a glance jumped " + maxStep + " deg in one tick", maxStep <= AimDynamics.MAX_YAW_STEP + 0.01f);
         assertTrue("a glance ran for " + longest + " ticks, past its cap", longest <= 100);
         // 6000 ticks is five minutes; a person glances about now and then, they do not scan constantly
         assertTrue("only " + gestures + " glances in five minutes", gestures >= 10);
         assertTrue("glancing constantly: " + gestures + " in five minutes", gestures <= 120);
         assertTrue("the head was active " + (100.0 * active / 6000.0) + "% of the time", active < 3600);
+        // and now and then one of those glances is at the hand rather than around: a person standing about
+        // checks what they are holding, but it is a habit and not a tic
+        assertTrue("the hand was checked " + atTheHand + " times in five minutes", atTheHand >= 3);
+        assertTrue(atTheHand + " hand checks in " + gestures + " glances",
+                atTheHand * 2 <= gestures);
+        assertTrue("only " + wandering + " glances looked around", wandering >= 10);
     }
 
     @Test
@@ -189,19 +220,21 @@ public class IdleGlanceTest {
     @Test
     public void nothingOfferedMeansNothingIsLookedAt() {
         // the supplier answering null - there is nobody near - has to leave the glance exactly as it was
-        final IdleGlance glance = new IdleGlance();
+        final IdleGlance glance = new IdleGlance(new Random(2));
         final Rotation camera = new Rotation(35f, 4f);
-        float maxYawDeviation = 0f, maxPitchDeviation = 0f;
+        float maxYawDeviation = 0f, maxUpPitch = 0f, lowestPitch = 0f;
         for (int t = 0; t < 6000; t++) {
             final Rotation sent = glance.next(camera, true, IdleGlanceTest::step, () -> null);
             if (sent == null) {
                 continue;
             }
             maxYawDeviation = Math.max(maxYawDeviation, Math.abs(Rotation.normalizeYaw(sent.getYaw() - camera.getYaw())));
-            maxPitchDeviation = Math.max(maxPitchDeviation, Math.abs(sent.getPitch() - camera.getPitch()));
+            maxUpPitch = Math.max(maxUpPitch, sent.getPitch() - camera.getPitch());
+            lowestPitch = Math.min(lowestPitch, sent.getPitch());
         }
         assertTrue("a glance strayed more than 28 deg in yaw: " + maxYawDeviation, maxYawDeviation <= 28.5f);
-        assertTrue("a glance strayed more than 7 deg in pitch: " + maxPitchDeviation, maxPitchDeviation <= 7.5f);
+        assertTrue("a glance looked up " + maxUpPitch + " deg", maxUpPitch <= 7.5f);
+        assertTrue("a glance went down to " + lowestPitch + " deg", lowestPitch >= -38.5f);
     }
 
     @Test

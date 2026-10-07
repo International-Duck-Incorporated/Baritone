@@ -62,6 +62,27 @@ public final class IdleGlance {
     private static final float MAX_PITCH = 7.0f;
 
     /**
+     * How often a glance looks down at what the hand is holding rather than around: about one wander in
+     * four.
+     * <p>
+     * The two are different gestures and neither can stand in for the other. Looking around is a yaw
+     * gesture - the head sweeps the horizon and comes back - and it is what a person does at a door, a
+     * junction, a wait. Checking the hand is a pitch gesture: the eyes drop to the item for a second without
+     * the head turning at all, and every player does it while standing about, because the thing being held
+     * is the thing with the durability on it. With both, an idle head moves in two dimensions instead of
+     * one, which is most of what separates a person waiting from a turret.
+     */
+    private static final float HAND_CHANCE = 0.25f;
+
+    /**
+     * Where the hand is, as a pitch to look at it by: down by thirty degrees or so, and a little to one
+     * side of straight ahead, because that is where an arm hangs.
+     */
+    private static final float HAND_PITCH_MIN = 24.0f;
+    private static final float HAND_PITCH_MAX = 38.0f;
+    private static final float HAND_YAW = 10.0f;
+
+    /**
      * How far the view may move away from where a glance started before the glance gives up. Movement
      * here means somebody moved the mouse themselves, and the polite thing is to get out of the way.
      */
@@ -88,7 +109,7 @@ public final class IdleGlance {
      */
     private static final Supplier<Rotation> NO_INTEREST = () -> null;
 
-    private final Random rand = new Random();
+    private final Random rand;
 
     private int cooldown = COOLDOWN_MIN;
     private int hold;
@@ -96,6 +117,17 @@ public final class IdleGlance {
     private Rotation aim;    // where the glance is pointed, null when none is running
     private Rotation home;   // where it started, and where it goes back to
     private Rotation sent;   // what the server was last told
+
+    public IdleGlance() {
+        this(new Random());
+    }
+
+    /**
+     * @param rand the source of variation, injectable so a run can be repeated; see {@code IdleGlanceTest}
+     */
+    public IdleGlance(Random rand) {
+        this.rand = rand;
+    }
 
     /**
      * @param camera where the player is actually looking right now
@@ -139,10 +171,12 @@ public final class IdleGlance {
                 lookAt = interest.get();
             }
             if (lookAt == null) {
-                lookAt = new Rotation(
-                        Rotation.normalizeYaw(camera.getYaw() + (this.rand.nextFloat() * 2.0f - 1.0f) * MAX_YAW),
-                        Rotation.clampPitch(camera.getPitch() + (this.rand.nextFloat() * 2.0f - 1.0f) * MAX_PITCH)
-                );
+                lookAt = this.rand.nextFloat() < HAND_CHANCE
+                        ? this.hand(camera)
+                        : new Rotation(
+                                Rotation.normalizeYaw(camera.getYaw() + (this.rand.nextFloat() * 2.0f - 1.0f) * MAX_YAW),
+                                Rotation.clampPitch(camera.getPitch() + (this.rand.nextFloat() * 2.0f - 1.0f) * MAX_PITCH)
+                        );
             }
             this.aim = new Rotation(Rotation.normalizeYaw(lookAt.getYaw()), Rotation.clampPitch(lookAt.getPitch()));
             this.hold = HOLD_MIN + this.rand.nextInt(HOLD_MAX - HOLD_MIN + 1);
@@ -178,6 +212,22 @@ public final class IdleGlance {
         }
         this.sent = wanted;
         return wanted;
+    }
+
+    /**
+     * Down at the hand, and never up.
+     * <p>
+     * A person already looking at the floor sees the item by doing nothing at all, so where the eye is below
+     * the hand the glance is the angle they are already holding - it arrives at once, is held for its
+     * moment, and comes back, which is the gesture of somebody checking rather than a head that dutifully
+     * lifts to the item and drops again.
+     */
+    private Rotation hand(Rotation camera) {
+        final float drop = HAND_PITCH_MIN + this.rand.nextFloat() * (HAND_PITCH_MAX - HAND_PITCH_MIN);
+        return new Rotation(
+                Rotation.normalizeYaw(camera.getYaw() + (this.rand.nextFloat() * 2.0f - 1.0f) * HAND_YAW),
+                Rotation.clampPitch(Math.min(camera.getPitch(), -drop))
+        );
     }
 
     private boolean reached(Rotation rotation) {
