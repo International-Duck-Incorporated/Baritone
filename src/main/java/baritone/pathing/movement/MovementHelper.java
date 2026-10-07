@@ -671,13 +671,17 @@ public interface MovementHelper extends ActionCosts, Helper {
         )).setInput(Input.MOVE_FORWARD, true);
     }
 
-    static void moveTowardsWithoutRotation(IPlayerContext ctx, MovementState state, float idealYaw) {
+    static void moveTowardsWithoutRotation(IPlayerContext ctx, MovementState state, float basisYaw, float idealYaw) {
         MovementOption.closest(
-                Mth.sin(ctx.playerRotations().getYaw() * DEG_TO_RAD_F),
-                Mth.cos(ctx.playerRotations().getYaw() * DEG_TO_RAD_F),
+                Mth.sin(basisYaw * DEG_TO_RAD_F),
+                Mth.cos(basisYaw * DEG_TO_RAD_F),
                 Mth.sin(idealYaw * DEG_TO_RAD_F),
                 Mth.cos(idealYaw * DEG_TO_RAD_F)
         ).ifPresent(selection -> selection.setInputs(state));
+    }
+
+    static void moveTowardsWithoutRotation(IPlayerContext ctx, MovementState state, float idealYaw) {
+        moveTowardsWithoutRotation(ctx, state, ctx.playerRotations().getYaw(), idealYaw);
     }
 
     static void moveTowardsWithoutRotation(IPlayerContext ctx, MovementState state, BlockPos dest) {
@@ -695,15 +699,18 @@ public interface MovementHelper extends ActionCosts, Helper {
                 VecUtils.getBlockPosCenter(dest),
                 ctx.playerRotations()
         ).getYaw();
-        float distance = Rotation.yawDistanceFromOffset(ctx.playerRotations().getYaw(), idealYaw) % 45f;
-        float newYaw = distance > 0f ?
-                distance > 22.5f ? distance - 45f : distance :
-                distance < -22.5f ? distance + 45f : distance;
-        state.setTarget(new MovementTarget(new Rotation(
-                ctx.playerRotations().getYaw() - newYaw,
+        // The camera turns in whole steps of 45 degrees and the keys pressed for the remainder walk the rest
+        // of the way. The two are chosen as a pair because they are applied as a pair: the game turns the
+        // pressed combination by whatever angle the camera is holding when the input becomes motion, so the
+        // combination is picked against the angle the camera is being told to hold, not against the angle
+        // the player happens to be facing. Picking them separately let the two roundings disagree by a whole
+        // step and walked the bot 45 degrees off its own path.
+        final Rotation look = new Rotation(
+                MovementOption.lookYaw(ctx.playerRotations().getYaw(), idealYaw),
                 ctx.playerRotations().getPitch()
-        ), true));
-        moveTowardsWithoutRotation(ctx, state, idealYaw);
+        );
+        state.setTarget(new MovementTarget(look, true));
+        moveTowardsWithoutRotation(ctx, state, look.getYaw(), idealYaw);
     }
 
     /**

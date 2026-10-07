@@ -17,6 +17,7 @@
 
 package baritone.pathing.movement;
 
+import baritone.api.utils.Rotation;
 import baritone.api.utils.input.Input;
 import org.junit.Test;
 
@@ -121,6 +122,40 @@ public class MovementOptionTest {
             }
         }
         assertTrue("a combination pointing only " + worst + " of the way there was chosen", worst > 0.9f);
+    }
+
+    @Test
+    public void theCameraAndTheKeysAddUpToTheDirectionAskedFor() {
+        // The camera and the keys are one gesture, not two: the game turns the pressed combination by the
+        // yaw the player is holding when the input becomes motion, and the camera is what decides that yaw.
+        // So the whole thing is walked here - pick the angle to hold, press the combination chosen for that
+        // angle, add them up - for every facing and every direction, and the sum has to be the direction the
+        // movement asked for. It was not: the angle and the keys used to be rounded separately and could
+        // disagree by a whole step, which walked the bot 45 degrees off its own path and had it weave back
+        // onto the line a tick later.
+        float worstError = 0f;
+        float worstTurn = 0f;
+        for (float facing = -180f; facing < 180f; facing += 0.25f) {
+            for (float ideal = -180f; ideal < 180f; ideal += 0.25f) {
+                final float held = MovementOption.lookYaw(facing, ideal);
+                final Optional<MovementOption> pressed = MovementOption.closest(
+                        (float) Math.sin(held * DEG), (float) Math.cos(held * DEG),
+                        (float) Math.sin(ideal * DEG), (float) Math.cos(ideal * DEG));
+                assertTrue("nothing was pressed at all", pressed.isPresent());
+                // where the pressed combination takes the player, which is the angle the player ends up
+                // walking along
+                final float walked = (float) Math.toDegrees(Math.atan2(
+                        pressed.get().motionX(), pressed.get().motionZ()));
+                final float error = Math.abs(Rotation.normalizeYaw(walked - ideal));
+                worstError = Math.max(worstError, error);
+                final float turn = Math.abs(Rotation.normalizeYaw(held - facing));
+                worstTurn = Math.max(worstTurn, turn);
+            }
+        }
+        assertTrue("the bot walked " + worstError + " degrees off the direction the movement asked for",
+                worstError < 1f);
+        assertTrue("the camera was told to turn " + worstTurn + " degrees, more than half a step",
+                worstTurn <= 22.5f + 1e-3f);
     }
 
     @Test

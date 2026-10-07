@@ -17,7 +17,9 @@
 
 package baritone.pathing.movement;
 
+import baritone.api.utils.Rotation;
 import baritone.api.utils.input.Input;
+import net.minecraft.util.Mth;
 
 import java.util.Comparator;
 import java.util.Optional;
@@ -28,9 +30,15 @@ import java.util.stream.Stream;
  * <p>
  * This is how the bot changes walking direction without turning - it presses a different combination, which
  * is the only way a keyboard has ever changed a person's mind about which way to walk - and the combination
- * picked is the one that points closest to where the movement wants to go.
+ * picked is the one that points closest to where the movement wants to go. The angle to hold the camera at
+ * while a combination is pressed is here too, next to the combinations it is paired with.
  */
 public record MovementOption(Input input1, Input input2, float motionX, float motionZ) {
+
+    /** how far apart two neighbouring combinations are */
+    private static final float STEP = 45f;
+    /** half of that: the most a person can be out by with four keys, and the most a camera needs to turn */
+    private static final float HALF_STEP = STEP / 2f;
 
     public MovementOption(Input input1, float motionX, float motionZ) {
         this(input1, null, motionX, motionZ);
@@ -66,6 +74,31 @@ public record MovementOption(Input input1, Input input2, float motionX, float mo
             return 2f;
         }
         return 1f - (this.motionX * idealX + this.motionZ * idealZ) / (length * idealLength);
+    }
+
+    /**
+     * The yaw to look along while the keys for {@code idealYaw} are pressed, so that they come out pointing
+     * at it.
+     * <p>
+     * The camera turns in whole steps of {@code STEP} degrees - the same grid the combinations sit on - and
+     * the keys cover the rest of the turn, which is why the snap is anchored at the direction the movement
+     * wants rather than at the direction the player happens to be facing: the remainder is then a whole
+     * number of steps, something a set of keys can actually press. The camera never has to turn more than
+     * half a step.
+     * <p>
+     * This has to be computed together with the keys and not separately from them, because the game applies
+     * them together: what the pressed combination means is measured from the yaw the player is holding at
+     * the moment the input is turned into motion, which is the angle this returns. Picking the camera angle
+     * with one rounding and the keys with another lets the two disagree by a whole step, and the bot then
+     * walks a whole step away from the line its path follows.
+     *
+     * @param facingYaw the yaw the player is currently looking along
+     * @param idealYaw  the yaw of the direction the movement wants to go in
+     * @return the yaw to hold while the combination for {@code idealYaw} is pressed
+     */
+    public static float lookYaw(float facingYaw, float idealYaw) {
+        final float steps = Mth.floor((facingYaw - idealYaw + HALF_STEP) / STEP);
+        return Rotation.normalizeYaw(idealYaw + STEP * steps);
     }
 
     /**
