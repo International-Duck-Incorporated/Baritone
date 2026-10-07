@@ -180,9 +180,16 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
 
     @Override
     public void updateTarget(Rotation rotation, boolean blockInteract) {
-        // a target about to be clicked is aimed at exactly - the lean stands aside, and takes its tick
-        // of memory with it either way
-        this.target = new Target(this.gazeAhead.lean(rotation, blockInteract), blockInteract, Target.Mode.resolve(ctx, blockInteract));
+        // The rotation the movement asked for is kept as it was asked for, because it is two things at
+        // once: the angle the game turns the pressed keys by (see onPlayerRotationMove, which hands it to
+        // Entity.moveRelative) and the angle the head is to look along. The lean onto the line ahead is
+        // only ever the second. Applied to the first, it steered: the keys were chosen against the walk's
+        // own yaw and the body was then turned by the leaned one, which walked it up to thirty degrees
+        // toward the inside of every corner and off the axis of a parkour run-up. A target about to be
+        // clicked is aimed at exactly - the lean stands aside, and takes its tick of memory with it
+        // either way.
+        this.target = new Target(rotation, this.gazeAhead.lean(rotation, blockInteract), blockInteract,
+                Target.Mode.resolve(ctx, blockInteract));
     }
 
     @Override
@@ -260,13 +267,16 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
                 this.prevRotation = new Rotation(ctx.player().getYRot(), ctx.player().getXRot());
                 // the aim is writing the camera again, so the idle head's base is a stale angle from now on
                 this.idleBase = null;
-                final Rotation wanted = this.processor.peekRotation(this.target.rotation);
                 if (ctx.player().isFallFlying()) {
                     // Elytra is a control loop: the flight path is solved assuming the angles it asked for
                     // last tick are the angles it has this tick. A lagging aim there is a crash, not a
-                    // personality trait, so flying keeps the old straight-to-target behaviour.
-                    this.aimRotation = wanted;
+                    // personality trait, so flying keeps the old straight-to-target behaviour - and it is
+                    // the steering rotation it keeps, not the gaze, for the same reason.
+                    this.aimRotation = this.processor.peekRotation(this.target.rotation);
                 } else {
+                    // What the head is to look along, which is the walk's own direction with the lean
+                    // onto the line ahead on it. The body is steered by target.rotation, never by this.
+                    final Rotation wanted = this.processor.peekRotation(this.target.gaze);
                     // On a fresh target the hand is wherever the player is currently looking.
                     final Rotation from = this.aimRotation != null ? this.aimRotation : this.prevRotation;
                     if (this.aimRotation == null || this.isNewDirection(wanted)) {
@@ -1040,7 +1050,20 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
 
     private static class Target {
 
+        /**
+         * The rotation the movement asked for, exactly as it asked for it. This is the one the body is
+         * steered by: {@link #onPlayerRotationMove} hands it to the game in place of the player's own
+         * angle when the pressed keys are turned into motion, so the keys a movement chose against it
+         * come out pointing where the movement meant. Nothing that is only about how the head looks may
+         * be applied to it.
+         */
         public final Rotation rotation;
+        /**
+         * Where the head is to look, which is {@link #rotation} with the lean onto the line ahead on it
+         * ({@link GazeAhead}), and is identical to it on a straight line and for anything about to be
+         * clicked. The aim eases toward this; the body never reads it.
+         */
+        public final Rotation gaze;
         /**
          * Whether acting on this rotation is the point of it - a block to break, a face to place against -
          * rather than it saying where the movement is going. Decides whether the aim may carry past it.
@@ -1048,8 +1071,9 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
         public final boolean blockInteract;
         public final Mode mode;
 
-        public Target(Rotation rotation, boolean blockInteract, Mode mode) {
+        public Target(Rotation rotation, Rotation gaze, boolean blockInteract, Mode mode) {
             this.rotation = rotation;
+            this.gaze = gaze;
             this.blockInteract = blockInteract;
             this.mode = mode;
         }

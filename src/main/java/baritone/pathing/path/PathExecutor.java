@@ -293,8 +293,11 @@ public class PathExecutor implements IPathExecutor, Helper {
     private void leanGazeAhead(Movement movement) {
         final GazeAhead gaze = behavior.baritone.getLookBehavior().gazeAhead();
         if (movement.getDirection().getY() != 0
+                || movement instanceof MovementParkour
                 || pathPosition + 1 >= path.length()
                 || !ctx.player().onGround()) {
+            // A jump along the flat is a jump all the same: the run-up to a gap is the one walk where a
+            // person has their eyes on the landing and nowhere else, so parkour gets no lean either.
             gaze.offer(null, 0);
             return;
         }
