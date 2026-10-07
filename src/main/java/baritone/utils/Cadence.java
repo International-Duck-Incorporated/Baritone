@@ -66,10 +66,54 @@ public final class Cadence {
     public static final int SIGHT_SETTLE_MAX = 2;
 
     /**
-     * @return the pause, in ticks, before the first swing at a block the crosshair has just arrived on
+     * @return the pause, in ticks, before the first click on a block the crosshair has just arrived on
      */
     public static int sightSettle(Random rand) {
         return SIGHT_SETTLE_MIN + rand.nextInt(SIGHT_SETTLE_MAX - SIGHT_SETTLE_MIN + 1);
+    }
+
+    /**
+     * The beat between the crosshair arriving on a block and the click that follows it, as a small piece of
+     * state: drawn on the tick a request starts, spent over the ticks that follow it, and gone the moment
+     * the request does.
+     * <p>
+     * Both of Baritone's mouse buttons need exactly this - see {@link #sightSettle} - and both had their own
+     * copy of it, which is the shape of thing that drifts: one of them growing a guard the other lacks. The
+     * rule is here instead, free of any Minecraft type, so that "one settle per arrival, none for a place
+     * that has to be made in mid air" can be tested without a world to click in.
+     */
+    public static final class Settle {
+
+        private final Random rand;
+        private boolean wasAsked;
+        private int timer;
+
+        public Settle(Random rand) {
+            this.rand = rand;
+        }
+
+        /**
+         * @param asked    whether something is being clicked at this moment
+         * @param onGround whether the player is standing on something. A place made in mid air is timed
+         *                 against the jump arc the player is already on, so it is not held back by a
+         *                 reaction it cannot afford: such a request is never charged, and one that is
+         *                 already in flight when the player lands is not charged on landing either.
+         * @return whether this tick is still the beat before the click
+         */
+        public boolean waiting(boolean asked, boolean onGround) {
+            if (!asked) {
+                this.wasAsked = false;
+                this.timer = 0;
+            } else if (!this.wasAsked && onGround) {
+                this.timer = sightSettle(this.rand);
+            }
+            this.wasAsked = asked;
+            if (this.timer > 0) {
+                this.timer--;
+                return true;
+            }
+            return false;
+        }
     }
 
     /**

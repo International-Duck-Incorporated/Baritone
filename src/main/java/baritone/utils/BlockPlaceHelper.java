@@ -33,40 +33,17 @@ public class BlockPlaceHelper {
 
     private final IPlayerContext ctx;
     private final Random placeRand = new Random();
+    private final Cadence.Settle sightSettle = new Cadence.Settle(this.placeRand);
     private int rightClickTimer;
-
-    /**
-     * Whether the previous tick was also asked to place, which is how the rising edge - the moment the
-     * crosshair has just arrived on a face there is something to do with - is recognised. See
-     * {@link Cadence#sightSettle}.
-     */
-    private boolean wasClicking;
-
-    /**
-     * Counts down the beat between arriving on a face and clicking it. See {@link Cadence#sightSettle}.
-     */
-    private int sightTimer;
 
     BlockPlaceHelper(IPlayerContext playerContext) {
         this.ctx = playerContext;
     }
 
     public void tick(boolean rightClickRequested) {
-        if (!rightClickRequested) {
-            // Nothing is being asked for, so there is nothing to have arrived on.
-            this.wasClicking = false;
-            this.sightTimer = 0;
-        } else if (!this.wasClicking && ctx.player().onGround()) {
-            // The first tick of a request. The callers only set this once the trace is on the face they
-            // mean to use, so this is the tick the crosshair arrived, and the click comes a beat later -
-            // the same beat the other mouse button is given. While airborne it is not spent: a block placed
-            // under a jump is timed against the arc the player is already on, and a hand that waits there
-            // lands the block after the foot has gone past it.
-            this.sightTimer = Cadence.sightSettle(this.placeRand);
-        }
-        this.wasClicking = rightClickRequested;
-        if (this.sightTimer > 0) {
-            this.sightTimer--;
+        // The same beat the pickaxe gets, between arriving on a face and clicking it, and not spent while
+        // the player is off the ground. See Cadence.Settle: MovementParkour places a block to land on.
+        if (this.sightSettle.waiting(rightClickRequested, ctx.player().onGround())) {
             return;
         }
         if (rightClickTimer > 0) {

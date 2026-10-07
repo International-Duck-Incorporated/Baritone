@@ -24,6 +24,7 @@ import java.util.Random;
 import java.util.Set;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -114,6 +115,57 @@ public class CadenceTest {
         }
         assertEquals("a hangover that is always the same length is a timer, not a hand",
                 Cadence.SPRINT_HANGOVER_MAX - Cadence.SPRINT_HANGOVER_MIN + 1, seen.size());
+    }
+
+    @Test
+    public void theSettleIsPaidOncePerArrival() {
+        // The whole point of charging it on the rising edge: a run of blocks clicked with the crosshair
+        // never leaving a face is one arrival and one reaction, not a reaction before every block. A settle
+        // drawn per tick would make the bot slower the longer it mined, which is the opposite of the point.
+        final Cadence.Settle settle = new Cadence.Settle(new Random(99));
+        assertTrue("the first tick of a request is not held back at all", settle.waiting(true, true));
+        int waited = 1;
+        while (settle.waiting(true, true)) {
+            waited++;
+            assertTrue("the settle outlived its own maximum", waited <= Cadence.SIGHT_SETTLE_MAX);
+        }
+        assertTrue("the settle was shorter than its own minimum", waited >= Cadence.SIGHT_SETTLE_MIN);
+        for (int i = 0; i < 500; i++) {
+            assertFalse("a request that is still going is being charged again", settle.waiting(true, true));
+        }
+    }
+
+    @Test
+    public void lettingGoOfTheMouseStartsTheNextSettleAfresh() {
+        // Click, let go, click again somewhere else: the second click is a new arrival and gets its own
+        // reaction. Without the reset the timer would be long spent and every click after the first would
+        // land in the tick the crosshair arrived, which is the thing being fixed.
+        final Cadence.Settle settle = new Cadence.Settle(new Random(1234));
+        boolean sawThemAllSettle = true;
+        for (int round = 0; round < 50; round++) {
+            sawThemAllSettle &= settle.waiting(true, true);
+            assertFalse("nothing to wait for", settle.waiting(false, true));
+            assertFalse("nothing to wait for", settle.waiting(false, true));
+        }
+        assertTrue("a click after letting go did not wait for the crosshair", sawThemAllSettle);
+    }
+
+    @Test
+    public void aPlaceTimedAgainstAJumpIsNotHeldBack() {
+        // MovementParkour places a block under itself in mid air to land on. That click is timed against
+        // the arc and cannot afford a reaction, so a request made while airborne never waits - and the same
+        // request is not charged when the player lands on it either, because by then it is not an arrival.
+        final Cadence.Settle settle = new Cadence.Settle(new Random(4242));
+        for (int i = 0; i < 20; i++) {
+            assertFalse("a block placed under a jump was held back", settle.waiting(true, false));
+        }
+        for (int i = 0; i < 20; i++) {
+            assertFalse("a request already in flight was charged when the player landed",
+                    settle.waiting(true, true));
+        }
+        // and once it is let go of, the next click on the ground is a normal arrival again
+        assertFalse(settle.waiting(false, true));
+        assertTrue(settle.waiting(true, true));
     }
 
     @Test
