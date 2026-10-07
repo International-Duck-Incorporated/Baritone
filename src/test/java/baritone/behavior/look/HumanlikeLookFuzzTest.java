@@ -51,6 +51,8 @@ public class HumanlikeLookFuzzTest {
         Rotation applied;
         boolean swayAdvanced;
         boolean swayDecayed;
+        /** Whether the sway that this tick advanced, if any, was the standing-still one. */
+        boolean idleSway;
     }
 
     private static Rotation target(Random rand) {
@@ -130,23 +132,42 @@ public class HumanlikeLookFuzzTest {
             }
         }
 
-        // the sway, last, and only while walking under Baritone's control with nothing being interacted with
-        final boolean canSway = wanted != null && walking && pathing && !interacting;
+        // The sway, last, and behind either of two gates: a walk being executed, in which case it is at
+        // full amplitude, or a bot standing about under Baritone's control with nothing being clicked, in
+        // which case the idle path runs the same sway at HeadWander.IDLE_FRACTION and the glance rides on
+        // top of it. Both want the head to be ours and nothing to be being clicked; they cannot both be
+        // true, because one of them wants a walk and the other wants no walk.
+        final boolean walkingSway = wanted != null && walking && pathing && !interacting;
+        final boolean idleSway = wanted == null && inControl && standingStill && !interacting;
+        outcome.idleSway = idleSway;
         final float before = wander[0].yaw();
-        if (canSway) {
+        if (walkingSway || idleSway) {
             wander[0].advance();
             outcome.swayAdvanced = true;
         } else {
             wander[0].recentre();
             outcome.swayDecayed = Math.abs(wander[0].yaw()) <= Math.abs(before) + 1e-5f;
         }
-        sway[0] = wander[0].yaw();
+        final boolean idle = wanted == null;
+        sway[0] = idle ? wander[0].idleYaw() : wander[0].yaw();
+        final float swayPitch = idle ? wander[0].idlePitch() : wander[0].pitch();
         outcome.applied = null;
 
-        if (applied != null && sway[0] != 0f) {
-            applied = new Rotation(applied.getYaw() + sway[0], applied.getPitch());
-        } else if (applied == null && canSway) {
-            applied = new Rotation(camera.getYaw() + sway[0], camera.getPitch());
+        if (idle) {
+            // the idle path writes nothing at all unless the head was ours this tick, which is what keeps
+            // a leftover half degree off the rotation Baritone traces its pickaxe along; when it is ours,
+            // the sway is added to whatever the glance asked for, or to the camera if it asked for nothing
+            if (!idleSway) {
+                applied = null;
+            } else {
+                final Rotation base = applied != null ? applied : camera;
+                applied = new Rotation(base.getYaw() + sway[0], Rotation.clampPitch(base.getPitch() + swayPitch));
+            }
+        } else if (walkingSway) {
+            final Rotation base = applied != null ? applied : camera;
+            applied = new Rotation(base.getYaw() + sway[0], base.getPitch() + swayPitch);
+        } else if (applied != null && sway[0] != 0f) {
+            applied = new Rotation(applied.getYaw() + sway[0], applied.getPitch() + swayPitch);
         }
         outcome.applied = applied;
         lastOutcome = outcome;
@@ -214,13 +235,22 @@ public class HumanlikeLookFuzzTest {
                 }
                 assertTrue("the sway escaped its limit: " + sway, Math.abs(sway) <= HeadWander.MAX_YAW + 1e-4f);
 
-                // the two things that move the head must never both be *driving*. The sway may still be
-                // fading out for a second after a walk stops, which is deliberate, so what must hold is
-                // that it is not being advanced and is on its way back to nothing.
-                if (glanceActive == 1) {
-                    assertFalse("the sway was advanced while a glance was driving the head",
-                            lastOutcome.swayAdvanced);
-                    assertTrue("the sway grew while a glance was driving the head", lastOutcome.swayDecayed);
+                // A glance and the *walking* sway must never drive the head together: the glance wants the
+                // player standing still and the walking sway wants them moving, so a harness that let both
+                // through would have lost one of those gates. The standing-still sway is the deliberate
+                // exception - one look every few seconds on a head that is otherwise still is exactly what
+                // the idle path is for - so what must hold there is that it is the quiet one.
+                if (glanceActive == 1 && lastOutcome.swayAdvanced) {
+                    assertTrue("a walking sway drove the head while a glance was driving it",
+                            lastOutcome.idleSway);
+                    assertTrue("the standing sway was as loud as the walking one: " + sway,
+                            Math.abs(sway) <= HeadWander.MAX_YAW * HeadWander.IDLE_FRACTION + 1e-4f);
+                }
+
+                // A sway that is not being advanced is a sway on its way out. Without this the fade is
+                // unobservable and nothing would notice it being replaced by a switch.
+                if (!lastOutcome.swayAdvanced && sway != 0f) {
+                    assertTrue("the sway grew while it was not being advanced", lastOutcome.swayDecayed);
                 }
 
                 // Nobody's head but ours, and only while Baritone is in charge of the body: the glance's
@@ -334,32 +364,44 @@ public class HumanlikeLookFuzzTest {
     }
 
     @Test
-    public void aSwayAndAGlanceNeverDriveTheHeadTogether() {
-        // The caller's gates make these mutually exclusive by construction - the glance needs the player
-        // standing still, the sway needs them walking - and this is what would break if either gate changed.
+    public void aStandingHeadKeepsMovingAndTheSwaySurvivesTheHandover() {
+        // What the standing sway is for, and what it must not cost. For: a bot with nothing to do used to
+        // hold its angle to the last bit between glances, which under a held pause is minutes of a head
+        // that is not moving at all. Cost: the sway is one state machine shared with the walk, so the tick
+        // the feet start or stop the head may only change by the difference between the two amplitudes -
+        // never from whatever one phase had got to, to whatever another one was at.
         final HeadWander wander = new HeadWander();
-        final IdleGlance glance = new IdleGlance();
-        final Rotation camera = new Rotation(12f, 3f);
-        final Random rand = new Random(7);
-        for (int t = 0; t < 5000; t++) {
-            final boolean walking = rand.nextBoolean();
-            final boolean pathing = rand.nextInt(10) > 2;
-            final boolean inControl = pathing || rand.nextInt(10) > 4;
-            final Rotation glanceSent = walking ? null
-                    : glance.next(camera, inControl, (from, to) -> AimDynamics.step(from, to,
-                            AimDynamics.IDLE_YAW_STEP, AimDynamics.IDLE_PITCH_STEP, 0.5));
-            final float before = wander.yaw();
-            if (walking && pathing) {
-                wander.advance();
-                assertNull("the sway was advanced while a glance was driving the head", glanceSent);
-            } else {
-                wander.recentre();
-                if (glanceSent != null) {
-                    assertTrue("the sway grew while a glance was driving the head",
-                            Math.abs(wander.yaw()) <= Math.abs(before) + 1e-5f);
-                }
+        final Random rand = new Random(11);
+        boolean walking = true;
+        float previous = 0f;
+        int idleTicks = 0, stillness = 0, longestStillness = 0;
+        float worstStep = 0f;
+        for (int t = 0; t < 40000; t++) {
+            if (rand.nextInt(60) == 0) {
+                walking = !walking;
             }
+            wander.advance();
             assertTrue("the sway escaped its limit", Math.abs(wander.yaw()) <= HeadWander.MAX_YAW + 1e-4f);
+            assertTrue("the standing sway was louder than the walking one",
+                    Math.abs(wander.idleYaw()) <= Math.abs(wander.yaw()) + 1e-4f);
+            final float offset = walking ? wander.yaw() : wander.idleYaw();
+            if (t > 0) {
+                worstStep = Math.max(worstStep, Math.abs(offset - previous));
+            }
+            if (!walking) {
+                idleTicks++;
+                stillness = Math.abs(offset) < 1e-3f ? stillness + 1 : 0;
+                longestStillness = Math.max(longestStillness, stillness);
+            }
+            previous = offset;
         }
+        assertTrue("no ticks were spent standing", idleTicks > 1000);
+        // a swing crosses the bearing a couple of times a second at most, and where it does it is briefly
+        // within a thousandth of a degree of zero; anything longer than a second or two of that is a head
+        // that has stopped moving, which is the thing this exists to prevent
+        assertTrue("the head stood perfectly still for " + longestStillness + " ticks of " + idleTicks,
+                longestStillness < 40);
+        // one tick of the slowest swing the walk allows, plus the half degree the two amplitudes differ by
+        assertTrue("the sway stepped " + worstStep + " deg when the feet changed", worstStep < 0.7f);
     }
 }

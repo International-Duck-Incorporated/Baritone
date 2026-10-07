@@ -193,6 +193,24 @@ public class HeadWanderTest {
     }
 
     @Test
+    public void theStandingSwayIsQuieterThanTheWalkingOne() {
+        // Standing still is not the same as being switched off. The head still drifts, it just drifts less:
+        // half of the walking sway is small enough that a crosshair held on a block does not wander off it,
+        // and large enough that a bot waiting for a door to open is not a screenshot.
+        assertTrue("the standing sway is not quieter than the walking one", HeadWander.IDLE_FRACTION < 1f);
+        assertTrue("the standing sway is not there at all", HeadWander.IDLE_FRACTION >= 0.25f);
+        final HeadWander wander = new HeadWander();
+        for (int t = 0; t < 200; t++) {
+            wander.advance();
+        }
+        assertTrue("the walking sway was silent to begin with", Math.abs(wander.yaw()) > 0.05f);
+        assertEquals("the standing yaw is not a fixed fraction of the walking one",
+                wander.yaw() * HeadWander.IDLE_FRACTION, wander.idleYaw(), 1e-6f);
+        assertEquals("the standing pitch is not a fixed fraction of the walking one",
+                wander.pitch() * HeadWander.IDLE_FRACTION, wander.idlePitch(), 1e-6f);
+    }
+
+    @Test
     public void everySeedIsWellBehaved() {
         // in game this is seeded from the clock, so no seed may be the bad one
         for (long seed = 0; seed < 30; seed++) {

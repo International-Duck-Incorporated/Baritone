@@ -38,6 +38,12 @@ import java.util.Random;
  * <p>
  * It is also the more human shape of the two: a person's head sways with their stride, and the amplitude
  * and period of that sway wander slowly rather than being resampled every tick.
+ * <p>
+ * The same state also covers standing still, at {@link #IDLE_FRACTION} of the amplitude. A bot with nothing
+ * to do used to hold its angle exactly, to the last bit, for minutes at a time between glances, and a head
+ * that never moves at all is not a person waiting: it is a screenshot. Halving it is the difference between
+ * a stride and a weight shift, and sharing the state is what keeps the two from stepping on each other when
+ * the feet stop.
  */
 public final class HeadWander {
 
@@ -50,6 +56,22 @@ public final class HeadWander {
      * Pitch sways less than yaw: a head bobs rather than nods, and pitch is the axis a player would notice.
      */
     public static final float MAX_PITCH = 0.6f;
+
+    /**
+     * What the sway is worth while the player is standing still, as a fraction of what it is worth while
+     * walking.
+     * <p>
+     * A person who stops walking does not stop moving; they stop walking. What is left is slower and
+     * smaller - a body holding itself up, and a hand resting on a mouse - and the difference between the
+     * two is why this is a flag on the sway rather than a second sway.
+     * <p>
+     * It is deliberately the same state machine, the same phase and the same fade, just quieter. A sway of
+     * its own would have its own phase, and the tick a walk stopped and the other started the head would
+     * jump from wherever the first one had got to, to wherever the second one was. One state, two
+     * amplitudes, cannot do that: at worst the head changes by the difference between the two, half a
+     * degree, on the one tick the feet stop.
+     */
+    public static final float IDLE_FRACTION = 0.5f;
 
     /**
      * The sway period, in ticks: two to five seconds. A sway per step would be a wobble; this is one slow
@@ -129,6 +151,20 @@ public final class HeadWander {
     public float pitch() {
         // a lower frequency and its own phase, so the two axes do not move in lockstep
         return this.gain * this.pitchAmplitude * (float) Math.sin(this.phase * 0.6 + 1.7);
+    }
+
+    /**
+     * @return the yaw offset for a player who is standing still, in degrees: see {@link #IDLE_FRACTION}
+     */
+    public float idleYaw() {
+        return IDLE_FRACTION * this.yaw();
+    }
+
+    /**
+     * @return the pitch offset for a player who is standing still, in degrees
+     */
+    public float idlePitch() {
+        return IDLE_FRACTION * this.pitch();
     }
 
     private float drawAmplitude(float max) {

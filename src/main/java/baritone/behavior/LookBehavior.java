@@ -102,10 +102,11 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
     private final ReactionDelay reaction = new ReactionDelay();
 
     /**
-     * Where the camera was before an idle glance took the angles for this tick, so it can be handed
-     * back before the frame is drawn. See {@link #updateIdleLook}.
+     * Where the camera was before the idle behaviour took the angles for this tick, so it can be handed
+     * back before the frame is drawn. See {@link #updateIdleLook}. Covers the glance and the sway that
+     * runs under it, because they are applied to the same angles and have to be handed back together.
      */
-    private Rotation glanceCamera;
+    private Rotation idleCamera;
 
     /**
      * The player's own rotation before the walking wander was applied, or null when it is not applied.
@@ -281,7 +282,7 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
         this.aimAge = 0;
         this.lastWanted = null;
         this.wanderCamera = null;
-        this.glanceCamera = null;
+        this.idleCamera = null;
         this.idleGlance.reset();
         this.reaction.clear();
         this.smoothYawBuffer.clear();
@@ -304,30 +305,58 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
      * different things: everyone else sees somebody glancing about, and the person at the keyboard never
      * has the view taken off them. That is the same trick {@link Target.Mode#SERVER} plays for aiming,
      * and it is what makes this safe to do while someone is playing.
+     * <p>
+     * The sway under the glance is the same arrangement, and it is here rather than in a state machine of
+     * its own because it has to share the camera handback: the glance and the sway are two offsets added
+     * to the same two numbers, and one of them taking the angles back to where they started while the
+     * other still holds them would be a head that drifts a fraction of a degree per tick, which is the
+     * failure the walking sway's ordering comment describes.
      */
     private void updateIdleLook(EventState state) {
         switch (state) {
             case PRE: {
+                final boolean allowed = this.canGlanceSomewhere();
+                // A person standing still does not stop moving. The glance is a coarse thing - one look
+                // every few seconds, held and given back - and between two of them a bot used to hold its
+                // angle to the last bit, exactly, for as long as the wait lasted. Minutes, under a held
+                // pause. The sway keeps running instead, quieter, because there is no stride underneath it,
+                // and it fades on the same terms as the walking one so that the two can hand it over.
+                if (allowed) {
+                    this.headWander.advance();
+                } else {
+                    this.headWander.recentre();
+                }
                 // the player's own rotation, read straight from the player: ctx.playerRotations() returns
                 // exactly this (LocalPlayer.getYRot/getXRot) and is what the movement code reads, so the
                 // glance goes into the same variable the movement code will read. That is fine for a glance
                 // - it only runs while the player is standing still, where nothing downstream reads the
                 // facing - and it is why the walking wander, which does run while walking, does not go here.
                 final Rotation camera = new Rotation(ctx.player().getYRot(), ctx.player().getXRot());
-                final Rotation wanted = this.idleGlance.next(camera, this.canGlanceSomewhere(), this::idleStep);
-                if (wanted == null) {
+                final Rotation wanted = this.idleGlance.next(camera, allowed, this::idleStep);
+                if (!allowed) {
+                    // Not ours this tick, and that includes the sway: a leftover half degree rides on the
+                    // rotation Baritone traces its own pickaxe and blocks along, and an idle drift is not
+                    // worth pointing the crosshair at the wrong block for. Standing still with nothing
+                    // being clicked, nothing reads the angle at all, which is the whole reason this is safe.
                     return;
                 }
-                this.glanceCamera = camera;
-                ctx.player().setYRot(wanted.getYaw());
-                ctx.player().setXRot(wanted.getPitch());
+                // The sway rides on top of whatever the glance is doing, including nothing: read against
+                // the camera rather than the glance's own angle, it cannot be mistaken for the glance's
+                // bookkeeping, which stays exactly where it was and so still arrives and still comes home.
+                final Rotation base = wanted != null ? wanted : camera;
+                final Rotation applied = new Rotation(
+                        base.getYaw() + this.headWander.idleYaw(),
+                        Rotation.clampPitch(base.getPitch() + this.headWander.idlePitch()));
+                this.idleCamera = camera;
+                ctx.player().setYRot(applied.getYaw());
+                ctx.player().setXRot(applied.getPitch());
                 break;
             }
             case POST: {
-                if (this.glanceCamera != null) {
-                    ctx.player().setYRot(this.glanceCamera.getYaw());
-                    ctx.player().setXRot(this.glanceCamera.getPitch());
-                    this.glanceCamera = null;
+                if (this.idleCamera != null) {
+                    ctx.player().setYRot(this.idleCamera.getYaw());
+                    ctx.player().setXRot(this.idleCamera.getPitch());
+                    this.idleCamera = null;
                 }
                 break;
             }
@@ -351,6 +380,13 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
      * Those two have to see the real camera, which is why this runs last in PRE and first in POST.
      */
     private void updateHeadWander() {
+        if (this.target == null) {
+            // Nothing is being aimed at, so the idle path owns this sway - the same state, at half the
+            // amplitude - and it has already advanced or faded it for this tick, in the one place where
+            // the glance's angles are written. Doing it here as well would fade out what that just faded
+            // in, every tick, and leave the head nailed to the bearing after all.
+            return;
+        }
         if (!this.canWander()) {
             // Standing still, mining, or not ours to drive: fade the sway out rather than switching it off,
             // so that starting or stopping a walk does not step the head by a degree on one tick. The
