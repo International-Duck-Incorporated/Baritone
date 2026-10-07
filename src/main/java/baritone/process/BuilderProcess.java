@@ -375,7 +375,7 @@ public final class BuilderProcess extends BaritoneProcessHelper implements IBuil
                 continue;
             }
             AABB aabb = shape.bounds();
-            for (Vec3 placementMultiplier : aabbSideMultipliers(against)) {
+            for (Vec3 placementMultiplier : placementMultipliers(new BetterBlockPos(x, y, z), toPlace, against)) {
                 double placeX = placeAgainstPos.x + aabb.minX * placementMultiplier.x + aabb.maxX * (1 - placementMultiplier.x);
                 double placeY = placeAgainstPos.y + aabb.minY * placementMultiplier.y + aabb.maxY * (1 - placementMultiplier.y);
                 double placeZ = placeAgainstPos.z + aabb.minZ * placementMultiplier.z + aabb.maxZ * (1 - placementMultiplier.z);
@@ -425,6 +425,37 @@ public final class BuilderProcess extends BaritoneProcessHelper implements IBuil
             }
         }
         return OptionalInt.empty();
+    }
+
+    /**
+     * Where on the face to try putting the crosshair, in order. A block that is a full cube whatever is
+     * clicked where - most of a building - gets a point of its own on the face first, in the middle two
+     * thirds of it (see {@link AimScatter#facePoint}), the way the hand already lands on a block it breaks:
+     * a wall built with the crosshair on a hundred face centres is a tell that survives everything else about
+     * the hand. The fixed points follow, as before. A block that takes its shape from where it is clicked - a
+     * slab, a stair, a trapdoor - gets only the fixed points, which sit well clear of the halfway line; a
+     * point of its own could sit a hair from it, and the tremor would then put the other half of the slab
+     * down. Whatever point is tried, {@link #hasAnyItemThatWouldPlace} still checks what would actually be
+     * placed from it.
+     */
+    private static Vec3[] placementMultipliers(BetterBlockPos pos, BlockState toPlace, Direction against) {
+        final Vec3[] fixed = aabbSideMultipliers(against);
+        boolean fullCube;
+        try {
+            fullCube = Block.isShapeFullBlock(toPlace.getCollisionShape(null, null));
+        } catch (Exception ignored) {
+            fullCube = false; // a shape that needs the world to be worked out, a shulker box say: the fixed points, as before
+        }
+        if (!fullCube) {
+            return fixed;
+        }
+        final Vec3 faceCentre = against.getAxis() == Direction.Axis.Y
+                ? fixed[0]
+                : new Vec3(fixed[0].x, 0.5, fixed[0].z);
+        final Vec3[] tried = new Vec3[fixed.length + 1];
+        tried[0] = AimScatter.facePoint(pos, faceCentre, against.getAxis());
+        System.arraycopy(fixed, 0, tried, 1, fixed.length);
+        return tried;
     }
 
     private static Vec3[] aabbSideMultipliers(Direction side) {
