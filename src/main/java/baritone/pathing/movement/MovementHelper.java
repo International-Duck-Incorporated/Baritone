@@ -671,26 +671,25 @@ public interface MovementHelper extends ActionCosts, Helper {
         )).setInput(Input.MOVE_FORWARD, true);
     }
 
-    static void moveTowardsWithoutRotation(IPlayerContext ctx, MovementState state, float basisYaw, float idealYaw) {
+    /**
+     * Presses the combination of keys that walks in {@code idealYaw} while the camera holds {@code basisYaw}.
+     * <p>
+     * The two have to be given together and they have to agree, which is the whole reason there is no
+     * overload here that takes the direction alone: the game turns the pressed combination by the angle the
+     * player is looking along at the moment the input becomes motion, and while a movement target is set that
+     * angle is the one the camera is being told to hold. Choosing keys against any other angle presses them
+     * into a frame they were not measured in, and the bot walks the difference - which is how it used to walk
+     * up to a whole step off its own path. There were overloads that took the direction alone, and a
+     * destination and worked the direction out itself; nothing has called either since the camera and the keys
+     * were paired, and they are gone rather than sitting there waiting to be called again.
+     */
+    static void moveTowardsWithoutRotation(MovementState state, float basisYaw, float idealYaw) {
         MovementOption.closest(
                 Mth.sin(basisYaw * DEG_TO_RAD_F),
                 Mth.cos(basisYaw * DEG_TO_RAD_F),
                 Mth.sin(idealYaw * DEG_TO_RAD_F),
                 Mth.cos(idealYaw * DEG_TO_RAD_F)
         ).ifPresent(selection -> selection.setInputs(state));
-    }
-
-    static void moveTowardsWithoutRotation(IPlayerContext ctx, MovementState state, float idealYaw) {
-        moveTowardsWithoutRotation(ctx, state, ctx.playerRotations().getYaw(), idealYaw);
-    }
-
-    static void moveTowardsWithoutRotation(IPlayerContext ctx, MovementState state, BlockPos dest) {
-        float idealYaw = RotationUtils.calcRotationFromVec3d(
-                ctx.playerHead(),
-                VecUtils.getBlockPosCenter(dest),
-                ctx.playerRotations()
-        ).getYaw();
-        moveTowardsWithoutRotation(ctx, state, idealYaw);
     }
 
     static void moveTowardsWithSlightRotation(IPlayerContext ctx, MovementState state, BlockPos dest) {
@@ -710,7 +709,7 @@ public interface MovementHelper extends ActionCosts, Helper {
                 ctx.playerRotations().getPitch()
         );
         state.setTarget(new MovementTarget(look, true));
-        moveTowardsWithoutRotation(ctx, state, look.getYaw(), idealYaw);
+        moveTowardsWithoutRotation(state, look.getYaw(), idealYaw);
     }
 
     /**
