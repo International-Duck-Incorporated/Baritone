@@ -60,6 +60,12 @@ a quarter faster); inventory moves are spaced by a redrawn interval rather than 
 | The camera and the keys are chosen together | `MovementOption#lookYaw`, `MovementHelper#moveTowardsWithSlightRotation` | The camera turns in whole 45° steps and the keys cover the rest, both measured against the angle the camera is being told to hold - because that is the angle the game turns the pressed keys by. Chosen separately, the two roundings disagree by a whole step and the bot walks 45° off its own path. |
 | A direction and its opposite are a beat apart | `pathing/movement/KeyBeat.java`, `InputOverrideHandler#beatTheKeys` | The four keys are decided fresh every tick, so a turn-around arrived as W becoming S in one tick - through the game's own input packet, to anybody watching. A reversal now costs one to two ticks of no keys while the hand repositions, and only a reversal: lifting a finger, landing a finger, and the W+S someone brakes with all answer the tick they are asked. Only at a run on the ground - sneaking along a bridge, backing away from a drop, water, air, and the elytra loop all get their keys immediately, because there the keys are a control loop and not fingers (`InputOverrideHandler#atAPace`). |
 
+## Following
+
+| what | where | the rule |
+| --- | --- | --- |
+| A moving target does not take the walk apart | `process/FollowProgress.java`, `FollowProcess#walkOrTurnAround` | Following used to cancel the path every time the goal stepped clear of where it ended - a stop every second or two at the target's own walking pace. The walk under way now keeps going while its end is still a step toward the thing being followed (closer to it than the player is), and the plan-ahead chains the next stretch to wherever the goal has wandered by then. Only somebody who has actually gone somewhere else - doubled back, run off sideways - makes the bot stop, turn around, and path from where it stands. |
+
 ## Deliberate exceptions
 
 - **Elytra flight** sets the aim straight to its target. It is a control loop: the flight solver
@@ -109,7 +115,9 @@ POST. `CameraWritesTest` counts them, so a fifth file fails the build with this 
 - A new repeated interval goes through `Cadence`, and a new rule that can be expressed without a
   running game goes in its own class in `behavior/look` with a test next to it, the way `AimDynamics`,
   `IdleGlance`, `HeadWander`, `PitchWander`, `IdleFidget` and `ReactionDelay` are - or, for a rule about
-  the keys rather than the camera, in `pathing/movement` beside `MovementOption`, the way `KeyBeat` is.
+  the keys rather than the camera, in `pathing/movement` beside `MovementOption`, the way `KeyBeat` is,
+  and for a rule about what to do next rather than how to look doing it, beside the process that uses
+  it, the way `FollowProgress` is.
 - Everything with a random source takes it through its constructor - `HeadWander`, `PitchWander`,
   `IdleGlance`, `IdleFidget`, `ReactionDelay`, `KeyBeat` - and the constructor with no argument is the
   only one that seeds itself from the clock. Every machine in a test run draws from that run's seed,

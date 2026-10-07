@@ -27,6 +27,7 @@ import baritone.api.process.IFollowProcess;
 import baritone.api.process.PathingCommand;
 import baritone.api.process.PathingCommandType;
 import baritone.api.utils.BetterBlockPos;
+import baritone.pathing.path.PathExecutor;
 import baritone.utils.BaritoneProcessHelper;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.entity.Entity;
@@ -55,18 +56,50 @@ public final class FollowProcess extends BaritoneProcessHelper implements IFollo
     @Override
     public PathingCommand onTick(boolean calcFailed, boolean isSafeToCancel) {
         scanWorld();
-        Goal goal = new GoalComposite(cache.stream().map(this::towards).toArray(Goal[]::new));
-        return new PathingCommand(goal, PathingCommandType.REVALIDATE_GOAL_AND_PATH);
+        List<BlockPos> places = cache.stream().map(this::placeOf).collect(Collectors.toList());
+        Goal goal = new GoalComposite(places.stream().map(this::towards).toArray(Goal[]::new));
+        return new PathingCommand(goal, walkOrTurnAround(places));
     }
 
-    private Goal towards(Entity following) {
-        BlockPos pos;
-        if (Baritone.settings().followOffsetDistance.value == 0 || into) {
-            pos = following.blockPosition();
-        } else {
-            GoalXZ g = GoalXZ.fromDirection(following.position(), Baritone.settings().followOffsetDirection.value, Baritone.settings().followOffsetDistance.value);
-            pos = new BetterBlockPos(g.getX(), following.position().y, g.getZ());
+    /**
+     * The command for this tick: let the walk under way finish, or stop it and turn around.
+     * <p>
+     * Following something that moves used to be revalidated on every tick, and revalidation cancels a
+     * path the moment its end is out of the goal - which a moving goal does to every end, sooner or
+     * later. So the walk was taken apart and rebuilt on a metronome of the target's own walking speed,
+     * and each rebuild stood still while it calculated. A person following somebody keeps walking: the
+     * plan in their head bends a little at a time, and only somebody who has actually gone somewhere
+     * else makes them stop and work out a new way.
+     * <p>
+     * So while the end of the walk under way is still a step toward the thing being followed - closer to
+     * it than the player is, see {@link FollowProgress} - the goal is merely set afresh and the walk is
+     * left alone; the plan-ahead already chains the next stretch to wherever the goal has got to by the
+     * time the walk is nearly done. Only when the target has genuinely gone elsewhere does the command
+     * become the revalidate that stops, turns around, and paths from where the player is standing.
+     */
+    private PathingCommandType walkOrTurnAround(List<BlockPos> places) {
+        PathExecutor current = baritone.getPathingBehavior().getCurrent();
+        if (current != null && !current.failed() && !current.finished()) {
+            final BetterBlockPos me = ctx.playerFeet();
+            final BlockPos end = current.getPath().getDest();
+            for (BlockPos target : places) {
+                if (FollowProgress.worthFinishing(me.x, me.y, me.z, end.getX(), end.getY(), end.getZ(), target.getX(), target.getY(), target.getZ())) {
+                    return PathingCommandType.SET_GOAL_AND_PATH;
+                }
+            }
         }
+        return PathingCommandType.REVALIDATE_GOAL_AND_PATH;
+    }
+
+    private BlockPos placeOf(Entity following) {
+        if (Baritone.settings().followOffsetDistance.value == 0 || into) {
+            return following.blockPosition();
+        }
+        GoalXZ g = GoalXZ.fromDirection(following.position(), Baritone.settings().followOffsetDirection.value, Baritone.settings().followOffsetDistance.value);
+        return new BetterBlockPos(g.getX(), following.position().y, g.getZ());
+    }
+
+    private Goal towards(BlockPos pos) {
         if (into) {
             return new GoalBlock(pos);
         }
