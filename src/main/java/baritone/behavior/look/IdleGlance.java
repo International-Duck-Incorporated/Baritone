@@ -38,7 +38,14 @@ public final class IdleGlance {
     @FunctionalInterface
     public interface Stepper {
 
-        Rotation step(Rotation from, Rotation to);
+        /**
+         * @param legAge how many ticks this leg of the glance - out to the thing, or back home - has been
+         *               under way, from zero on its first tick. A turn spins up ({@code AimDynamics#ramp}),
+         *               and the glance is two turns: a head that set off at full speed toward something
+         *               that caught its eye, and again on the way back, was the one thing about it that
+         *               still moved like a servo.
+         */
+        Rotation step(Rotation from, Rotation to, int legAge);
     }
 
 
@@ -118,6 +125,7 @@ public final class IdleGlance {
     private int cooldown = COOLDOWN_MIN;
     private int hold;
     private int age;
+    private int legAge;      // ticks into the current leg, out or back: see Stepper
     private Rotation aim;    // where the glance is pointed, null when none is running
     private Rotation home;   // where it started, and where it goes back to
     private Rotation sent;   // what the server was last told
@@ -203,6 +211,7 @@ public final class IdleGlance {
             this.aim = new Rotation(Rotation.normalizeYaw(lookAt.getYaw()), Rotation.clampPitch(lookAt.getPitch()));
             this.hold = HOLD_MIN + this.rand.nextInt(HOLD_MAX - HOLD_MIN + 1);
             this.age = 0;
+            this.legAge = 0;
             this.sent = camera;
         } else if (someoneElsesCamera
                 && (Math.abs(Rotation.normalizeYaw(camera.getYaw() - this.home.getYaw())) > TAKEN_OVER
@@ -217,12 +226,13 @@ public final class IdleGlance {
             return null;
         }
 
-        final Rotation wanted = step.step(this.sent, this.aim);
+        final Rotation wanted = step.step(this.sent, this.aim, this.legAge++);
         if (this.reached(wanted)) {
             if (this.hold > 0) {
                 this.hold--;
             } else if (this.aim != this.home) {
                 this.aim = this.home;   // nothing else to see here, head back
+                this.legAge = 0;        // and that is a turn of its own, which spins up like one
             } else {
                 // Home again. Hand back the exact rotation we started from one last time, so the
                 // server is not left holding a fraction of a degree of leftover offset, and only
@@ -282,6 +292,7 @@ public final class IdleGlance {
         this.sent = null;
         this.hold = 0;
         this.age = 0;
+        this.legAge = 0;
         this.cooldown = COOLDOWN_MIN + this.rand.nextInt(COOLDOWN_MAX - COOLDOWN_MIN + 1);
     }
 }

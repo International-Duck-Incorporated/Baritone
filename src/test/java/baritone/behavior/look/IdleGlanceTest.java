@@ -18,9 +18,11 @@
 package baritone.behavior.look;
 
 import baritone.api.utils.Rotation;
-
-import java.util.Random;
 import org.junit.Test;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Random;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
@@ -37,7 +39,7 @@ public class IdleGlanceTest {
 
     private static final double SENSITIVITY = 0.5;
 
-    private static Rotation step(Rotation from, Rotation to) {
+    private static Rotation step(Rotation from, Rotation to, int legAge) {
         return AimDynamics.step(from, to, AimDynamics.MAX_YAW_STEP, AimDynamics.MAX_PITCH_STEP, SENSITIVITY);
     }
 
@@ -388,5 +390,36 @@ public class IdleGlanceTest {
                 assertTrue("pitch out of range: " + sent.getPitch(), Math.abs(sent.getPitch()) <= 90f);
             }
         }
+    }
+    @Test
+    public void eachLegOfAGlanceStartsFromItsFirstTick() {
+        // the stepper is told how far into the leg it is, from zero, twice per glance: once setting off
+        // and once again heading home, so that both turns can spin up the way the aim's turns do
+        final IdleGlance glance = new IdleGlance(new Random(11));
+        final Rotation camera = new Rotation(0f, 0f);
+        final List<Integer> ages = new ArrayList<>();
+        boolean started = false;
+        for (int tick = 0; tick < 400; tick++) {
+            final Rotation sent = glance.next(camera, true, (from, to, legAge) -> {
+                ages.add(legAge);
+                return step(from, to, legAge);
+            });
+            if (sent != null) {
+                started = true;
+            } else if (started) {
+                break;
+            }
+        }
+        assertTrue(started);
+        int zeros = 0;
+        for (int i = 0; i < ages.size(); i++) {
+            if (ages.get(i) == 0) {
+                zeros++;
+                assertTrue("a leg's age started again at tick " + i + " without a first tick before it", i == 0 || ages.get(i - 1) > 0);
+            } else {
+                assertEquals("the age skipped", ages.get(i - 1) + 1, (int) ages.get(i));
+            }
+        }
+        assertEquals("one leg out and one leg back", 2, zeros);
     }
 }

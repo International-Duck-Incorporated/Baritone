@@ -951,8 +951,10 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
      * 585 deg/s, at the peak of every glance. {@link AimDynamics#IDLE_YAW_STEP} is where that came from and
      * what replaced it.
      */
-    private Rotation idleStep(Rotation from, Rotation to) {
-        return AimDynamics.step(from, to, AimDynamics.IDLE_YAW_STEP, AimDynamics.IDLE_PITCH_STEP,
+    private Rotation idleStep(Rotation from, Rotation to, int legAge) {
+        // the looking speed, spun up over the first ticks of each leg the way the aim's own turns are
+        final float ramp = AimDynamics.ramp(legAge);
+        return AimDynamics.step(from, to, AimDynamics.IDLE_YAW_STEP * ramp, AimDynamics.IDLE_PITCH_STEP * ramp,
                 sensitivity(ctx));
     }
 
