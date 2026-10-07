@@ -226,6 +226,18 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
         return this.walkGlance;
     }
 
+    /**
+     * Where the ground ahead is going, in degrees of pitch - positive down - for the settled gaze to lean
+     * along this tick. {@code PathExecutor} is the only thing that knows and the only thing that says, every
+     * tick it is on the ground with somewhere to go; the lean lasts the tick, and it only ever moves the pitch
+     * of a target that had no opinion about its pitch, by the degree a tick the gaze moves anyway. See
+     * {@link PitchWander#lean}, which is where the rule lives, and {@link #settledGaze}, which is where it is
+     * applied.
+     */
+    public void leanOntoTheSlope(float degrees) {
+        this.processor.leanOntoTheSlope(degrees);
+    }
+
     @Override
     public void updateTarget(Rotation rotation, boolean blockInteract) {
         // The rotation the movement asked for is kept as it was asked for, because it is two things at
@@ -1197,6 +1209,14 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
          */
         final float settledPitch(float pitch) {
             return this.pitchWander.step(pitch);
+        }
+
+        /**
+         * Where the ground ahead is going, for the gaze to settle along this tick; see
+         * {@link PitchWander#lean} and {@link LookBehavior#leanOntoTheSlope}.
+         */
+        final void leanOntoTheSlope(float degrees) {
+            this.pitchWander.lean(degrees);
         }
 
         @Override

@@ -263,4 +263,38 @@ public class PitchWanderTest {
         assertEquals(preferred - 0.4f, wander.step(preferred + 0.6f), 1e-6f);
         assertEquals(preferred + 0.4f, wander.step(preferred - 0.6f), 1e-6f);
     }
+    @Test
+    public void theGroundAheadPullsTheGazeForOneTickOnly() {
+        final PitchWander wander = new PitchWander(new Random(21));
+        wander.advance();
+        final float preferred = wander.preferredPitch();
+        wander.lean(20f);
+        assertEquals(preferred + 20f, wander.settlingPitch(), 0f);
+        assertEquals("a step down the slope", preferred + PitchWander.STEP, wander.step(preferred), 1e-6f);
+        wander.advance(); // the next tick, with nobody saying where the ground goes
+        assertEquals(preferred, wander.settlingPitch(), 0f);
+        assertEquals("the gaze did not come back to its own", preferred, wander.step(preferred), 0f);
+    }
+
+    @Test
+    public void aSlopeIsLookedAlongNoFurtherThanTheBound() {
+        for (int seed = 0; seed < 10; seed++) {
+            final PitchWander wander = new PitchWander(new Random(seed));
+            wander.advance();
+            final float preferred = wander.preferredPitch();
+            float pitch = preferred;
+            for (int tick = 0; tick < 100; tick++) {
+                wander.lean(seed % 2 == 0 ? 90f : -90f);
+                final float next = wander.step(pitch);
+                assertTrue("seed " + seed + ": a step of " + (next - pitch), Math.abs(next - pitch) <= PitchWander.STEP + 1e-6f);
+                pitch = next;
+                if (wander.preferredPitch() != preferred) {
+                    break; // the gaze moved on of its own accord; this seed has said what it had to
+                }
+                // every tick, not just the last: the gaze is never pulled past the bound on the way either
+                assertTrue("seed " + seed + ": " + Math.abs(pitch - preferred) + " degrees off the gaze",
+                        Math.abs(pitch - preferred) <= PitchWander.MAX_LEAN + PitchWander.DEAD_BAND + 1e-6f);
+            }
+        }
+    }
 }

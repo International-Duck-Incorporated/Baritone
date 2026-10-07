@@ -35,6 +35,10 @@ import java.util.Random;
  * rather than a number changing; the dead band of half a degree is there so a pitch that has arrived stays
  * arrived instead of buzzing against its own preference.
  * <p>
+ * The ground ahead pulls on where the gaze settles - see {@link #lean} - because the eyes go where the
+ * feet are about to, and the pull lasts one tick so that only a walk that keeps saying where it is going
+ * is looked along.
+ * <p>
  * Free of Minecraft so the rules can be tested; {@code PitchWanderTest} covers it.
  */
 public final class PitchWander {
@@ -61,9 +65,17 @@ public final class PitchWander {
      */
     public static final float STEP = 1.0f;
 
+    /**
+     * The furthest the ground ahead may pull the settled gaze off its own preference, in degrees, either
+     * way. See {@link #lean}: a stair down is looked down, a drop is looked down more, and this is where
+     * "more" stops being a glance at the footing and starts being a stare at the floor.
+     */
+    public static final float MAX_LEAN = 35.0f;
+
     private final Random rand;
 
     private float preferred;
+    private float lean;
     private int hold;
 
     public PitchWander() {
@@ -81,6 +93,7 @@ public final class PitchWander {
      * One tick of the habit: every few seconds, the gaze settles somewhere else.
      */
     public void advance() {
+        this.lean = 0f; // the ground ahead is offered every tick, and a lean not repeated is gone
         if (--this.hold > 0) {
             return;
         }
@@ -98,19 +111,42 @@ public final class PitchWander {
      * @return the pitch to ask for instead
      */
     public float step(float pitch) {
-        if (pitch > this.preferred + DEAD_BAND) {
+        final float settling = this.preferred + this.lean;
+        if (pitch > settling + DEAD_BAND) {
             return pitch - STEP;
         }
-        if (pitch < this.preferred - DEAD_BAND) {
+        if (pitch < settling - DEAD_BAND) {
             return pitch + STEP;
         }
         return pitch;
     }
 
     /**
-     * Where the gaze is settling at the moment, in degrees.
+     * Where the ground ahead is going, as degrees of pitch to add to wherever the gaze has settled, for
+     * this tick only: positive looks down. The eyes go where the feet are about to: a person walking down
+     * a hill watches the footing and one walking up it looks up the slope, and a gaze that stays level
+     * through both is a gaze fixed on nothing. A lean is a lean and not a new preference - the gaze still
+     * settles where it settled, the ground just pulls it - and it lasts one tick, so that whoever knows the
+     * ground has to keep saying so; the moment they stop, the gaze comes back to its own.
+     *
+     * @param degrees the pull, bounded to {@link #MAX_LEAN} either way
+     */
+    public void lean(float degrees) {
+        this.lean = Math.max(-MAX_LEAN, Math.min(MAX_LEAN, degrees));
+    }
+
+    /**
+     * Where the gaze is settling at the moment, in degrees, as its own preference: without the pull of
+     * the ground ahead.
      */
     public float preferredPitch() {
         return this.preferred;
+    }
+
+    /**
+     * Where the gaze is settling this tick, in degrees, ground and all: what {@link #step} steps toward.
+     */
+    public float settlingPitch() {
+        return this.preferred + this.lean;
     }
 }

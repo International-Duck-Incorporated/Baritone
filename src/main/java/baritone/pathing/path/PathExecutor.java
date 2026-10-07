@@ -256,6 +256,7 @@ public class PathExecutor implements IPathExecutor, Helper {
             return true;
         }
         leanGazeAhead(movement);
+        leanOntoTheSlope(movement);
         welcomeGlance(movement);
         MovementStatus movementStatus = movement.update();
         if (movementStatus == UNREACHABLE || movementStatus == FAILED) {
@@ -301,6 +302,15 @@ public class PathExecutor implements IPathExecutor, Helper {
     private static final double GAZE_LEAD_DISTANCE = 2.0;
 
     /**
+     * How far ahead along the path the slope the gaze leans along is measured, in blocks of run, and the
+     * share of its angle the gaze takes: more than half of a way down, a third of a way up. See
+     * {@link #leanOntoTheSlope}.
+     */
+    private static final double SLOPE_LOOKAHEAD = 5.0;
+    private static final double SLOPE_DOWN_SHARE = 0.6;
+    private static final double SLOPE_UP_SHARE = 0.33;
+
+    /**
      * Offers the gaze the line the path takes next, so the head leads the body around corners instead
      * of whipping around at every movement boundary.
      * <p>
@@ -331,6 +341,34 @@ public class PathExecutor implements IPathExecutor, Helper {
         final IMovement next = path.movements().get(pathPosition + 1);
         final Rotation toNext = RotationUtils.calcRotationFromVec3d(ctx.playerHead(), VecUtils.getBlockPosCenter(next.getDest()), ctx.playerRotations());
         gaze.offer(toNext, GazeAhead.LEAN * (1 - dist / GAZE_LEAD_DISTANCE));
+    }
+
+    /**
+     * Tells the gaze where the ground is going, so that it can settle along it: see
+     * {@link baritone.behavior.look.PitchWander#lean}. The slope is the rise over the run of the next few
+     * movements - the climb of a stair, the step down off a ledge, the drop at the end of a corridor - as
+     * the angle a person would look along it, and then only part of that, because the eyes check the
+     * footing on a way down and glance up a way up without ever fixing on either. A drop is looked down
+     * more than a climb is looked up: on a way down the footing is the thing that can go wrong. Nothing on
+     * a flat, in water or in the air, and not on the run-up to a jump, whose eyes are on the landing.
+     */
+    private void leanOntoTheSlope(Movement movement) {
+        if (!ctx.player().onGround() || ctx.player().isInWater() || movement instanceof MovementParkour) {
+            return;
+        }
+        double rise = 0;
+        double run = 0;
+        for (int i = pathPosition; i < path.length() && run < SLOPE_LOOKAHEAD; i++) {
+            final BlockPos direction = path.movements().get(i).getDirection();
+            rise += direction.getY();
+            run += Math.sqrt(direction.getX() * direction.getX() + direction.getZ() * direction.getZ());
+        }
+        if (rise == 0) {
+            return;
+        }
+        // positive pitch looks down, and a run of less than a block is a drop or a climb looked straight along
+        final double angle = Math.toDegrees(Math.atan2(-rise, Math.max(1.0, run)));
+        behavior.baritone.getLookBehavior().leanOntoTheSlope((float) (angle * (rise < 0 ? SLOPE_DOWN_SHARE : SLOPE_UP_SHARE)));
     }
 
     /**
