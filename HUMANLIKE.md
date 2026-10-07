@@ -78,6 +78,26 @@ a quarter faster); inventory moves are spaced by a redrawn interval rather than 
   stride sway runs while swimming, because the game turns a swim by the yaw exactly as it turns a walk,
   so a degree of drift in it is a degree of drift in the heading, which is what the sway already is.
 
+The camera is written in four files, and that is a rule rather than an observation: `LookBehavior` (the aim,
+the glance and the sway, all of them eased), `BuilderProcess#hasAnyItemThatWouldPlace` (an angle borrowed and
+given back inside the same tick so the game can be asked which way round a block would be placed), and the
+two mixin bridges that carry the aim and the elytra solver, each of which puts the player's own angles back in
+POST. `CameraWritesTest` counts them, so a fifth file fails the build with this list beside it.
+
+## What is not smoothed
+
+- **Handing the camera back.** Under free look the head Baritone drives and the head the person is looking
+  through are two different angles, and when the job ends the second one takes over: the server is told the
+  player's own rotation and everyone else sees the head get there in one tick. Smoothing it would mean
+  driving the head after Baritone has nothing left to do, which is the one time the person owns it.
+- **Turning is not how every step is walked.** The 45 degree step in `MovementOption#lookYaw` is upstream's
+  and it is kept: the camera holds a grid angle and the keys cover the difference, so a diagonal is walked by
+  pressing two keys rather than by turning onto it, which is what somebody with a keyboard does. The
+  movements that walk by turning instead end up facing exactly where they are going.
+- **A path is started on the tick it is handed over.** Upstream's splice sites begin the next movement in the
+  tick the last one ended in rather than waiting one out. One tick of path is not worth changing it for: a
+  person who has decided to walk starts walking.
+
 ## If you add something
 
 - A new repeated interval goes through `Cadence`, and a new rule that can be expressed without a
