@@ -295,16 +295,25 @@ public final class FarmProcess extends BaritoneProcessHelper implements IFarmPro
             }
             boolean soulsand = openSoulsand.contains(pos);
             Optional<Rotation> rot = RotationUtils.reachableOffset(ctx, pos, new Vec3(pos.getX() + 0.5, pos.getY() + 1, pos.getZ() + 0.5), blockReachDistance, false);
-            if (rot.isPresent() && isSafeToCancel && baritone.getInventoryBehavior().throwaway(true, soulsand ? this::isNetherWart : this::isPlantable)) {
-                HitResult result = RayTraceUtils.rayTraceTowards(ctx.player(), rot.get(), blockReachDistance);
-                if (result instanceof BlockHitResult && ((BlockHitResult) result).getDirection() == Direction.UP) {
-                    baritone.getLookBehavior().updateTarget(rot.get(), true);
-                    if (ctx.isLookingAt(pos)) {
-                        baritone.getInputOverrideHandler().setInputForceState(Input.CLICK_RIGHT, true);
-                    }
-                    return new PathingCommand(null, PathingCommandType.REQUEST_PAUSE);
-                }
+            if (!rot.isPresent() || !isSafeToCancel) {
+                continue;
             }
+            HitResult result = RayTraceUtils.rayTraceTowards(ctx.player(), rot.get(), blockReachDistance);
+            if (!(result instanceof BlockHitResult) || ((BlockHitResult) result).getDirection() != Direction.UP) {
+                continue;
+            }
+            // Ask for the seed only now that this planting is one that is going to happen. Selecting an item
+            // is a move - a packet, a slot, and the stack in the hand changing - and this used to ask for
+            // one for every candidate it looked at, including the ones it then looked at and decided
+            // against, every tick that it was considering them.
+            if (!baritone.getInventoryBehavior().throwaway(true, soulsand ? this::isNetherWart : this::isPlantable)) {
+                continue;
+            }
+            baritone.getLookBehavior().updateTarget(rot.get(), true);
+            if (ctx.isLookingAt(pos)) {
+                baritone.getInputOverrideHandler().setInputForceState(Input.CLICK_RIGHT, true);
+            }
+            return new PathingCommand(null, PathingCommandType.REQUEST_PAUSE);
         }
         for (BlockPos pos : openLog) {
             if (playerPos.distSqr(pos) > blockReachDistance * blockReachDistance) {
@@ -316,16 +325,23 @@ public final class FarmProcess extends BaritoneProcessHelper implements IFarmPro
                 }
                 Vec3 faceCenter = Vec3.atCenterOf(pos).add(Vec3.atLowerCornerOf(dir.getUnitVec3i()).scale(0.5));
                 Optional<Rotation> rot = RotationUtils.reachableOffset(ctx, pos, faceCenter, blockReachDistance, false);
-                if (rot.isPresent() && isSafeToCancel && baritone.getInventoryBehavior().throwaway(true, this::isCocoa)) {
-                    HitResult result = RayTraceUtils.rayTraceTowards(ctx.player(), rot.get(), blockReachDistance);
-                    if (result instanceof BlockHitResult && ((BlockHitResult) result).getDirection() == dir) {
-                        baritone.getLookBehavior().updateTarget(rot.get(), true);
-                        if (ctx.isLookingAt(pos)) {
-                            baritone.getInputOverrideHandler().setInputForceState(Input.CLICK_RIGHT, true);
-                        }
-                        return new PathingCommand(null, PathingCommandType.REQUEST_PAUSE);
-                    }
+                if (!rot.isPresent() || !isSafeToCancel) {
+                    continue;
                 }
+                HitResult result = RayTraceUtils.rayTraceTowards(ctx.player(), rot.get(), blockReachDistance);
+                if (!(result instanceof BlockHitResult) || ((BlockHitResult) result).getDirection() != dir) {
+                    continue;
+                }
+                // As above: the bean goes in the hand when the face is one that is about to be clicked, not
+                // for every trunk face that happens to be looked at first.
+                if (!baritone.getInventoryBehavior().throwaway(true, this::isCocoa)) {
+                    continue;
+                }
+                baritone.getLookBehavior().updateTarget(rot.get(), true);
+                if (ctx.isLookingAt(pos)) {
+                    baritone.getInputOverrideHandler().setInputForceState(Input.CLICK_RIGHT, true);
+                }
+                return new PathingCommand(null, PathingCommandType.REQUEST_PAUSE);
             }
         }
         for (BlockPos pos : bonemealable) {

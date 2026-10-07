@@ -211,6 +211,14 @@ public final class InventoryBehavior extends Behavior implements Helper {
     public boolean throwaway(boolean select, Predicate<? super ItemStack> desired, boolean allowInventory) {
         LocalPlayer p = ctx.player();
         NonNullList<ItemStack> inv = p.getInventory().getNonEquipmentItems();
+        // What is already in the hand wins, even when the scan below would have found the same item further
+        // along the hotbar: the caller is asking for the hand to hold something and does not care which slot
+        // it came from, and "hold the seeds" answered by "put away the seeds you are holding and pick up the
+        // other stack of them" is a carried-item packet and a flicker of the held item for nothing.
+        final int held = p.getInventory().getSelectedSlot();
+        if (held >= 0 && held < 9 && desired.test(inv.get(held))) {
+            return true;
+        }
         for (int i = 0; i < 9; i++) {
             ItemStack item = inv.get(i);
             // this usage of settings() is okay because it's only called once during pathing
