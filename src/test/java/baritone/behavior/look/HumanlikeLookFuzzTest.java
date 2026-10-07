@@ -33,8 +33,9 @@ import static org.junit.Assert.assertTrue;
  * <p>
  * The individual tests cover each rule on its own. This covers the things nobody thinks to write a rule
  * for: that nothing ever produces a NaN, that no state can be entered from which the aim stops moving, that
- * a target which never settles still gets arrived at, that the two behaviours that move the head can never
- * both be driving, and that no sequence of player states can leave one of them stuck on. Those are the
+ * a target which never settles still gets arrived at, that a walking sway can never drive the head at the
+ * same time as a glance, and that no sequence of player states can leave the head - or one of the state
+ * machines that moves it - stuck. Those are the
  * failures that would not look like a bug in a short playtest; they would look like Baritone being strange
  * a few minutes in.
  */
@@ -132,42 +133,43 @@ public class HumanlikeLookFuzzTest {
             }
         }
 
-        // The sway, last, and behind either of two gates: a walk being executed, in which case it is at
-        // full amplitude, or a bot standing about under Baritone's control with nothing being clicked, in
-        // which case the idle path runs the same sway at HeadWander.IDLE_FRACTION and the glance rides on
-        // top of it. Both want the head to be ours and nothing to be being clicked; they cannot both be
-        // true, because one of them wants a walk and the other wants no walk.
+        // The sway, last, and behind one of three gates. Walking along what is being aimed at is the
+        // stride, at full amplitude. Standing still waiting for it - a path with nowhere to go this tick -
+        // is the same sway at HeadWander.IDLE_FRACTION. And a bot with nothing aimed at at all, standing
+        // about under Baritone's control with nothing clicked, runs it at half under the glance. Nothing
+        // being clicked is the gate they all share, because the rotation they are adding to is the one
+        // Baritone traces its own pickaxe and blocks along.
         final boolean walkingSway = wanted != null && walking && pathing && !interacting;
+        final boolean waitingSway = wanted != null && standingStill && inControl && !interacting;
         final boolean idleSway = wanted == null && inControl && standingStill && !interacting;
-        outcome.idleSway = idleSway;
+        outcome.idleSway = idleSway || waitingSway;
+        final float fraction = wanted != null && walking ? 1f : HeadWander.IDLE_FRACTION;
         final float before = wander[0].yaw();
-        if (walkingSway || idleSway) {
+        if (walkingSway || waitingSway || idleSway) {
             wander[0].advance();
             outcome.swayAdvanced = true;
         } else {
             wander[0].recentre();
             outcome.swayDecayed = Math.abs(wander[0].yaw()) <= Math.abs(before) + 1e-5f;
         }
-        final boolean idle = wanted == null;
-        sway[0] = idle ? wander[0].idleYaw() : wander[0].yaw();
-        final float swayPitch = idle ? wander[0].idlePitch() : wander[0].pitch();
+        sway[0] = fraction * wander[0].yaw();
+        final float swayPitch = fraction * wander[0].pitch();
         outcome.applied = null;
 
-        if (idle) {
-            // the idle path writes nothing at all unless the head was ours this tick, which is what keeps
-            // a leftover half degree off the rotation Baritone traces its pickaxe along; when it is ours,
-            // the sway is added to whatever the glance asked for, or to the camera if it asked for nothing
+        if (wanted == null) {
+            // the idle path writes nothing at all unless the head was ours this tick; when it is ours, the
+            // sway is added to whatever the glance asked for, or to the camera if it asked for nothing
             if (!idleSway) {
                 applied = null;
             } else {
                 final Rotation base = applied != null ? applied : camera;
                 applied = new Rotation(base.getYaw() + sway[0], Rotation.clampPitch(base.getPitch() + swayPitch));
             }
-        } else if (walkingSway) {
+        } else if (walkingSway || waitingSway) {
+            // the aim drives the head and the sway rides on top of it; when the sway is not running it is
+            // simply not added, which is what leaves the aim exactly on target while a block is swinging
             final Rotation base = applied != null ? applied : camera;
-            applied = new Rotation(base.getYaw() + sway[0], base.getPitch() + swayPitch);
-        } else if (applied != null && sway[0] != 0f) {
-            applied = new Rotation(applied.getYaw() + sway[0], applied.getPitch() + swayPitch);
+            applied = new Rotation(base.getYaw() + sway[0], Rotation.clampPitch(base.getPitch() + swayPitch));
         }
         outcome.applied = applied;
         lastOutcome = outcome;
@@ -270,6 +272,15 @@ public class HumanlikeLookFuzzTest {
                 if (interacting) {
                     assertFalse("a glance drove the head while a click was forced", glanceActive == 1);
                     assertFalse("the sway was advanced while a click was forced", lastOutcome.swayAdvanced);
+                }
+
+                // A path with nowhere to go this tick - a door somebody else has to open, a block that has
+                // not updated - is exactly where a bot used to stand absolutely still: with something aimed
+                // at, the idle path is never consulted, and standing still is not walking, so every gate was
+                // shut and the head was held exactly where it was for as long as the wait lasted.
+                if (wanted != null && speedSquared < 0.02 * 0.02 && inControl && !interacting) {
+                    assertTrue("nothing was moving the head while waiting with a target on",
+                            lastOutcome.swayAdvanced);
                 }
 
                 // walking or not, the sway must not be able to push the walk off its line

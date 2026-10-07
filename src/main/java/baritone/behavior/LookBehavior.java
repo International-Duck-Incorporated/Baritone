@@ -370,7 +370,8 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
      * <p>
      * Applied on the same terms as the idle glance: during PRE, so the client's rotation packet carries it
      * to the server, and taken back off during POST before the frame is drawn. Everyone else sees a head
-     * that moves a little as its owner walks; the person at the keyboard sees nothing.
+     * that moves a little as its owner walks - or, at {@link HeadWander#IDLE_FRACTION}, while it stands
+     * there waiting for something to let it carry on; the person at the keyboard sees nothing.
      * <p>
      * The lagging player rotation is not invisible to Baritone itself, though the two channels are worth
      * keeping apart. What runs early - the movement state machines, the key selection - reads
@@ -387,21 +388,31 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
             // in, every tick, and leave the head nailed to the bearing after all.
             return;
         }
-        if (!this.canWander()) {
-            // Standing still, mining, or not ours to drive: fade the sway out rather than switching it off,
-            // so that starting or stopping a walk does not step the head by a degree on one tick. The
-            // offsets are taken back off every tick anyway, so this only ever smooths the two ends.
+        // Two ways for the head to be swaying while something is still being aimed at. Walking along the
+        // thing being aimed at is the stride, and it is the full amplitude. Standing still waiting for it -
+        // a path that is executing but has nowhere to go this tick, a door somebody else has to open, a
+        // block that has not updated yet - is the same sway at half. Without the second one there was a
+        // gap in the middle of the behaviour: with a target the idle path is not consulted at all, and
+        // standing still while pathing is not walking, so both gates were shut and the head was held
+        // exactly on the last angle it was given for as long as the wait lasted.
+        final boolean walking = this.canWander();
+        if (!walking && !this.canGlanceSomewhere()) {
+            // Mining, placing, or not ours to drive: fade the sway out rather than switching it off, so
+            // that starting or stopping a walk does not step the head by a degree on one tick. The offsets
+            // are taken back off every tick anyway, so this only ever smooths the two ends.
             this.headWander.recentre();
             return;
         }
         this.headWander.advance();
+        final float fraction = walking ? 1.0f : HeadWander.IDLE_FRACTION;
         // Both angles are taken from the player and put back, exactly, for the same reason the glance does
         // it: an offset that is only taken off later accumulates. Applied to the yaw alone, the pitch would
         // be added again on top of itself every tick and walk the view up into the sky at six degrees a
         // second.
         this.wanderCamera = new Rotation(ctx.player().getYRot(), ctx.player().getXRot());
-        ctx.player().setYRot(this.wanderCamera.getYaw() + this.headWander.yaw());
-        ctx.player().setXRot(this.wanderCamera.getPitch() + this.headWander.pitch());
+        ctx.player().setYRot(this.wanderCamera.getYaw() + this.headWander.yaw() * fraction);
+        ctx.player().setXRot(Rotation.clampPitch(
+                this.wanderCamera.getPitch() + this.headWander.pitch() * fraction));
     }
 
     private void unwindHeadWander() {
@@ -413,10 +424,10 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
     }
 
     /**
-     * Whether the head is ours to move.
+     * Whether the head is ours to move, for the walk.
      * <p>
      * Three conditions and all three are load bearing. The player has to be walking, because this is the
-     * walking drift and standing still already has the idle glance. Baritone has to be the one driving,
+     * stride, and standing still is a different gate and a quieter sway. Baritone has to be the one driving,
      * because a head that moves on its own while a person is walking somewhere is not human, it is broken.
      * And nothing may be being clicked this tick, for the reason given on {@link #interacting()}: the trace
      * Baritone aims its own pickaxe and blocks along follows the rotation it last told the server, and a
