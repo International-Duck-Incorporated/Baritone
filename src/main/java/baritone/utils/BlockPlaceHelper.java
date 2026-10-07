@@ -63,6 +63,11 @@ public class BlockPlaceHelper {
                 return;
             }
             if (!ctx.player().getItemInHand(hand).isEmpty() && ctx.playerController().processRightClick(ctx.player(), ctx.world(), hand) == InteractionResult.SUCCESS) {
+                // And vanilla swings on this path too. A bucket, a firework, a flint and steel - an item being
+                // used is an arm, the same as a block being placed is, and it is the arm that carries the
+                // gesture. The swing only animates the hand the player is watching; the server broadcasts one
+                // for a successful use by itself, so nothing else is needed here.
+                ctx.player().swing(hand, SwingAnimation.DEFAULT, false);
                 return;
             }
         }
