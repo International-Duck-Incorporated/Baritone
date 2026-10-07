@@ -79,10 +79,12 @@ public class RotationTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation") // pins the exactness helper the aim no longer uses; still public API
     public void theToleranceReachesAcrossTheBoundary() {
         // "Really close" is a hundredth of a degree, and two angles either side of the 180 degree boundary
         // can be a thousandth of a degree apart, which is why the check is written the awkward way it is.
         // Pinned here so that a future simplification has to argue with a test rather than with a comment.
+        // The helper is deprecated for *aiming*; it is still what the API hands out, so it still works.
         assertTrue("two angles a thousandth of a degree apart across the boundary are not close",
                 new Rotation(179.999f, 0f).isReallyCloseTo(new Rotation(-179.999f, 0f)));
         assertFalse("two angles a fiftieth of a degree apart somewhere else are close",

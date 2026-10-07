@@ -118,15 +118,32 @@ public class Rotation {
     }
 
     /**
-     * Is really close to
+     * Whether the two rotations agree to a hundredth of a degree.
      *
      * @param other another rotation
      * @return are they really close
+     * @deprecated A hand that eases toward where it is going, and is shaken by the tremor while it does,
+     * sits a fraction of a degree off the angle it was asked for - two fifths of a degree on average, and
+     * inside a hundredth of a degree on about one tick in seventy. A question this exact is therefore
+     * answered by luck, which is what every gate that asked it "is the aim here yet" was waiting for. Ask
+     * the aim instead: {@link baritone.api.behavior.ILookBehavior#hasArrivedAt(Rotation)} where there is a
+     * behaviour to hand, or {@code AimDynamics.arrived} for a pair of rotations in hand. Kept, and working
+     * exactly as it did, for the API's sake.
      */
+    @Deprecated
     public boolean isReallyCloseTo(Rotation other) {
         return yawIsReallyClose(other) && Math.abs(this.pitch - other.pitch) < 0.01;
     }
 
+    /**
+     * Whether the two yaws agree to a hundredth of a degree.
+     * <p>
+     * This is a wraparound guard rather than a question about a hand: {@link
+     * RotationUtils#wrapAnglesToRelative(Rotation, Rotation)} asks it so that a yaw which is already right
+     * is kept rather than re-derived from the same geometry, which is what stops floating point noise
+     * deciding the sign of the one-eighty boundary afresh every tick. "Has the aim arrived" is a different
+     * question, with a different answer: {@link baritone.api.behavior.ILookBehavior#hasArrivedAt(Rotation)}.
+     */
     public boolean yawIsReallyClose(Rotation other) {
         float yawDiff = Math.abs(normalizeYaw(yaw) - normalizeYaw(other.yaw)); // you cant fool me
         return (yawDiff < 0.01 || yawDiff > 359.99);
