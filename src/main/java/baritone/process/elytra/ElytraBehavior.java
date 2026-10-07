@@ -1258,9 +1258,6 @@ public final class ElytraBehavior implements Helper {
         double flatMotion = Math.sqrt(motionX * motionX + motionZ * motionZ);
         double thisIsAlwaysOne = lookDirection.length();
         float pitchBase3 = Mth.cos(pitchRadians);
-        //System.out.println("always the same lol " + -pitchBase + " " + pitchBase3);
-        //System.out.println("always the same lol " + Math.abs(pitchBase3) + " " + pitchBase2);
-        //System.out.println("always 1 lol " + thisIsAlwaysOne);
         pitchBase3 = (float) ((double) pitchBase3 * (double) pitchBase3 * Math.min(1, thisIsAlwaysOne / 0.4));
         motionY += -0.08 + (double) pitchBase3 * 0.06;
         if (motionY < 0 && pitchBase2 > 0) {
@@ -1282,7 +1279,6 @@ public final class ElytraBehavior implements Helper {
         motionX *= 0.99f;
         motionY *= 0.98f;
         motionZ *= 0.99f;
-        //System.out.println(motionX + " " + motionY + " " + motionZ);
 
         return new Vec3(motionX, motionY, motionZ);
     }

@@ -19,6 +19,7 @@ package baritone.cache;
 
 import baritone.Baritone;
 import baritone.api.cache.IWorldProvider;
+import baritone.api.utils.Helper;
 import baritone.api.utils.IPlayerContext;
 import baritone.api.utils.Pair;
 import net.minecraft.client.multiplayer.ServerData;
@@ -90,7 +91,7 @@ public class WorldProvider implements IWorldProvider {
                 Files.createDirectories(worldDataDir);
             } catch (IOException ignored) {}
 
-            System.out.println("Baritone world data dir: " + worldDataDir);
+            Helper.HELPER.logDebug("Baritone world data dir: " + worldDataDir);
             synchronized (worldCache) {
                 this.currentWorld = worldCache.computeIfAbsent(worldDataDir, d -> new WorldData(d, world.dimensionType(), world.dimension()));
             }
@@ -142,7 +143,7 @@ public class WorldProvider implements IWorldProvider {
                 folderName = serverData.isRealm() ? "realms" : serverData.ip;
             } else {
                 //replaymod causes null currentServer and false singleplayer.
-                System.out.println("World seems to be a replay. Not loading Baritone cache.");
+                Helper.HELPER.logDebug("World seems to be a replay. Not loading Baritone cache.");
                 currentWorld = null;
                 mcWorld = ctx.world();
                 return Optional.empty();
@@ -165,15 +166,15 @@ public class WorldProvider implements IWorldProvider {
     private void detectAndHandleBrokenLoading() {
         if (this.mcWorld != ctx.world()) {
             if (this.currentWorld != null) {
-                System.out.println("mc.world unloaded unnoticed! Unloading Baritone cache now.");
+                Helper.HELPER.logDebug("mc.world unloaded unnoticed! Unloading Baritone cache now.");
                 closeWorld();
             }
             if (ctx.world() != null) {
-                System.out.println("mc.world loaded unnoticed! Loading Baritone cache now.");
+                Helper.HELPER.logDebug("mc.world loaded unnoticed! Loading Baritone cache now.");
                 initWorld(ctx.world());
             }
         } else if (this.currentWorld == null && ctx.world() != null && (ctx.minecraft().hasSingleplayerServer() || ctx.minecraft().getCurrentServer() != null)) {
-            System.out.println("Retrying to load Baritone cache");
+            Helper.HELPER.logDebug("Retrying to load Baritone cache");
             initWorld(ctx.world());
         }
     }

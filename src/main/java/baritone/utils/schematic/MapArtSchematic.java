@@ -18,6 +18,7 @@
 package baritone.utils.schematic;
 
 import baritone.api.schematic.IStaticSchematic;
+import baritone.api.utils.Helper;
 import baritone.api.schematic.MaskSchematic;
 import java.util.OptionalInt;
 import java.util.function.Predicate;
@@ -55,7 +56,7 @@ public class MapArtSchematic extends MaskSchematic {
             }
         }
         if (missingColumns != 0) {
-            System.out.println(missingColumns + " columns had no block despite being in a map art, letting them be whatever");
+            Helper.HELPER.logDebug(missingColumns + " columns had no block despite being in a map art, letting them be whatever");
         }
         return heightMap;
     }

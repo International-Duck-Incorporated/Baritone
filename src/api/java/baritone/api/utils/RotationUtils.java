@@ -202,7 +202,6 @@ public final class RotationUtils {
             }
         }
         Optional<Rotation> possibleRotation = reachableCenter(ctx, pos, blockReachDistance, wouldSneak);
-        //System.out.println("center: " + possibleRotation);
         if (possibleRotation.isPresent()) {
             return possibleRotation;
         }
@@ -240,7 +239,6 @@ public final class RotationUtils {
         Rotation rotation = calcRotationFromVec3d(eyes, offsetPos, ctx.playerRotations());
         Rotation actualRotation = BaritoneAPI.getProvider().getBaritoneForPlayer(ctx.player()).getLookBehavior().getAimProcessor().peekRotation(rotation);
         HitResult result = RayTraceUtils.rayTraceTowards(ctx.player(), actualRotation, blockReachDistance, wouldSneak);
-        //System.out.println(result);
         if (result != null && result.getType() == HitResult.Type.BLOCK) {
             if (((BlockHitResult) result).getBlockPos().equals(pos)) {
                 return Optional.of(rotation);
@@ -282,7 +280,6 @@ public final class RotationUtils {
         Vec3 eyes = wouldSneak ? RayTraceUtils.inferSneakingEyePosition(entity) : entity.getEyePosition(1.0F);
         Rotation rotation = calcRotationFromVec3d(eyes, offsetPos, new Rotation(entity.getYRot(), entity.getXRot()));
         HitResult result = RayTraceUtils.rayTraceTowards(entity, rotation, blockReachDistance, wouldSneak);
-        //System.out.println(result);
         if (result != null && result.getType() == HitResult.Type.BLOCK) {
             if (((BlockHitResult) result).getBlockPos().equals(pos)) {
                 return Optional.of(rotation);

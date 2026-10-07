@@ -124,7 +124,6 @@ public class PathExecutor implements IPathExecutor, Helper {
                     if (i - pathPosition > 2) {
                         logDebug("Skipping forward " + (i - pathPosition) + " steps, to " + i);
                     }
-                    //System.out.println("Double skip sundae");
                     pathPosition = i - 1;
                     onChangeInPathPosition();
                     onTick();
@@ -185,10 +184,6 @@ public class PathExecutor implements IPathExecutor, Helper {
             toWalkInto = newWalkInto;
             recalcBP = false;
         }
-        /*long end = System.nanoTime() / 1000000L;
-        if (end - start > 0) {
-            System.out.println("Recalculating break and place took " + (end - start) + "ms");
-        }*/
         if (pathPosition < path.movements().size() - 1) {
             IMovement next = path.movements().get(pathPosition + 1);
             if (!behavior.baritone.bsi.worldContainsLoadedChunk(next.getDest().x, next.getDest().z)) {
@@ -235,7 +230,6 @@ public class PathExecutor implements IPathExecutor, Helper {
             return true;
         }
         if (movementStatus == SUCCESS) {
-            //System.out.println("Movement done, next path");
             pathPosition++;
             onChangeInPathPosition();
             onTick();

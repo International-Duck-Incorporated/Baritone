@@ -120,7 +120,7 @@ public class SettingsUtil {
         List<Settings.Setting> modified = new ArrayList<>();
         for (Settings.Setting setting : settings.allSettings) {
             if (setting.value == null) {
-                System.out.println("NULL SETTING?" + setting.getName());
+                Helper.HELPER.logDebug("NULL SETTING?" + setting.getName());
                 continue;
             }
             if (setting.isJavaOnly()) {

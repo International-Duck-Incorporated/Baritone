@@ -89,8 +89,6 @@ public final class ChunkPacker {
         } catch (Exception e) {
             e.printStackTrace();
         }
-        //long end = System.nanoTime() / 1000000L;
-        //System.out.println("Chunk packing took " + (end - start) + "ms for " + chunk.x + "," + chunk.z);
         BlockState[] blocks = new BlockState[256];
 
         // get top block in columns

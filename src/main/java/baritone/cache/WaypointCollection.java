@@ -21,6 +21,7 @@ import baritone.api.cache.IWaypoint;
 import baritone.api.cache.IWaypointCollection;
 import baritone.api.cache.Waypoint;
 import baritone.api.utils.BetterBlockPos;
+import baritone.api.utils.Helper;
 
 import java.io.*;
 import java.nio.file.Files;
@@ -50,7 +51,7 @@ public class WaypointCollection implements IWaypointCollection {
                 Files.createDirectories(directory);
             } catch (IOException ignored) {}
         }
-        System.out.println("Would save waypoints to " + directory);
+        Helper.HELPER.logDebug("Waypoints are saved under " + directory);
         this.waypoints = new HashMap<>();
         load();
     }

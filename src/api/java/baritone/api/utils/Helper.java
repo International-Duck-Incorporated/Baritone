@@ -150,8 +150,6 @@ public interface Helper {
      */
     default void logDebug(String message) {
         if (!BaritoneAPI.getSettings().chatDebug.value) {
-            //System.out.println("Suppressed debug message:");
-            //System.out.println(message);
             return;
         }
         // We won't log debug chat into toasts

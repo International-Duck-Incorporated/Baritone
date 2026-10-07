@@ -173,10 +173,6 @@ public final class CachedChunk {
             // if the top block in a column is water, we cache it as AVOID but we don't want to just return default state water (which is not flowing) beacuse then it would try to path through it
 
             // we have this exact block, it's a surface block
-            /*System.out.println("Saying that " + x + "," + y + "," + z + " is " + state);
-            if (!Minecraft.getInstance().world.getBlockState(new BlockPos(x + this.x * 16, y, z + this.z * 16)).getBlock().equals(state.getBlock())) {
-                throw new IllegalStateException("failed " + Minecraft.getInstance().world.getBlockState(new BlockPos(x + this.x * 16, y, z + this.z * 16)).getBlock() + " " + state.getBlock() + " " + (x + this.x * 16) + " " + y + " " + (z + this.z * 16));
-            }*/
             return overview[internalPos];
         }
         if (special != null) {
