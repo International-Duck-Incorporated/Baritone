@@ -98,7 +98,7 @@ public final class HeadWander {
     private static final float AMPLITUDE_RATE = 0.01f;
     private static final float GAIN_RATE = 0.05f;
 
-    private final Random rand = new Random();
+    private final Random rand;
 
     private double phase;
     private double yawOmega = omega(60.0);
@@ -109,6 +109,22 @@ public final class HeadWander {
     private float pitchAmplitudeTarget = MAX_PITCH;
     private float gain;
     private int sinceRedraw;
+
+    public HeadWander() {
+        this(new Random());
+    }
+
+    /**
+     * Takes the source of the drawn amplitudes and periods, for the tests.
+     * <p>
+     * In game this is seeded from the clock and nobody cares which sway they get. A test does care: a test
+     * that draws from the clock is one that passes on the machine that wrote it and fails on somebody
+     * else's once a week, and a seed sweep that builds a fresh clock-seeded sway per iteration sweeps
+     * nothing at all.
+     */
+    HeadWander(Random rand) {
+        this.rand = rand;
+    }
 
     /**
      * Advances the sway one tick.

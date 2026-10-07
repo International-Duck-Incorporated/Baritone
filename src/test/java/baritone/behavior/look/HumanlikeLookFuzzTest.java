@@ -186,7 +186,9 @@ public class HumanlikeLookFuzzTest {
             Rotation lastWanted = null;
             final IdleGlance glance = new IdleGlance();
             final ReactionDelay reaction = new ReactionDelay();
-            final HeadWander wander = new HeadWander();
+            // a fixed seed: the run is twenty thousand ticks of a fixed pseudo-random sequence, and it
+            // should be reproducible on the machine that reads the failure as well as the one that wrote it
+            final HeadWander wander = new HeadWander(new Random(1));
             int glanceActive = 0;
             float sway = 0f;
 
@@ -370,7 +372,7 @@ public class HumanlikeLookFuzzTest {
         // that is not moving at all. Cost: the sway is one state machine shared with the walk, so the tick
         // the feet start or stop the head may only change by the difference between the two amplitudes -
         // never from whatever one phase had got to, to whatever another one was at.
-        final HeadWander wander = new HeadWander();
+        final HeadWander wander = new HeadWander(new Random(2));
         final Random rand = new Random(11);
         boolean walking = true;
         float previous = 0f;

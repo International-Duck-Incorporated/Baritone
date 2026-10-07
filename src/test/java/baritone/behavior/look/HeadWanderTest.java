@@ -44,8 +44,17 @@ public class HeadWanderTest {
     /** A thousand seconds of walking: two thousand blocks a quarter, if it were diagonal. */
     private static final int LONG_WALK = 20000;
 
+    /**
+     * A sway with a seed nobody has to guess at. Everything here draws amplitudes and periods, so a test
+     * that took its sway from the clock would be a test of the clock: the two long-walk assertions are the
+     * ones that can fail on an unlucky draw, and they failed on the pipeline before this existed.
+     */
+    private static HeadWander sway(final long seed) {
+        return new HeadWander(new Random(seed));
+    }
+
     private static float[] run(int ticks) {
-        final HeadWander wander = new HeadWander();
+        final HeadWander wander = sway(1);
         final float[] yaws = new float[ticks];
         for (int t = 0; t < ticks; t++) {
             wander.advance();
@@ -56,7 +65,7 @@ public class HeadWanderTest {
 
     @Test
     public void theOffsetsNeverLeaveTheirLimits() {
-        final HeadWander wander = new HeadWander();
+        final HeadWander wander = sway(1);
         for (int t = 0; t < 200000; t++) {
             wander.advance();
             assertTrue("yaw offset " + wander.yaw() + " escaped its limit",
@@ -99,8 +108,8 @@ public class HeadWanderTest {
     public void noStretchOfAWalkLeans() {
         // A sway must come back through the bearing regularly. Twenty seconds is long enough for a lean to
         // show up and short enough that a walk is made of several of them.
-        for (int seed = 0; seed < 10; seed++) {
-            final HeadWander wander = new HeadWander();
+        for (int seed = 0; seed < 30; seed++) {
+            final HeadWander wander = sway(seed);
             double sum = 0, worstLean = 0;
             for (int t = 0; t < LONG_WALK; t++) {
                 wander.advance();
@@ -117,8 +126,8 @@ public class HeadWanderTest {
     @Test
     public void aLongWalkIsNotPushedSideways() {
         double worst = 0;
-        for (int seed = 0; seed < 10; seed++) {
-            final HeadWander wander = new HeadWander();
+        for (int seed = 0; seed < 30; seed++) {
+            final HeadWander wander = sway(seed);
             double sideways = 0;
             for (int t = 0; t < LONG_WALK; t++) {
                 wander.advance();
@@ -135,7 +144,7 @@ public class HeadWanderTest {
 
     @Test
     public void recentringBringsTheHeadBack() {
-        final HeadWander wander = new HeadWander();
+        final HeadWander wander = sway(1);
         for (int t = 0; t < 200; t++) {
             wander.advance();
         }
@@ -153,7 +162,7 @@ public class HeadWanderTest {
     public void theSwayFadesInAndOutRatherThanSwitching() {
         // When the head changes hands the sway is faded, not switched, or starting and stopping a walk
         // would step the head by up to a degree on a single tick.
-        final HeadWander wander = new HeadWander();
+        final HeadWander wander = sway(1);
         wander.advance();
         assertTrue("the sway did not start small", Math.abs(wander.yaw()) < 0.1f);
         for (int t = 0; t < 200; t++) {
@@ -183,7 +192,7 @@ public class HeadWanderTest {
         // a head bobs; it does not nod, and pitch is what the player would actually notice
         assertTrue("the pitch sway is not smaller than the yaw sway",
                 HeadWander.MAX_PITCH < HeadWander.MAX_YAW);
-        final HeadWander wander = new HeadWander();
+        final HeadWander wander = sway(1);
         float maxPitch = 0f;
         for (int t = 0; t < LONG_WALK; t++) {
             wander.advance();
@@ -199,7 +208,7 @@ public class HeadWanderTest {
         // and large enough that a bot waiting for a door to open is not a screenshot.
         assertTrue("the standing sway is not quieter than the walking one", HeadWander.IDLE_FRACTION < 1f);
         assertTrue("the standing sway is not there at all", HeadWander.IDLE_FRACTION >= 0.25f);
-        final HeadWander wander = new HeadWander();
+        final HeadWander wander = sway(1);
         for (int t = 0; t < 200; t++) {
             wander.advance();
         }
@@ -214,7 +223,7 @@ public class HeadWanderTest {
     public void everySeedIsWellBehaved() {
         // in game this is seeded from the clock, so no seed may be the bad one
         for (long seed = 0; seed < 30; seed++) {
-            final HeadWander wander = new HeadWander();
+            final HeadWander wander = sway(seed);
             double sideways = 0, worst = 0;
             for (int t = 0; t < LONG_WALK; t++) {
                 wander.advance();
