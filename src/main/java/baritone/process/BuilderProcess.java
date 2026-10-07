@@ -327,26 +327,24 @@ public final class BuilderProcess extends BaritoneProcessHelper implements IBuil
 
     private Optional<Placement> searchForPlacables(BuilderCalculationContext bcc, List<BlockState> desirableOnHotbar) {
         BetterBlockPos center = ctx.playerFeet();
-        for (int dx = -5; dx <= 5; dx++) {
+        for (int[] column : PlaceSearch.COLUMNS) {
+            int x = center.x + column[0];
+            int z = center.z + column[1];
             for (int dy = -5; dy <= 1; dy++) {
-                for (int dz = -5; dz <= 5; dz++) {
-                    int x = center.x + dx;
-                    int y = center.y + dy;
-                    int z = center.z + dz;
-                    BlockState desired = bcc.getSchematic(x, y, z, bcc.bsi.get0(x, y, z));
-                    if (desired == null) {
-                        continue; // irrelevant
+                int y = center.y + dy;
+                BlockState desired = bcc.getSchematic(x, y, z, bcc.bsi.get0(x, y, z));
+                if (desired == null) {
+                    continue; // irrelevant
+                }
+                BlockState curr = bcc.bsi.get0(x, y, z);
+                if (MovementHelper.isReplaceable(x, y, z, curr, bcc.bsi) && !valid(curr, desired, false)) {
+                    if (dy == 1 && bcc.bsi.get0(x, y + 1, z).getBlock() instanceof AirBlock) {
+                        continue;
                     }
-                    BlockState curr = bcc.bsi.get0(x, y, z);
-                    if (MovementHelper.isReplaceable(x, y, z, curr, bcc.bsi) && !valid(curr, desired, false)) {
-                        if (dy == 1 && bcc.bsi.get0(x, y + 1, z).getBlock() instanceof AirBlock) {
-                            continue;
-                        }
-                        desirableOnHotbar.add(desired);
-                        Optional<Placement> opt = possibleToPlace(desired, x, y, z, bcc.bsi);
-                        if (opt.isPresent()) {
-                            return opt;
-                        }
+                    desirableOnHotbar.add(desired);
+                    Optional<Placement> opt = possibleToPlace(desired, x, y, z, bcc.bsi);
+                    if (opt.isPresent()) {
+                        return opt;
                     }
                 }
             }
