@@ -51,11 +51,26 @@ public final class ReactionDelay {
     public static final int HOLD_MIN = 2;
     public static final int HOLD_MAX = 4;
 
-    private final Random rand = new Random();
+    private final Random rand;
 
     private Rotation lastTarget;
     private int hold;
     private int heldFor;
+
+    public ReactionDelay() {
+        this(new Random());
+    }
+
+    /**
+     * Takes the source of the react times, for the tests.
+     * <p>
+     * The same arrangement as {@link HeadWander}: in game this is seeded from the clock and nobody cares
+     * which beat they get, and a test that draws from the clock is one that passes on the machine that wrote
+     * it and fails on somebody else's once a week.
+     */
+    public ReactionDelay(Random rand) {
+        this.rand = rand;
+    }
 
     /**
      * Advances one tick.

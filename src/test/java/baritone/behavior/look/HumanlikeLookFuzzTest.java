@@ -200,19 +200,57 @@ public class HumanlikeLookFuzzTest {
     /** The last tick's outcome, for the assertions that need to know what drove the head. */
     private static Outcome lastOutcome;
 
+    /**
+     * The seeds the hostile run is repeated from. The first is the long reference run; the rest are shorter,
+     * and are there for the rules that hold for one sequence of states and not for another - which, in a
+     * fork whose numbers are all drawn, is most of them.
+     */
+    private static final long[] SEEDS = {20261006L, 3L, 11L, 101L, 4242L, 7919L};
+
+    /** How long the runs after the first one are, in ticks: five minutes each, at five sensitivities. */
+    private static final int SWEEP_TICKS = 6000;
+
+    /** How often the run writes down where the head was, for the fingerprint its callers compare. */
+    private static final int FINGERPRINT_EVERY = 137;
+
     @Test
     public void nothingSurvivesTwentyThousandHostileTicks() {
+        final String[] heads = new String[SEEDS.length];
+        for (int i = 0; i < SEEDS.length; i++) {
+            heads[i] = run(SEEDS[i], i == 0 ? TICKS : SWEEP_TICKS);
+        }
+        // And no two seeds are the same head. Everything in the run draws from the seed it was given, so a
+        // seed that changed nothing means one of the four machines has gone back to the clock or to a fixed
+        // sequence - and a head that is the same head every time is the one thing nobody has to watch twice
+        // to know it is a machine.
+        for (int a = 0; a < heads.length; a++) {
+            for (int b = a + 1; b < heads.length; b++) {
+                assertFalse("seeds " + SEEDS[a] + " and " + SEEDS[b] + " produced the same head",
+                        heads[a].equals(heads[b]));
+            }
+        }
+    }
+
+    /**
+     * One hostile run: {@code ticks} ticks at each sensitivity, every machine in it drawing from {@code
+     * seed}, and the invariants asserted as it goes. The assertions are the point of the run; the string it
+     * returns is a coarse fingerprint of what the head did, which is how a caller tells one run from another
+     * without caring about a fraction of a degree.
+     */
+    private static String run(long seed, int ticks) {
+        final StringBuilder head = new StringBuilder();
         for (double sensitivity : SENSITIVITIES) {
-            final Random rand = new Random(20261006);
+            final Random rand = new Random(seed);
             Rotation aim = null;
             int aimAge = 0;
             Rotation lastWanted = null;
             Rotation turnFrom = null;
-            final IdleGlance glance = new IdleGlance();
-            final ReactionDelay reaction = new ReactionDelay();
-            // a fixed seed: the run is twenty thousand ticks of a fixed pseudo-random sequence, and it
-            // should be reproducible on the machine that reads the failure as well as the one that wrote it
-            final HeadWander wander = new HeadWander(new Random(1));
+            // Every machine draws from the run's own seed, each from a number of its own cut from it: a
+            // failure reported for a seed has to be reproducible by running that seed, and a machine that
+            // draws from the clock instead makes the run a different run every time somebody reads it.
+            final IdleGlance glance = new IdleGlance(new Random(seed + 1));
+            final ReactionDelay reaction = new ReactionDelay(new Random(seed + 2));
+            final HeadWander wander = new HeadWander(new Random(seed + 3));
             int glanceActive = 0;
             float sway = 0f;
 
@@ -220,7 +258,7 @@ public class HumanlikeLookFuzzTest {
             int reactionRun = 0;
             double sideways = 0;
 
-            for (int t = 0; t < TICKS; t++) {
+            for (int t = 0; t < ticks; t++) {
                 final boolean pathing = rand.nextInt(10) > 2;
                 // in control is the glance's gate and has to be visited on its own: executing implies it,
                 // and the states this widened gate exists for are the ones where nothing is executing
@@ -252,6 +290,14 @@ public class HumanlikeLookFuzzTest {
                 turnFrom = turnRef[0];
                 glanceActive = glanceRef2[0];
                 sway = swayRef[0];
+
+                // where the head was, roughly, for the fingerprint: one look every few seconds is enough to
+                // tell one run from another, and rounding to whole degrees keeps it from being a measure of
+                // anything but that
+                if (t % FINGERPRINT_EVERY == 0) {
+                    head.append(applied == null ? "."
+                            : Math.round(applied.getYaw()) + "/" + Math.round(applied.getPitch())).append(' ');
+                }
 
                 if (applied != null) {
                     assertTrue("a rotation with a NaN or infinity came out of the look code: " + applied,
@@ -325,6 +371,7 @@ public class HumanlikeLookFuzzTest {
                 }
             }
         }
+        return head.toString();
     }
 
     @Test
@@ -418,7 +465,8 @@ public class HumanlikeLookFuzzTest {
         final Rotation a = new Rotation(170f, 0f);
         final Rotation b = new Rotation(-170f, 0f);
         Rotation aim = new Rotation(0f, 0f);
-        final ReactionDelay reaction = new ReactionDelay();
+        // seeded, like the hostile run above, so that a failure is the same failure twice
+        final ReactionDelay reaction = new ReactionDelay(new Random(4));
         int held = 0;
         float moved = 0f;
         for (int t = 0; t < 200; t++) {
@@ -448,7 +496,7 @@ public class HumanlikeLookFuzzTest {
         final IdleGlance.Stepper step = (from, to) -> AimDynamics.step(from, to,
                 AimDynamics.IDLE_YAW_STEP, AimDynamics.IDLE_PITCH_STEP, 0.5);
 
-        final IdleGlance idle = new IdleGlance();
+        final IdleGlance idle = new IdleGlance(new Random(5));
         int waited = 0;
         while (idle.next(camera, true, step) == null && waited < 400) {
             waited++;

@@ -103,6 +103,10 @@ POST. `CameraWritesTest` counts them, so a fifth file fails the build with this 
 - A new repeated interval goes through `Cadence`, and a new rule that can be expressed without a
   running game goes in its own class in `behavior/look` with a test next to it, the way `AimDynamics`,
   `IdleGlance`, `HeadWander`, `PitchWander`, `IdleFidget` and `ReactionDelay` are.
+- Everything with a random source takes it through its constructor - `HeadWander`, `PitchWander`,
+  `IdleGlance`, `IdleFidget`, `ReactionDelay` - and the constructor with no argument is the only one that
+  seeds itself from the clock. Every machine in a test run draws from that run's seed, because a failure
+  reported for a seed has to be reproducible by running that seed.
 - The numbers are allowed to move; the invariants are not. `HumanlikeLookFuzzTest` runs the hand
   through twenty thousand hostile ticks and asserts that the aim never moves more than its tick limit,
   that a settled hand is always arrived, and that the sway never escapes its band. `AimDynamicsTest`,
