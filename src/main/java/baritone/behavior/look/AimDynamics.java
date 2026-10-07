@@ -95,6 +95,34 @@ public final class AimDynamics {
     public static final float[] TURN_RAMP = {0.5f, 0.8f, 1.0f};
 
     /**
+     * How long a hand carries past what it is walking toward, in ticks.
+     * <p>
+     * The carry is not a step that is taken and then undone: what the hand aims at starts a little past
+     * the target and walks back onto it over this many ticks, which is what correcting looks like.
+     */
+    public static final int OVERSHOOT_TICKS = 16;
+
+    /**
+     * How much of the turn the hand carries past the target, before the cap: eight percent, which is the
+     * size of the correction a person makes after reaching for something - the hand does not stop where it
+     * meant to, it goes a little past and comes back.
+     */
+    public static final float OVERSHOOT_FRACTION = 0.08f;
+
+    /**
+     * The most the hand carries past the target, in degrees. The fraction alone would put a half turn of
+     * the same few percent out at fourteen degrees, which is not a correction, it is a miss.
+     */
+    public static final float OVERSHOOT_MAX = 6.0f;
+
+    /**
+     * Turns smaller than this are not carried past at all. Nobody overshoots a movement they were almost
+     * already making, and the aim makes plenty of those: a degree of tremor, a step of the wander, the
+     * drift of a target as the player walks toward it.
+     */
+    public static final float OVERSHOOT_MIN_TURN = 15.0f;
+
+    /**
      * Low pass applied to the random-looking offsets, so they wander like an unsteady wrist instead of
      * being resampled from scratch twenty times a second.
      */
@@ -162,6 +190,52 @@ public final class AimDynamics {
     public static Rotation humanStep(Rotation from, Rotation to, int aimAge, double sensitivity, float ease) {
         final float ramp = ramp(aimAge);
         return step(from, to, MAX_YAW_STEP * ramp, MAX_PITCH_STEP * ramp, sensitivity, ease);
+    }
+
+    /**
+     * What the hand is aimed at while a turn is young: the target, with the little extra a real hand carries
+     * past it.
+     * <p>
+     * Easing alone is a hand that gets slower the closer it gets and stops dead on arrival, and that is not
+     * what arriving looks like. A person's arm is still moving when it reaches what it was going for, so it
+     * goes a little past, notices, and comes back. This returns the angle to aim at so the stepper draws
+     * that: past the target at the start of a turn, walking back onto it as the turn ages, and exactly on
+     * the target once the carry has run out. What is aimed at, not what is held - the hand still never
+     * passes the thing it is aimed at, which is what {@link #humanStep} promises and its own test asserts.
+     * <p>
+     * Simulated against the stepper at the in-game default sensitivity and measured on the hand, not on the
+     * aim: a quarter turn peaks 2.4 degrees past its target nine ticks in and is sitting exactly on it ten
+     * ticks after that; a twenty degree turn carries one degree past at tick six and lands ten ticks later;
+     * a turn under {@link #OVERSHOOT_MIN_TURN} is not carried at all; and half a turn never gets the chance,
+     * because the flick ceiling gets the hand there after the carry has run out - which is the cap earning
+     * its keep, since a hand cannot be carried past a place it has not reached yet.
+     *
+     * @param turnFrom where the hand was when the turn began, which is what the carry is measured from;
+     *                 {@code null} when there is no turn to measure
+     * @param to       the rotation that was asked for
+     * @param aimAge   how many ticks the turn has been going
+     * @return the rotation to aim at this tick
+     */
+    public static Rotation overshoot(Rotation turnFrom, Rotation to, int aimAge) {
+        if (turnFrom == null) {
+            return to;
+        }
+        return new Rotation(
+                to.getYaw() + carriedPast(Rotation.normalizeYaw(to.getYaw() - turnFrom.getYaw()), aimAge),
+                to.getPitch() + carriedPast(to.getPitch() - turnFrom.getPitch(), aimAge)
+        ).clamp();
+    }
+
+    /**
+     * One axis of the carry: how far past the target to aim, for a turn that started {@code delta} degrees
+     * away and is {@code aimAge} ticks old.
+     */
+    private static float carriedPast(float delta, int aimAge) {
+        final float decay = 1.0f - aimAge / (float) OVERSHOOT_TICKS;
+        if (decay <= 0.0f || Math.abs(delta) < OVERSHOOT_MIN_TURN) {
+            return 0.0f;
+        }
+        return Math.copySign(Math.min(Math.abs(delta) * OVERSHOOT_FRACTION, OVERSHOOT_MAX), delta) * decay;
     }
 
     /**

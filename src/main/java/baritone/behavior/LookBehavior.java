@@ -85,6 +85,13 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
      */
     private int aimAge;
 
+    /**
+     * Where the hand was when the current turn started. A hand carries a little way past what it is walking
+     * toward, and how far is a fraction of how far it had to come - so the turn's own size has to be
+     * remembered, and this is it. Reset with {@link #aimAge}; {@code null} when nothing is being aimed at.
+     */
+    private Rotation turnFrom;
+
     // The aim's speed, easing, spin-up and tremor numbers all live in AimDynamics, together with the
     // maths that uses them, so they can be reasoned about and tested without a game running.
 
@@ -152,7 +159,7 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
 
     @Override
     public void updateTarget(Rotation rotation, boolean blockInteract) {
-        this.target = new Target(rotation, Target.Mode.resolve(ctx, blockInteract));
+        this.target = new Target(rotation, blockInteract, Target.Mode.resolve(ctx, blockInteract));
     }
 
     @Override
@@ -210,6 +217,7 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
             // target starts from wherever the player is actually looking instead of from a stale angle.
             this.aimRotation = null;
             this.aimAge = 0;
+            this.turnFrom = null;
             this.lastWanted = null;
             this.reaction.clear();
             // Nothing is being aimed at, so this is where a person would get bored and have a look about.
@@ -241,6 +249,7 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
                         // players are most likely to be watching - opened at the full speed ceiling, because
                         // the target is re-set every tick while pathing and the hand never looked fresh.
                         this.aimAge = 0;
+                        this.turnFrom = from;
                     }
                     if (standingStill() && this.reaction.holding(wanted)) {
                         // Notice, then move. Deliberately only while the player is not going anywhere:
@@ -249,6 +258,7 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
                         // before the turn, and the turn still gets its full spin-up afterwards.
                         this.aimRotation = from;
                         this.aimAge = 0;
+                        this.turnFrom = from;
                     } else {
                         this.aimRotation = this.humanStep(from, wanted);
                         this.aimAge++;
@@ -322,6 +332,7 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
         // glance's own state would come back to an angle in a level that no longer exists.
         this.aimRotation = null;
         this.aimAge = 0;
+        this.turnFrom = null;
         this.lastWanted = null;
         this.wanderCamera = null;
         this.idleCamera = null;
@@ -642,7 +653,25 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
      */
     private Rotation humanStep(Rotation from, Rotation to) {
         final float ease = this.interacting() ? AimDynamics.CLICK_EASE : AimDynamics.AIM_EASE;
-        return AimDynamics.humanStep(from, to, this.aimAge, sensitivity(ctx), ease);
+        return AimDynamics.humanStep(from, this.carriedPast(to), this.aimAge, sensitivity(ctx), ease);
+    }
+
+    /**
+     * Where the hand is actually aimed this tick: the target, or the target with the carry of a young turn
+     * on it. See {@link AimDynamics#overshoot}.
+     * <p>
+     * The carry is a flourish, and it is not for everything. A target that is about to be acted on - a block
+     * to break, a face to place against - is aimed at exactly: there the angles are the point of asking for
+     * them, the trace follows them to the centimetre, and the movement waits for them to be there before it
+     * clicks. The targets that get the carry are the ones that say where the bot is walking, and only while
+     * it is walking: the flourish is a person turning while they walk, and a bot standing still has nothing
+     * to carry.
+     */
+    private Rotation carriedPast(Rotation to) {
+        if (this.target.blockInteract || this.interacting() || !this.isWalking()) {
+            return to;
+        }
+        return AimDynamics.overshoot(this.turnFrom, to, this.aimAge);
     }
 
     /**
@@ -857,10 +886,16 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
     private static class Target {
 
         public final Rotation rotation;
+        /**
+         * Whether acting on this rotation is the point of it - a block to break, a face to place against -
+         * rather than it saying where the movement is going. Decides whether the aim may carry past it.
+         */
+        public final boolean blockInteract;
         public final Mode mode;
 
-        public Target(Rotation rotation, Mode mode) {
+        public Target(Rotation rotation, boolean blockInteract, Mode mode) {
             this.rotation = rotation;
+            this.blockInteract = blockInteract;
             this.mode = mode;
         }
 

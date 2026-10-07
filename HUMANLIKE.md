@@ -14,6 +14,7 @@ opt-in: a bot that has to be told to look alive is a bot that looks dead by defa
 | --- | --- | --- |
 | The aim eases instead of snapping | `behavior/look/AimDynamics.java` | Whole mouse pixels, converted with the player's own sensitivity, capped at 18°/tick of yaw and 9° of pitch. Turns spin up over their first two ticks and ease out as they arrive. |
 | The hand takes a beat to notice | `behavior/look/ReactionDelay.java` | Two to four ticks before the aim starts moving to a target it was not already pointing at. Only while standing still: the walking code reads the facing, so a lagging aim mid-walk steers. |
+| ... and goes a little past | `behavior/look/AimDynamics.java` | A hand is still moving when it reaches what it was reaching for: what it aims at starts a few percent of the turn past the target and walks back onto it. Measured on the hand at the default sensitivity, a quarter turn peaks 2.4 degrees past and is exactly on target ten ticks later. Only while walking, and only for a target that says where the bot is going - anything about to be clicked is aimed at exactly. |
 | The hand calls itself arrived | `behavior/look/AimDynamics.java`, `ILookBehavior#hasArrivedAt` | "Is the aim here yet" is asked of the aim, not of a hundredth-of-a-degree comparison against the target: a settled hand sits a fraction of a degree off, because it is easing and the tremor is still shaking it. |
 | A target with no opinion about the pitch | `behavior/look/PitchWander.java` | The gaze settles a few degrees this way and that every few seconds - triangular around level, a degree a tick, ten degrees out at the extremes - instead of holding one angle for a whole journey. Only where the pitch is decoration: a swim travels by the pitch it is looking along and a glide solves for it, so in water and in the air the pitch stays where the movement put it. |
 | Something moved the mouse | `behavior/look/IdleGlance.java` | A glance is dropped the moment the view is taken over, and the angles are handed back exactly. |
@@ -63,6 +64,10 @@ a quarter faster); inventory moves are spaced by a redrawn interval rather than 
 - **Under free look** (`freeLook`, `antiCheatCompatibility`), the rotations Baritone drives are sent to
   the server while the player's own camera is handed back untouched. Everyone else sees the aim move;
   the person at the keyboard sees their own view.
+- **Anything about to be clicked** is aimed at exactly, whatever the rest of the aim is doing: a block to
+  break, a face to place against, a door. The trace follows those angles to the centimetre, and the
+  movement waits for them before it clicks - so the carry past a target and the one-tick sway and glance
+  all stand aside for them.
 - **The builder's transient rotations** (`BuilderProcess#hasAnyItemThatWouldPlace`) are written and
   restored inside one tick. Nothing outside that tick sees them.
 - **Water and gliding** are the two states where the movement reads the look back: sprint-swimming

@@ -402,4 +402,97 @@ public class AimDynamicsTest {
                     aim.getYaw() >= -180f && aim.getYaw() <= 180f);
         }
     }
+
+    // ---- the carry past the target ------------------------------------------------------------------
+
+    /**
+     * Runs a turn through both halves of the rule - the carry, then the stepper - exactly as the look
+     * behaviour does, and reports how far past the target the hand got, the tick it peaked on, and the tick
+     * it came to rest on the target, or -1 if it never did.
+     */
+    private static float[] carry(float turn) {
+        final Rotation from = new Rotation(0f, 0f);
+        final Rotation to = new Rotation(turn, 0f);
+        Rotation aim = from;
+        float past = 0f;
+        int peakTick = -1, landed = -1;
+        for (int age = 0; age < 60; age++) {
+            aim = AimDynamics.humanStep(aim, AimDynamics.overshoot(from, to, age), age, SENSITIVITY);
+            final float beyond = (aim.getYaw() - turn) * Math.signum(turn);
+            if (beyond > past) {
+                past = beyond;
+                peakTick = age;
+            }
+            if (landed < 0 && Math.abs(aim.getYaw() - turn) <= 1e-4f) {
+                landed = age;
+            }
+        }
+        return new float[]{past, peakTick, landed};
+    }
+
+    @Test
+    public void aWalkCarriesTheHandPastWhereItIsGoing() {
+        final float[] quarter = carry(90f);
+        assertTrue("a quarter turn should be left a little past its target, not stopped dead on it: "
+                + quarter[0], quarter[0] >= 1.5f && quarter[0] <= 3.0f);
+        assertTrue("the hand should come back", quarter[2] > 0);
+        assertTrue("and the correction should be the slower half of the movement", quarter[2] > quarter[1]);
+    }
+
+    @Test
+    public void theCarryIsAFractionOfTheTurn() {
+        final float small = carry(20f)[0];
+        final float bigger = carry(45f)[0];
+        assertTrue("a twenty degree turn carried the hand " + small + " degrees past", small >= 0.5f && small <= 1.5f);
+        assertTrue("a forty five degree turn carried the hand " + bigger + " degrees past", bigger >= 1.2f && bigger <= 2.5f);
+        assertTrue("a bigger turn should carry further, not less", bigger > small);
+    }
+
+    @Test
+    public void theCarryNeverExceedsTheCap() {
+        for (float turn : new float[]{30f, 90f, 180f, 300f, -90f}) {
+            final Rotation aimed = AimDynamics.overshoot(new Rotation(0f, 0f), new Rotation(turn, 0f), 0);
+            final float past = Math.abs(Rotation.normalizeYaw(aimed.getYaw() - turn));
+            assertTrue("carried " + past + " degrees past a " + turn + " degree turn",
+                    past <= AimDynamics.OVERSHOOT_MAX + 1e-4f);
+        }
+    }
+
+    @Test
+    public void smallTurnsAreNotCarriedPast() {
+        for (float turn : new float[]{1f, 5f, 10f, -12f}) {
+            final Rotation to = new Rotation(turn, 0f);
+            for (int age = 0; age < 20; age++) {
+                assertEquals("a " + turn + " degree turn was carried at age " + age,
+                        to.getYaw(), AimDynamics.overshoot(new Rotation(0f, 0f), to, age).getYaw(), 0f);
+            }
+            assertEquals("and the hand should not go past it either", 0f, carry(turn)[0], 1e-4f);
+        }
+    }
+
+    @Test
+    public void theCarryWalksBackOntoTheTargetAndStops() {
+        final Rotation from = new Rotation(0f, 0f);
+        final Rotation to = new Rotation(90f, 0f);
+        assertTrue("the carry should start past the target", AimDynamics.overshoot(from, to, 0).getYaw() > 90f);
+        assertEquals("and should be exactly the target once it has run out", to.getYaw(),
+                AimDynamics.overshoot(from, to, AimDynamics.OVERSHOOT_TICKS).getYaw(), 0f);
+        assertEquals("and stay there", to.getYaw(),
+                AimDynamics.overshoot(from, to, AimDynamics.OVERSHOOT_TICKS + 40).getYaw(), 0f);
+    }
+
+    @Test
+    public void withoutATurnToMeasureItThereIsNoCarry() {
+        final Rotation to = new Rotation(90f, 12f);
+        assertEquals(to.getYaw(), AimDynamics.overshoot(null, to, 0).getYaw(), 0f);
+        assertEquals(to.getPitch(), AimDynamics.overshoot(null, to, 0).getPitch(), 0f);
+    }
+
+    @Test
+    public void theCarryFollowsThePitchTooAndStaysALegalAngle() {
+        final Rotation aimed = AimDynamics.overshoot(new Rotation(0f, 0f), new Rotation(0f, 45f), 0);
+        assertTrue("the hand should be carried past in pitch as well: " + aimed.getPitch(), aimed.getPitch() > 45f);
+        assertEquals("a carried pitch is still a pitch", 90f,
+                AimDynamics.overshoot(new Rotation(0f, 0f), new Rotation(0f, 88f), 0).getPitch(), 0f);
+    }
 }
