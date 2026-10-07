@@ -18,6 +18,8 @@
 package baritone.behavior.look;
 
 import baritone.api.utils.Rotation;
+
+import java.util.Random;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
@@ -143,6 +145,45 @@ public class IdleGlanceTest {
         assertTrue("an interested glance moved " + maxStep + " deg in one tick", maxStep <= AimDynamics.MAX_YAW_STEP + 0.01f);
         assertTrue("an interested glance ran for " + longest + " ticks", longest <= 100);
         assertTrue("the head was active " + (100.0 * active / 120000.0) + "% of the time", active < 120000 / 2);
+    }
+
+    @Test
+    public void aHostileInterestIsStillOnlyAGlance() {
+        // The look behaviour offers an interest only when there is something in sight to look at, but the
+        // glance must not rely on that: this hands it the worst angles there are - behind the player, at both
+        // ends of the yaw wrap, pitches past vertical - while the camera itself sits near the wrap point, and
+        // holds it to the same rules every other glance is held to.
+        final Random rand = new Random(20261007);
+        final IdleGlance glance = new IdleGlance();
+        final Rotation camera = new Rotation(179.5f, 42f);
+        Rotation previous = null;
+        int gestures = 0, longest = 0, streak = 0;
+        float maxStep = 0f;
+        for (int t = 0; t < 60000; t++) {
+            final Rotation interest = new Rotation(rand.nextFloat() * 360f - 180f, rand.nextFloat() * 360f - 180f);
+            final Rotation sent = glance.next(camera, true, IdleGlanceTest::step, () -> interest);
+            if (sent == null) {
+                if (previous != null) {
+                    assertEquals("an interested glance stopped away from home (yaw)", camera.getYaw(), previous.getYaw(), 1e-4f);
+                    assertEquals("an interested glance stopped away from home (pitch)", camera.getPitch(), previous.getPitch(), 1e-4f);
+                    gestures++;
+                }
+                longest = Math.max(longest, streak);
+                streak = 0;
+                previous = null;
+                continue;
+            }
+            assertTrue("pitch escaped its range: " + sent.getPitch(), sent.getPitch() >= -90f && sent.getPitch() <= 90f);
+            assertTrue("yaw escaped its range: " + sent.getYaw(), sent.getYaw() >= -180f && sent.getYaw() <= 180f);
+            if (previous != null) {
+                maxStep = Math.max(maxStep, Math.abs(Rotation.normalizeYaw(sent.getYaw() - previous.getYaw())));
+            }
+            previous = sent;
+            streak++;
+        }
+        assertTrue("the head moved " + maxStep + " deg in one tick", maxStep <= AimDynamics.MAX_YAW_STEP + 0.01f);
+        assertTrue("a glance outlived its cap: " + longest, longest <= 100);
+        assertTrue("almost nothing happened in fifty minutes: " + gestures, gestures > 10);
     }
 
     @Test
