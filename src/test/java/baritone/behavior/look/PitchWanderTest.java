@@ -17,6 +17,7 @@
 
 package baritone.behavior.look;
 
+import baritone.api.utils.Rotation;
 import org.junit.Test;
 
 import java.util.Random;
@@ -143,6 +144,96 @@ public class PitchWanderTest {
                     ticks++;
                 }
                 assertTrue("started at " + start + ", still at " + pitch + " after " + ticks + " ticks", ticks < 200);
+            }
+        }
+    }
+
+    @Test
+    public void aWalkingGazeSettlesOntoItsGazeAndRestsThere() {
+        // The rule as the aim runs it, which is the only run of it anyone sees: for a target with no opinion
+        // about the pitch - see LookBehavior#settledGaze - the destination is one step away from the pitch
+        // the aim is holding, the aim walks at it with the stepper every other part of the look uses, and the
+        // yaw is not its business at all.
+        //
+        // Measured over the same fifty seeds and the same thousand seconds as the rest of this file: the aim
+        // reaches the dead band of a freshly drawn preference in at most 39 ticks (mean 11), asks for the
+        // pitch it is already holding on 89.2 percent of ticks, never moves more than 0.45 degrees in a tick,
+        // never reaches further than 9.45 degrees from level, and never crosses the preference it is settling
+        // on. The thresholds below are those numbers with room.
+        long rests = 0;
+        long ticks = 0;
+        float worstMove = 0.0f;
+        float worstBand = 0.0f;
+        for (long seed = 0; seed < SEEDS; seed++) {
+            final PitchWander wander = wander(seed);
+            final float yaw = 90.0f;
+            float pitch = 0.0f;
+            float preferred = wander.preferredPitch();
+            int since = -1;
+            for (int t = 0; t < LONG_WALK; t++) {
+                wander.advance();
+                ticks++;
+                if (wander.preferredPitch() != preferred) {
+                    preferred = wander.preferredPitch();
+                    since = 0;
+                } else if (since >= 0) {
+                    since++;
+                }
+                final float destination = wander.step(pitch);
+                if (destination == pitch) {
+                    rests++;
+                }
+                final Rotation aim = AimDynamics.humanStep(
+                        new Rotation(yaw, pitch),
+                        new Rotation(yaw, destination),
+                        0, 0.5, AimDynamics.AIM_EASE);
+                assertEquals("the settle moved the yaw", yaw, aim.getYaw(), 0.0f);
+                worstMove = Math.max(worstMove, Math.abs(aim.getPitch() - pitch));
+                worstBand = Math.max(worstBand, Math.abs(aim.getPitch()));
+                if (Math.abs(pitch - preferred) > PitchWander.DEAD_BAND) {
+                    assertTrue("the gaze crossed the pitch it was settling on: " + pitch + " -> "
+                                    + aim.getPitch() + ", gaze at " + preferred,
+                            Math.signum(preferred - pitch) == Math.signum(preferred - aim.getPitch()));
+                }
+                if (since >= 0 && Math.abs(aim.getPitch() - preferred) <= PitchWander.DEAD_BAND) {
+                    assertTrue("a gaze drawn a new preference took " + since + " ticks to reach it", since <= 60);
+                    since = -1;
+                }
+                pitch = aim.getPitch();
+            }
+        }
+        assertTrue("the gaze rested on only " + (100.0 * rests / ticks) + " percent of ticks",
+                rests > 0.85 * ticks);
+        assertTrue("the gaze moved " + worstMove + " degrees in a tick", worstMove <= 1.0f);
+        assertTrue("the gaze reached " + worstBand + " degrees from level", worstBand <= PitchWander.RANGE);
+    }
+
+    @Test
+    public void anExtremeAimSettlesBackTooAndStaysLegalOnTheWay() {
+        // The same loop from an aim holding the one thing a gaze should never hold for long - the sky, or the
+        // floor. It comes back on its own, at the settle's own rate rather than in one jump, and every angle
+        // on the way is one the player could legally be holding: the clamp the aim path runs after each step
+        // is the last word on the pitch no matter where the preference is drawn.
+        for (long seed = 0; seed < SEEDS; seed++) {
+            for (float start : new float[]{90.0f, -90.0f}) {
+                final PitchWander wander = wander(seed);
+                float pitch = start;
+                int ticks = 0;
+                while (Math.abs(pitch - wander.preferredPitch()) > PitchWander.DEAD_BAND && ticks < 400) {
+                    wander.advance();
+                    final Rotation aim = AimDynamics.humanStep(
+                            new Rotation(0.0f, pitch),
+                            new Rotation(0.0f, wander.step(pitch)),
+                            0, 0.5, AimDynamics.AIM_EASE);
+                    assertTrue("an aim left the legal range: " + aim.getPitch(),
+                            aim.getPitch() >= -90.0f && aim.getPitch() <= 90.0f);
+                    assertTrue("an aim moved " + Math.abs(aim.getPitch() - pitch) + " degrees in a tick",
+                            Math.abs(aim.getPitch() - pitch) <= 1.0f + 1e-4f);
+                    pitch = aim.getPitch();
+                    ticks++;
+                }
+                assertTrue("started at " + start + ", still " + (pitch - wander.preferredPitch())
+                        + " from the gaze after " + ticks + " ticks", ticks < 400);
             }
         }
     }

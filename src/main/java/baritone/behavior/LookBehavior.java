@@ -682,7 +682,8 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
      */
     private Rotation humanStep(Rotation from, Rotation to) {
         final float ease = this.interacting() ? AimDynamics.CLICK_EASE : AimDynamics.AIM_EASE;
-        return AimDynamics.humanStep(from, this.carriedPast(to), this.aimAge, sensitivity(ctx), ease);
+        final Rotation wanted = this.carriedPast(this.settledGaze(from, to));
+        return AimDynamics.humanStep(from, wanted, this.aimAge, sensitivity(ctx), ease);
     }
 
     /**
@@ -701,6 +702,51 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
             return to;
         }
         return AimDynamics.overshoot(this.turnFrom, to, this.aimAge);
+    }
+
+    /**
+     * The rotation to aim at, for a target that has no opinion about the pitch.
+     * <p>
+     * Every walking target is built by echoing the player's own pitch straight back - {@code new
+     * Rotation(yaw, ctx.playerRotations().getPitch())} is the idiom for a target with something to say
+     * about the yaw and nothing to say about the pitch - so aiming at one exactly is holding whichever
+     * angle the journey happened to start on until it ends. Nobody's gaze does that. It settles a few
+     * degrees up or down while they walk, holds that for a few seconds, and moves on, and that habit is
+     * {@link PitchWander}, drawn and tested and described long before this: a preference two to seven
+     * seconds long, out to ten degrees but usually a few, approached at a degree a tick and left alone
+     * once it is reached.
+     * <p>
+     * It used to be applied inside {@code peekRotation}, which is the copy of the rotation the game's own
+     * movement reads. On dry ground - the only place the settle is allowed - that copy's pitch is read by
+     * nobody: {@code Entity.moveRelative} turns its input by the yaw alone, and the trade packet carries the
+     * aim, not the peek. So the habit only ever came out on the tracing side of the aiming, where it could
+     * delay an arrival gate by a degree and nothing else. It is applied here instead, to the angle the
+     * server is told, which is the one anybody watching can see.
+     * <p>
+     * Not for every target. The same two rules the carry uses, argued once at {@link #carriedPast}: a target
+     * that is about to be acted on asked for an angle in particular and gets exactly it, and nothing may be
+     * settling while a click is in flight, because the rotation this returns is the one Baritone traces its
+     * own pickaxe along. The third is about the body rather than the target: in water the pitch is the
+     * swimmer's depth and in a glide it is the attitude the elytra is holding, which is the whole subject of
+     * {@code AbstractAimProcessor#pitchIsAFreeAngle}.
+     * <p>
+     * The aim's own pitch is what is stepped, not the one the target echoed: the settle has to be continuous
+     * with the angle the aim is actually holding, or the destination would be a degree from the echo and the
+     * aim would walk at it forever without ever asking for the same angle twice - which is also what makes
+     * the settle a settle. Once the aim is inside the wander's dead band, {@link PitchWander#step} hands back
+     * the pitch it was given, and the destination is the aim, and the gaze holds.
+     */
+    private Rotation settledGaze(Rotation from, Rotation to) {
+        if (this.target.blockInteract || this.interacting() || !this.processor.pitchIsAFreeAngle()) {
+            return to;
+        }
+        if (to.getPitch() != ctx.playerRotations().getPitch()) {
+            // The target asked for a pitch of its own - down a hole, up at a block face - and gets it. This
+            // is the same question peekRotation asks of the same rotation, and it is asked of the same value:
+            // ctx.playerRotations() is what the movement echoed, under either free look setting.
+            return to;
+        }
+        return new Rotation(to.getYaw(), this.processor.settledPitch(from.getPitch()));
     }
 
     /**
@@ -791,11 +837,25 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
          * Two states where it is not, and both of them are places the movement follows the look: water,
          * where sprint-swimming drives the player's depth off the look vector's pitch, and a glide, where
          * the flight solver solves for the attitude it asked for. Everywhere else the pitch is decoration -
-         * on the ground the keys are turned by the yaw alone - which is what makes it the one angle a
-         * walking bot is allowed to be careless with. See {@link #peekRotation}.
+         * on the ground the keys are turned by the yaw alone, whatever the crosshair is pointed at - which
+         * is what makes it the one angle a walking bot is allowed to be careless with. The habit that uses
+         * the freedom is {@link LookBehavior#settledGaze}, and this is the gate it asks.
          */
-        private boolean pitchIsAFreeAngle() {
+        boolean pitchIsAFreeAngle() {
             return !ctx.player().isInWater() && !ctx.player().isFallFlying();
+        }
+
+        /**
+         * The pitch a gaze that has settled somewhere would ask for next, from where the aim is holding it.
+         * <p>
+         * One tick of the habit {@link PitchWander} describes: a degree toward wherever the gaze has settled
+         * for these few seconds, and exactly the pitch it was handed once it is already there, so that a gaze
+         * that has arrived stays arrived instead of buzzing against its own preference. A person's gaze moves
+         * in steps about this size and then rests; the rules are the wander's own and only the aiming side of
+         * them is here.
+         */
+        final float settledPitch(float pitch) {
+            return this.pitchWander.step(pitch);
         }
 
         @Override
@@ -805,29 +865,13 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
             float desiredYaw = rotation.getYaw();
             float desiredPitch = rotation.getPitch();
 
-            // In other words, the target doesn't care about the pitch: it asked for the player's own, which
-            // is the idiom for a target with an opinion about the yaw only, and that is how every walking
-            // target is built. So the pitch is free, and it does what a person's does while they walk - it
-            // settles a few degrees this way and that over the seconds rather than holding one angle for the
-            // whole journey. See PitchWander.
-            //
-            // Free is a claim about the body, though, and it is not true in water or in the air. A target
-            // that echoes the player's pitch hands that pitch to the wander, and in those two states the
-            // movement reads it back instead of ignoring it: the game's own swim code pulls the player's
-            // vertical velocity toward the look vector's pitch, so a gaze that has settled ten degrees down
-            // is a swimmer who slowly sinks - and the gaze keeps settling while they do, so the depth keeps
-            // changing under a path that was drawn at one height. A glide is the sharper version of the same
-            // mistake: the elytra solver picks its attitude from the angles it asked for last tick, which is
-            // why flying snaps rather than eases a page further down, and a wander there is a wander in the
-            // controls of a machine that is keeping itself in the air.
-            //
-            // So the pitch is wandered only where the body walks by its yaw. The other two head behaviours
-            // already sit both of these states out - see the note on {@link LookBehavior#isWalking} - and
-            // this one has the most reason to, because what it moves is not the angle the keys are paired
-            // with but the angle the body travels by.
-            if (desiredPitch == prev.getPitch() && this.pitchIsAFreeAngle()) {
-                desiredPitch = this.pitchWander.step(desiredPitch);
-            }
+            // The pitch of a target that has no opinion about it is not settled here any more, and the
+            // reason is that here is the wrong side of the looking glass. What this returns is the rotation
+            // the game's own movement reads, and on dry ground - the only place the settle is free to happen
+            // at all - the movement reads the yaw out of it and nothing else, and the packet the client sends
+            // carries the aim rather than this. So the habit lived in a copy nobody looked at and moved an
+            // arrival gate by a degree besides. It is applied to the aim now, in
+            // {@link LookBehavior#settledGaze}, under the same three gates and by the same rules.
 
             desiredYaw += this.randomYawOffset * AimDynamics.TREMOR_GAIN;
             desiredPitch += this.randomPitchOffset * AimDynamics.TREMOR_GAIN;
