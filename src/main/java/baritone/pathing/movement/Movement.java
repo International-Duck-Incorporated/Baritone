@@ -131,11 +131,13 @@ public abstract class Movement implements IMovement, MovementHelper {
             currentState.setInput(Input.CLICK_LEFT, true);
         }
 
-        // If the movement target has to force the new rotations, or we aren't using silent move, then force the rotations
+        // Hand the aim to the look behaviour, which decides for itself whether it is applied visibly or
+        // quietly: a target that is about acting on a block may have to be shown, a target that is about
+        // where the movement is going never does.
         currentState.getTarget().getRotation().ifPresent(rotation ->
                 baritone.getLookBehavior().updateTarget(
                         rotation,
-                        currentState.getTarget().hasToForceRotations()));
+                        currentState.getTarget().isBlockInteract()));
         baritone.getInputOverrideHandler().clearAllKeys();
         currentState.getInputStates().forEach((input, forced) -> {
             baritone.getInputOverrideHandler().setInputForceState(input, forced);

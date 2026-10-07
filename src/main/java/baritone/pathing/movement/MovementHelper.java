@@ -708,7 +708,11 @@ public interface MovementHelper extends ActionCosts, Helper {
                 MovementOption.lookYaw(ctx.playerRotations().getYaw(), idealYaw),
                 ctx.playerRotations().getPitch()
         );
-        state.setTarget(new MovementTarget(look, true));
+        // Not a block interaction, however much the camera stepping looks like one: this target is where the
+        // movement is going. Under free look that is the difference between quietly telling the server and
+        // taking the camera off the person walking, and it is the difference between this movement and every
+        // other one.
+        state.setTarget(new MovementTarget(look, false));
         moveTowardsWithoutRotation(state, look.getYaw(), idealYaw);
     }
 

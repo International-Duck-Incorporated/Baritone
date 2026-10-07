@@ -66,27 +66,34 @@ public class MovementState {
         public Rotation rotation;
 
         /**
-         * Whether or not this target must force rotations.
+         * Whether this target is about acting on a block rather than about where the movement is going.
          * <p>
-         * {@code true} if we're trying to place or break blocks, {@code false} if we're trying to look at the movement location
+         * {@code true} if we're trying to place or break blocks, {@code false} if we're trying to look at the
+         * movement location. It is named after the question rather than the answer because the answer is not
+         * a yes or no: whether a rotation is applied visibly or quietly is {@link
+         * baritone.behavior.LookBehavior}'s business, and this is what it asks. It used to be called
+         * {@code forceRotations}, which reads as a demand that the rotations be applied, and the walking
+         * target of every horizontal movement was flagged with it as though it were one - so under free look
+         * the player's camera was driven for a walk and left alone for a jump, which is not a distinction
+         * anybody asked for.
          */
-        private boolean forceRotations;
+        private boolean blockInteract;
 
         public MovementTarget() {
             this(null, false);
         }
 
-        public MovementTarget(Rotation rotation, boolean forceRotations) {
+        public MovementTarget(Rotation rotation, boolean blockInteract) {
             this.rotation = rotation;
-            this.forceRotations = forceRotations;
+            this.blockInteract = blockInteract;
         }
 
         public final Optional<Rotation> getRotation() {
             return Optional.ofNullable(this.rotation);
         }
 
-        public boolean hasToForceRotations() {
-            return this.forceRotations;
+        public boolean isBlockInteract() {
+            return this.blockInteract;
         }
     }
 }
