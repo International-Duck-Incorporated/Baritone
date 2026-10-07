@@ -27,6 +27,7 @@ import baritone.api.process.IFollowProcess;
 import baritone.api.process.PathingCommand;
 import baritone.api.process.PathingCommandType;
 import baritone.api.utils.BetterBlockPos;
+import baritone.api.utils.RotationUtils;
 import baritone.pathing.path.PathExecutor;
 import baritone.utils.BaritoneProcessHelper;
 import net.minecraft.core.BlockPos;
@@ -58,7 +59,39 @@ public final class FollowProcess extends BaritoneProcessHelper implements IFollo
         scanWorld();
         List<BlockPos> places = cache.stream().map(this::placeOf).collect(Collectors.toList());
         Goal goal = new GoalComposite(places.stream().map(this::towards).toArray(Goal[]::new));
+        regardWhileStanding();
         return new PathingCommand(goal, walkOrTurnAround(places));
+    }
+
+    /**
+     * Faces whoever is being followed while the feet have nowhere to go: close enough already, or waiting
+     * on a way to be worked out.
+     * <p>
+     * A person following somebody who stops does not stand facing the last way they walked; they turn to
+     * the person, and keep turned to them as they move about, and look away now and then and back. That
+     * is exactly what a target that is standing gets from the look behaviour - the turn at the hand's
+     * own speed with its beat before it, the sway at half, the idle glance off it and home again - so
+     * this only has to say who. It is said on the ticks the walk is not under way: a walking tick's
+     * movement sets its own target after this and wins, and on the one tick a new walk begins the hand
+     * looks from the person to the way with the beat a change of direction gets anyway. An entity, not a
+     * block: this is the one process whose goal is somebody.
+     */
+    private void regardWhileStanding() {
+        if (cache.isEmpty() || baritone.getPathingBehavior().isPathing()) {
+            return;
+        }
+        Entity nearest = null;
+        double closest = Double.MAX_VALUE;
+        for (Entity entity : cache) {
+            final double distance = entity.distanceToSqr(ctx.player());
+            if (distance < closest) {
+                closest = distance;
+                nearest = entity;
+            }
+        }
+        baritone.getLookBehavior().updateTarget(
+                RotationUtils.calcRotationFromVec3d(ctx.playerHead(), nearest.getEyePosition(), ctx.playerRotations()),
+                false);
     }
 
     /**
