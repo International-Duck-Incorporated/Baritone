@@ -214,6 +214,102 @@ public class WalkGlanceTest {
     }
 
     @Test
+    public void theFeetStopForAFewLooksAndOnlyWhileTheHeadIsOutThere() {
+        int glances = 0;
+        int stops = 0;
+        for (int seed = 0; seed < SEEDS; seed++) {
+            final WalkGlance glance = new WalkGlance(new Random(seed));
+            boolean wasOut = false;
+            boolean wasStopped = false;
+            boolean wentAgainThisGlance = false;
+            float yawWhenStopped = 0f;
+            for (int tick = 0; tick < 12000; tick++) {
+                glance.advance(true, () -> null);
+                final boolean out = glance.out();
+                final boolean stopped = glance.stopped();
+                if (out && !wasOut) {
+                    glances++;
+                    wentAgainThisGlance = false;
+                    assertFalse("seed " + seed + ": the feet stopped on the first tick of a look", stopped);
+                }
+                if (stopped) {
+                    assertTrue("seed " + seed + ": the feet stopped with the head on the bearing", out);
+                    assertFalse("seed " + seed + ": the feet stopped twice for one look", wentAgainThisGlance);
+                    if (!wasStopped) {
+                        stops++;
+                        yawWhenStopped = Math.abs(glance.yaw());
+                        assertTrue("seed " + seed + ": stopped before the head was anywhere", yawWhenStopped > 0f);
+                    } else {
+                        // standing to look: the head is still going out or holding, never on its way back
+                        assertTrue("seed " + seed + ": the feet stood while the head was already coming back",
+                                Math.abs(glance.yaw()) >= yawWhenStopped - 0.01f);
+                        yawWhenStopped = Math.abs(glance.yaw());
+                    }
+                } else if (wasStopped) {
+                    wentAgainThisGlance = true;
+                    assertTrue("seed " + seed + ": the feet went again with the look already over", out);
+                }
+                if (!out && wasOut) {
+                    assertFalse(stopped);
+                }
+                wasOut = out;
+                wasStopped = stopped;
+            }
+        }
+        assertTrue("no walk ever stopped for a look", stops > 0);
+        assertTrue("the feet stopped for " + stops + " of " + glances + " looks at nothing, which is most walks on hold",
+                stops * 100 <= glances * 20);
+        assertTrue("the feet stopped for " + stops + " of " + glances + " looks at nothing, which is as good as never",
+                stops * 100 >= glances * 4);
+    }
+
+    @Test
+    public void aLookAtSomethingIsStoppedForMoreOften() {
+        int glances = 0;
+        int stops = 0;
+        for (int seed = 0; seed < SEEDS; seed++) {
+            final WalkGlance glance = new WalkGlance(new Random(seed));
+            final Rotation toTheLeft = new Rotation(-55f, -10f);
+            boolean wasOut = false;
+            boolean wasStopped = false;
+            for (int tick = 0; tick < 12000; tick++) {
+                glance.advance(true, () -> toTheLeft);
+                if (glance.out() && !wasOut) {
+                    glances++;
+                }
+                if (glance.stopped() && !wasStopped) {
+                    stops++;
+                }
+                wasOut = glance.out();
+                wasStopped = glance.stopped();
+            }
+        }
+        assertTrue("stopped for " + stops + " of " + glances + " looks with something there to look at",
+                stops * 100 >= glances * 12 && stops * 100 <= glances * 40);
+    }
+
+    @Test
+    public void theFeetGoAgainTheMomentTheHeadIsWanted() {
+        for (int seed = 0; seed < SEEDS; seed++) {
+            final WalkGlance glance = new WalkGlance(new Random(seed));
+            int tick = 0;
+            while (!glance.stopped() && tick < 60000) {
+                glance.advance(true, () -> null);
+                tick++;
+            }
+            if (!glance.stopped()) {
+                continue; // a walk that never stopped is a fine walk; the count is asserted elsewhere
+            }
+            glance.advance(false, () -> null);
+            assertFalse("seed " + seed + ": the feet stayed stopped with the head wanted", glance.stopped());
+            for (int i = 0; i < 200; i++) {
+                glance.advance(false, () -> null);
+                assertFalse(glance.stopped());
+            }
+        }
+    }
+
+    @Test
     public void theSameSeedIsTheSameWalk() {
         final WalkGlance a = new WalkGlance(new Random(99));
         final WalkGlance b = new WalkGlance(new Random(99));

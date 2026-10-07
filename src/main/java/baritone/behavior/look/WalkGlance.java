@@ -49,6 +49,11 @@ import java.util.function.Supplier;
  * whole interval. A walk that is all jumps and corners therefore never glances at all, which is what a
  * person on broken ground does too: they watch their feet.
  * <p>
+ * Now and then the feet stop for it - see {@link #stopped()} - because a person who sees something worth
+ * a look sometimes stands and looks, and a walk that never once pauses is a walk on rails. The pause is
+ * the hold of the glance and no more, and it is the caller's to take: on a plain walk along the flat it
+ * is free, and the caller is the one that knows the walk is plain.
+ * <p>
  * The whole of it is free of Minecraft, and {@code WalkGlanceTest} drives it: never further than the
  * bounds, never faster than the step, back to exactly nothing at the end, and nothing at all when it is
  * never allowed.
@@ -122,6 +127,15 @@ public final class WalkGlance {
      */
     private static final float INTEREST_CHANCE = 0.6f;
 
+    /**
+     * How often the feet stop for the look: once in ten for a glance at nothing, once in three for a glance
+     * at something - a person stops for a mob in a field, not for the field. The feet come off the keys
+     * halfway out, stand while the head is held there, and go again as it comes back, which is a pause of
+     * well under a second once every couple of minutes of open walking; see {@link #stopped()}.
+     */
+    private static final float STOP_CHANCE = 0.1f;
+    private static final float STOP_FOR_INTEREST_CHANCE = 0.34f;
+
     private enum Phase {NONE, OUT, HOLD, BACK}
 
     private final Random rand;
@@ -134,7 +148,8 @@ public final class WalkGlance {
     private float pitchAmplitude;
     private float yaw;
     private float pitch;
-    private boolean welcome; // offered this tick
+    private boolean welcome;  // offered this tick
+    private boolean stopping; // whether this glance is one the feet stop for
 
     public WalkGlance() {
         this(new Random());
@@ -187,6 +202,7 @@ public final class WalkGlance {
             if (this.phase != Phase.NONE) {
                 // interrupted: come back, and count the whole interval again before the next one
                 this.phase = Phase.NONE;
+                this.stopping = false;
                 this.cooldown = drawCooldown();
             }
             recover();
@@ -225,6 +241,7 @@ public final class WalkGlance {
                     this.yaw = 0f;
                     this.pitch = 0f;
                     this.phase = Phase.NONE;
+                    this.stopping = false;
                     this.cooldown = drawCooldown();
                 }
                 return;
@@ -254,6 +271,18 @@ public final class WalkGlance {
         return this.phase != Phase.NONE || this.yaw != 0f || this.pitch != 0f;
     }
 
+    /**
+     * Whether the feet are to stay off the keys this tick, for a look worth stopping for: from halfway out
+     * until the head starts back. Never once the glance has been interrupted, and never for most glances.
+     * The caller decides what a stopped foot is; this only says when.
+     */
+    public boolean stopped() {
+        if (!this.stopping) {
+            return false;
+        }
+        return this.phase == Phase.HOLD || (this.phase == Phase.OUT && this.elapsed * 2 >= this.length);
+    }
+
     private void start(Rotation interest) {
         if (interest != null && this.rand.nextFloat() < INTEREST_CHANCE
                 && Math.abs(interest.getYaw()) <= MAX_INTEREST_YAW && Math.abs(interest.getPitch()) <= MAX_INTEREST_PITCH
@@ -261,10 +290,12 @@ public final class WalkGlance {
             // at the thing, near enough: a glance is not an aim, and an exact bearing would look like one
             this.yawAmplitude = interest.getYaw() + (this.rand.nextFloat() - 0.5f) * 4f;
             this.pitchAmplitude = interest.getPitch() + (this.rand.nextFloat() - 0.5f) * 2f;
+            this.stopping = this.rand.nextFloat() < STOP_FOR_INTEREST_CHANCE;
         } else {
             final float side = this.rand.nextBoolean() ? 1f : -1f;
             this.yawAmplitude = side * (MIN_YAW + this.rand.nextFloat() * (MAX_YAW - MIN_YAW));
             this.pitchAmplitude = (this.rand.nextFloat() * 2f - 1f) * MAX_PITCH;
+            this.stopping = this.rand.nextFloat() < STOP_CHANCE;
         }
         enter(Phase.OUT, ticksFor(OUT_MIN, OUT_MAX));
     }

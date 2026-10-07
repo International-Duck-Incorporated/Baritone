@@ -274,6 +274,7 @@ public class PathExecutor implements IPathExecutor, Helper {
             return true;
         } else {
             letTheHeadLead();
+            standForTheLook();
             sprintNextTick = shouldSprintNextTick();
             if (!sprintNextTick) {
                 ctx.player().setSprinting(false); // letting go of control doesn't make you stop sprinting actually
@@ -768,6 +769,23 @@ public class PathExecutor implements IPathExecutor, Helper {
             return;
         }
         for (Input input : new Input[]{Input.MOVE_FORWARD, Input.MOVE_BACK, Input.MOVE_LEFT, Input.MOVE_RIGHT, Input.JUMP}) {
+            keys.setInputForceState(input, false);
+        }
+    }
+
+    /**
+     * Takes the feet off the keys while the walking glance says to - see
+     * {@link baritone.behavior.look.WalkGlance#stopped()}. Only ever true on a walk this executor has
+     * welcomed the glance on, which is a plain one along the flat with more of the same ahead, so standing
+     * on it for a moment is free; the movement has already set its target for the tick, so the head stays
+     * on the walk and the walk picks up where it left off.
+     */
+    private void standForTheLook() {
+        if (!behavior.baritone.getLookBehavior().walkGlance().stopped()) {
+            return;
+        }
+        final IInputOverrideHandler keys = behavior.baritone.getInputOverrideHandler();
+        for (Input input : new Input[]{Input.MOVE_FORWARD, Input.MOVE_BACK, Input.MOVE_LEFT, Input.MOVE_RIGHT, Input.SPRINT}) {
             keys.setInputForceState(input, false);
         }
     }

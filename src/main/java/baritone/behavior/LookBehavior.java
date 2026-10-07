@@ -615,15 +615,19 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
         // The glance's angles are absolute and are taken against the aimed camera rather than the swayed
         // one, which is what the idle path does too: the two offsets ride on the same base and are handed
         // back together in POST, so neither can take the head home while the other still holds it.
-        final Rotation glance = this.idleGlance.next(this.wanderCamera, waiting, this::idleStep, this::somethingNearby);
+        // The idle glance has the waiting ticks, unless the walking glance is still out on them: the feet
+        // stop for some of its looks, and the two must not be on the head at once.
+        final Rotation glance = this.idleGlance.next(this.wanderCamera, waiting && !this.walkGlance.out(), this::idleStep, this::somethingNearby);
         final Rotation base = glance != null ? glance : this.wanderCamera;
         // The walking glance rides on the same base, as an offset. It is welcome when the walk is plain
         // and the target is not something about to be clicked - a block to break, a face to place against
-        // - and not otherwise; standing still waiting is the idle glance's turn, not this one's, and a head
-        // the aim is not driving at all (Mode.NONE: the person's own view, walked along) is not ours to
-        // turn by forty degrees. Something nearby worth looking at is offered as a way off the aim, which
-        // is what the glance is made of.
-        this.walkGlance.advance(walking && this.walkGlance.welcomed() && !this.target.blockInteract
+        // - and not otherwise; standing still waiting is the idle glance's turn, not this one's, except
+        // while the feet have stopped for a look that is already out, and a head the aim is not driving at
+        // all (Mode.NONE: the person's own view, walked along) is not ours to turn by forty degrees.
+        // Something nearby worth looking at is offered as a way off the aim, which is what the glance is
+        // made of.
+        final boolean onTheWalk = walking || (waiting && this.walkGlance.out());
+        this.walkGlance.advance(onTheWalk && this.walkGlance.welcomed() && !this.target.blockInteract
                 && this.target.mode != Target.Mode.NONE, () -> {
             final Rotation nearby = this.somethingNearby();
             if (nearby == null) {
