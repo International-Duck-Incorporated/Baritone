@@ -102,8 +102,6 @@ public final class InputOverrideHandler extends Behavior implements IInputOverri
                 ctx.player().input = new KeyboardInput(ctx.minecraft().options);
             }
         }
-        // only set it if it was previously incorrect
-        // gotta do it this way, or else it constantly thinks you're beginning a double tap W sprint lol
     }
 
     private boolean inControl() {
