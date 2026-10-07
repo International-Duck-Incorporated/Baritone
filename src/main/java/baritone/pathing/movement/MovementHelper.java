@@ -676,8 +676,7 @@ public interface MovementHelper extends ActionCosts, Helper {
                 Mth.sin(ctx.playerRotations().getYaw() * DEG_TO_RAD_F),
                 Mth.cos(ctx.playerRotations().getYaw() * DEG_TO_RAD_F),
                 Mth.sin(idealYaw * DEG_TO_RAD_F),
-                Mth.cos(idealYaw * DEG_TO_RAD_F),
-                Baritone.settings().allowSprint.value
+                Mth.cos(idealYaw * DEG_TO_RAD_F)
         ).ifPresent(selection -> selection.setInputs(state));
     }
 
