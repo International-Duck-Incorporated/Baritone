@@ -18,6 +18,7 @@
 package baritone.api.utils;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.Random;
@@ -37,8 +38,12 @@ import java.util.Random;
  * <p>
  * Only the point is chosen here. Whether the hand can actually see it from where the player is standing is
  * {@code RotationUtils#reachable}'s to check, and when it cannot the centre and the face centres are tried
- * as they always were. Nothing that is placed takes it: a face to place against is aimed at exactly,
- * because where the crosshair lands on it is where the block goes.
+ * as they always were. A face a throwaway block is placed against takes it too - see {@link #facePoint} -
+ * a point of the face's own rather than its exact centre, because where the crosshair lands on a face only
+ * matters for a block that takes its shape from the landing, a slab or a stair, and the dirt and cobble
+ * under a bridge or a pillar do not; the trace that confirms the face is the right one is run on the point
+ * the hand is actually sent to, and the centre is tried when the point cannot be seen. The builder's own
+ * placements, which can be slabs and stairs, do not come through here.
  */
 public final class AimScatter {
 
@@ -78,6 +83,24 @@ public final class AimScatter {
                 centre.y + (unit(mix(seed)) - 0.5) * 2.0 * SPREAD * extent.y,
                 centre.z + (unit(mix(mix(seed))) - 0.5) * 2.0 * SPREAD * extent.z
         );
+    }
+
+    /**
+     * The point to aim at on a face of a block, when the face is the thing: somewhere in the middle two
+     * thirds of it, and on it - nothing is moved along the face's normal. Keyed on {@code placeAt} rather
+     * than the block the face belongs to, because what is being aimed at is where the new block goes, and
+     * the same place is aimed at the same way for as long as it is being aimed at.
+     *
+     * @param placeAt    where the block will go
+     * @param faceCentre the centre of the face being aimed at
+     * @param normal     the axis the face stands across
+     * @return a point on the face, within {@link #SPREAD} of its centre either way along it
+     */
+    public static Vec3 facePoint(BlockPos placeAt, Vec3 faceCentre, Direction.Axis normal) {
+        return point(placeAt, SALT, faceCentre, new Vec3(
+                normal == Direction.Axis.X ? 0 : 1,
+                normal == Direction.Axis.Y ? 0 : 1,
+                normal == Direction.Axis.Z ? 0 : 1));
     }
 
     /**

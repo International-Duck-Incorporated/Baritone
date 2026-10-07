@@ -832,18 +832,28 @@ public interface MovementHelper extends ActionCosts, Helper {
                 double faceX = (placeAt.getX() + against1.getX() + 1.0D) * 0.5D;
                 double faceY = (placeAt.getY() + against1.getY() + 0.5D) * 0.5D;
                 double faceZ = (placeAt.getZ() + against1.getZ() + 1.0D) * 0.5D;
-                Rotation place = RotationUtils.calcRotationFromVec3d(wouldSneak ? RayTraceUtils.inferSneakingEyePosition(ctx.player()) : ctx.playerHead(), new Vec3(faceX, faceY, faceZ), ctx.playerRotations());
-                Rotation actual = baritone.getLookBehavior().getAimProcessor().peekRotation(place);
-                HitResult res = RayTraceUtils.rayTraceTowards(ctx.player(), actual, ctx.playerController().getBlockReachDistance(), wouldSneak);
-                if (res != null && res.getType() == HitResult.Type.BLOCK && ((BlockHitResult) res).getBlockPos().equals(against1) && ((BlockHitResult) res).getBlockPos().relative(((BlockHitResult) res).getDirection()).equals(placeAt)) {
-                    state.setTarget(new MovementTarget(place, true));
-                    found = true;
-
-                    if (!preferDown) {
-                        // if preferDown is true, we want the last option
-                        // if preferDown is false, we want the first
+                final Vec3 faceCentre = new Vec3(faceX, faceY, faceZ);
+                final Vec3 eyes = wouldSneak ? RayTraceUtils.inferSneakingEyePosition(ctx.player()) : ctx.playerHead();
+                // The hand goes to a point of the face's own first - see AimScatter#facePoint - and to the
+                // exact centre only when that point cannot be seen from here; either way the trace below is
+                // run on the point actually being aimed at, so the face it confirms is the face that is hit.
+                final Vec3 ownPoint = AimScatter.facePoint(placeAt, faceCentre, HORIZONTALS_BUT_ALSO_DOWN_____SO_EVERY_DIRECTION_EXCEPT_UP[i].getAxis());
+                boolean placed = false;
+                for (Vec3 aimAt : new Vec3[]{ownPoint, faceCentre}) {
+                    Rotation place = RotationUtils.calcRotationFromVec3d(eyes, aimAt, ctx.playerRotations());
+                    Rotation actual = baritone.getLookBehavior().getAimProcessor().peekRotation(place);
+                    HitResult res = RayTraceUtils.rayTraceTowards(ctx.player(), actual, ctx.playerController().getBlockReachDistance(), wouldSneak);
+                    if (res != null && res.getType() == HitResult.Type.BLOCK && ((BlockHitResult) res).getBlockPos().equals(against1) && ((BlockHitResult) res).getBlockPos().relative(((BlockHitResult) res).getDirection()).equals(placeAt)) {
+                        state.setTarget(new MovementTarget(place, true));
+                        found = true;
+                        placed = true;
                         break;
                     }
+                }
+                if (placed && !preferDown) {
+                    // if preferDown is true, we want the last option
+                    // if preferDown is false, we want the first
+                    break;
                 }
             }
         }

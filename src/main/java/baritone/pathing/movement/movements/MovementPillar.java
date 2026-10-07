@@ -20,6 +20,7 @@ package baritone.pathing.movement.movements;
 import baritone.Baritone;
 import baritone.api.IBaritone;
 import baritone.api.pathing.movement.MovementStatus;
+import baritone.api.utils.AimScatter;
 import baritone.api.utils.BetterBlockPos;
 import baritone.api.utils.Rotation;
 import baritone.api.utils.RotationUtils;
@@ -161,8 +162,10 @@ public class MovementPillar extends Movement {
         }
         boolean ladder = MovementHelper.isClimbable(fromDown.getBlock());
 
+        // down at the block under the feet, at a point of its own rather than dead centre (see AimScatter):
+        // the eye is straight above it and the trace lands on its top whichever point in it is looked at
         Rotation rotation = RotationUtils.calcRotationFromVec3d(ctx.playerHead(),
-                VecUtils.getBlockPosCenter(positionToPlace),
+                AimScatter.point(positionToPlace, VecUtils.getBlockPosCenter(positionToPlace), new Vec3(1, 1, 1)),
                 ctx.playerRotations());
         if (!ladder) {
             state.setTarget(new MovementState.MovementTarget(ctx.playerRotations().withPitch(rotation.getPitch()), true));

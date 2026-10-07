@@ -20,6 +20,7 @@ package baritone.pathing.movement.movements;
 import baritone.Baritone;
 import baritone.api.IBaritone;
 import baritone.api.pathing.movement.MovementStatus;
+import baritone.api.utils.AimScatter;
 import baritone.api.utils.BetterBlockPos;
 import baritone.api.utils.Rotation;
 import baritone.api.utils.RotationUtils;
@@ -33,6 +34,7 @@ import baritone.pathing.movement.StraightRun;
 import baritone.utils.BlockStateInterface;
 import com.google.common.collect.ImmutableSet;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.world.level.block.AirBlock;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
@@ -332,11 +334,19 @@ public class MovementTraverse extends Movement {
                 // faceX, faceY, faceZ is the middle of the face between from and to
                 BlockPos goalLook = src.below(); // this is the block we were just standing on, and the one we want to place against
 
-                Rotation backToFace = RotationUtils.calcRotationFromVec3d(ctx.playerHead(), new Vec3(faceX, faceY, faceZ), ctx.playerRotations());
-                float pitch = backToFace.getPitch();
+                // a point of the face's own rather than its exact centre, see AimScatter#facePoint: the face
+                // is a side of the block just stepped off, seen from above with nothing but air between, so
+                // every point on it is in view, and the click still waits on the trace landing on that block
+                final Vec3 facePoint = AimScatter.facePoint(dest.below(), new Vec3(faceX, faceY, faceZ),
+                        dest.getX() != src.getX() ? Direction.Axis.X : Direction.Axis.Z);
+                Rotation backToFace = RotationUtils.calcRotationFromVec3d(ctx.playerHead(), facePoint, ctx.playerRotations());
                 double dist2 = Math.max(Math.abs(ctx.player().position().x - faceX), Math.abs(ctx.player().position().z - faceZ));
                 if (dist2 < 0.29) { // see issue #208
                     float yaw = RotationUtils.calcRotationFromVec3d(VecUtils.getBlockPosCenter(dest), ctx.playerHead(), ctx.playerRotations()).getYaw();
+                    // the yaw is straight back across the face here, so the pitch is to the point's height
+                    // on the face's own centre line: a pitch worked out for a point off to one side would
+                    // land the straight-back ray higher up than that point, and past the top of the face
+                    float pitch = RotationUtils.calcRotationFromVec3d(ctx.playerHead(), new Vec3(faceX, facePoint.y, faceZ), ctx.playerRotations()).getPitch();
                     state.setTarget(new MovementState.MovementTarget(new Rotation(yaw, pitch), true));
                     state.setInput(Input.MOVE_BACK, true);
                 } else {

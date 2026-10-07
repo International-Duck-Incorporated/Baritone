@@ -18,6 +18,7 @@
 package baritone.api.utils;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.world.phys.Vec3;
 import org.junit.Test;
 
@@ -131,6 +132,32 @@ public class AimScatterTest {
         for (long salt = 0; salt < 1000; salt++) {
             final Vec3 point = AimScatter.point(pos, salt, centre, extent);
             assertTrue(point.y > 3.0 && point.y < 3.5);
+        }
+    }
+    @Test
+    public void aFacePointIsOnTheFaceAndInTheMiddleOfIt() {
+        final Random rand = new Random(7);
+        for (int i = 0; i < 2000; i++) {
+            final BlockPos placeAt = new BlockPos(rand.nextInt(2000) - 1000, rand.nextInt(256), rand.nextInt(2000) - 1000);
+            final Direction.Axis normal = Direction.Axis.values()[i % 3];
+            final Vec3 centre = new Vec3(placeAt.getX() + 0.5, placeAt.getY() + 0.5, placeAt.getZ() + 0.5);
+            final Vec3 point = AimScatter.facePoint(placeAt, centre, normal);
+            final double dx = Math.abs(point.x - centre.x);
+            final double dy = Math.abs(point.y - centre.y);
+            final double dz = Math.abs(point.z - centre.z);
+            assertEquals("moved along the normal " + normal, 0.0, normal == Direction.Axis.X ? dx : normal == Direction.Axis.Y ? dy : dz, 0.0);
+            assertTrue("off the middle of the face: " + dx + ", " + dy + ", " + dz,
+                    dx <= AimScatter.SPREAD && dy <= AimScatter.SPREAD && dz <= AimScatter.SPREAD);
+        }
+    }
+
+    @Test
+    public void aFacePointIsTheSameForTheSamePlaceWhateverTheRunOfTicks() {
+        final BlockPos placeAt = new BlockPos(3, 64, -9);
+        final Vec3 centre = new Vec3(3.0, 64.5, -8.5);
+        final Vec3 first = AimScatter.facePoint(placeAt, centre, Direction.Axis.X);
+        for (int i = 0; i < 50; i++) {
+            assertEquals(first, AimScatter.facePoint(placeAt, centre, Direction.Axis.X));
         }
     }
 }
