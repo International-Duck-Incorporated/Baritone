@@ -94,6 +94,27 @@ public class CadenceTest {
     }
 
     @Test
+    public void aSprintOutlivesTheMovementThatAskedForIt() {
+        // Letting go of a run the same tick nothing asks for it means the speed, the particles and the
+        // field of view all switch between one tick and the next, which is not something a hand does. It
+        // has to be a beat, and it must never be a long enough one to turn into the bot running when it
+        // was told to walk.
+        assertTrue("a zero hangover releases the key on the very tick the movement stopped asking",
+                Cadence.SPRINT_HANGOVER_MIN >= 1);
+        assertTrue("a hangover this long is not a hand letting go", Cadence.SPRINT_HANGOVER_MAX <= 4);
+        final Random rand = new Random(2718);
+        final Set<Integer> seen = new HashSet<>();
+        for (int i = 0; i < 1000; i++) {
+            final int hangover = Cadence.sprintHangover(rand);
+            seen.add(hangover);
+            assertTrue("hangover " + hangover + " below the minimum", hangover >= Cadence.SPRINT_HANGOVER_MIN);
+            assertTrue("hangover " + hangover + " above the maximum", hangover <= Cadence.SPRINT_HANGOVER_MAX);
+        }
+        assertEquals("a hangover that is always the same length is a timer, not a hand",
+                Cadence.SPRINT_HANGOVER_MAX - Cadence.SPRINT_HANGOVER_MIN + 1, seen.size());
+    }
+
+    @Test
     public void everyJitteredIntervalIsWithinATickOfTheSetting() {
         final Random rand = new Random(2026);
         for (int setting = 0; setting <= 40; setting++) {

@@ -68,6 +68,26 @@ public final class Cadence {
     }
 
     /**
+     * Ticks a sprint key stays held after nothing is asking for it any more: one to three.
+     * <p>
+     * Sprint is decided from scratch every tick from what the current movement wants, which means the run
+     * blinks off on exactly the tick a movement stops asking for it and back on the tick the next one asks
+     * again. Nobody releases the key on that tick: the hand comes off a beat later, and the run peters out
+     * over a few ticks of walking instead of switching between two speeds between one tick and the next.
+     * Only ever spent where letting go can be delayed safely - see the gate in
+     * {@code PathExecutor#shouldSprintNextTick()}.
+     */
+    public static final int SPRINT_HANGOVER_MIN = 1;
+    public static final int SPRINT_HANGOVER_MAX = 3;
+
+    /**
+     * @return the hangover, in ticks, for a sprint nothing is asking for any more; inclusive of both ends
+     */
+    public static int sprintHangover(Random rand) {
+        return SPRINT_HANGOVER_MIN + rand.nextInt(SPRINT_HANGOVER_MAX - SPRINT_HANGOVER_MIN + 1);
+    }
+
+    /**
      * How far a repeated action's interval is allowed to wander, in ticks, either side of the setting.
      */
     public static final int JITTER = 1;

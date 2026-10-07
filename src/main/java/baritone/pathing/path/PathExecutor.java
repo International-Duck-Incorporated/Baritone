@@ -32,6 +32,7 @@ import baritone.pathing.movement.Movement;
 import baritone.pathing.movement.MovementHelper;
 import baritone.pathing.movement.movements.*;
 import baritone.utils.BlockStateInterface;
+import baritone.utils.Cadence;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Vec3i;
 import net.minecraft.world.phys.Vec3;
@@ -74,6 +75,13 @@ public class PathExecutor implements IPathExecutor, Helper {
     private final IPlayerContext ctx;
 
     private boolean sprintNextTick;
+
+    /**
+     * Ticks the sprint key is still being held for after the last movement that wanted it, so that a run
+     * does not blink on and off between one movement and the next. See {@link Cadence#sprintHangover}.
+     */
+    private int sprintHangover;
+    private final Random cadenceRand = new Random();
 
     public PathExecutor(PathingBehavior behavior, IPath path) {
         this.behavior = behavior;
@@ -341,6 +349,42 @@ public class PathExecutor implements IPathExecutor, Helper {
     }
 
     private boolean shouldSprintNextTick() {
+        if (sprintWanted()) {
+            // Something wants us running: the key is held, and the hand comes off within this many ticks
+            // of nothing wanting it any more.
+            this.sprintHangover = Cadence.sprintHangover(this.cadenceRand);
+            return true;
+        }
+        if (this.sprintHangover > 0 && canTrailOffSprint()) {
+            // Nothing wants it any more, but the key does not come off on this tick. Baritone only forces
+            // the sprint key down - vanilla still decides whether the player is sprinting - so this holds
+            // the key, it does not make the player do anything they could not have done anyway.
+            this.sprintHangover--;
+            return true;
+        }
+        this.sprintHangover = 0;
+        return false;
+    }
+
+    /**
+     * Whether a sprint that nothing is asking for any more may be held for another tick.
+     * <p>
+     * Only while running along the ground. Everywhere else the speed at the instant of the transition is
+     * load bearing - the jump that clears a gap, the step off a ledge, the fall after it - and those are
+     * planned assuming the player is slowing down, so the key has to come off the tick the movement stops
+     * asking for it.
+     */
+    private boolean canTrailOffSprint() {
+        if (pathPosition >= path.length() || path.movements().get(pathPosition).getDirection().getY() != 0) {
+            return false;
+        }
+        return ctx.player().onGround();
+    }
+
+    /**
+     * Whether the current movement wants the sprint key held, ignoring any hangover from the last one.
+     */
+    private boolean sprintWanted() {
         boolean requested = behavior.baritone.getInputOverrideHandler().isInputForcedDown(Input.SPRINT);
 
         // we'll take it from here, no need for minecraft to see we're holding down control and sprint for us
@@ -613,6 +657,7 @@ public class PathExecutor implements IPathExecutor, Helper {
             ret.currentMovementOriginalCostEstimate = currentMovementOriginalCostEstimate;
             ret.costEstimateIndex = costEstimateIndex;
             ret.ticksOnCurrent = ticksOnCurrent;
+            ret.sprintHangover = sprintHangover; // continuing the same run, so not a boundary the player can feel
             return ret;
         }).orElseGet(this::cutIfTooLong); // dont actually call cutIfTooLong every tick if we won't actually use it, use a method reference
     }
@@ -634,6 +679,7 @@ public class PathExecutor implements IPathExecutor, Helper {
                 ret.costEstimateIndex = costEstimateIndex - cutoffAmt;
             }
             ret.ticksOnCurrent = ticksOnCurrent;
+            ret.sprintHangover = sprintHangover; // continuing the same run, so not a boundary the player can feel
             return ret;
         }
         return this;
