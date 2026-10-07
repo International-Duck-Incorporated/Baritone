@@ -533,8 +533,9 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
     /**
      * Whether the head is ours to move, for the walk.
      * <p>
-     * Three conditions and all three are load bearing. The player has to be walking, because this is the
-     * stride, and standing still is a different gate and a quieter sway. Baritone has to be the one driving,
+     * Three conditions and all three are load bearing. The player has to be moving along - on foot or
+     * swimming, which are the same deal as far as the head is concerned (see {@link #isSwimming}) - because
+     * this is the stride, and standing still is a different gate and a quieter sway. Baritone has to be the one driving,
      * because a head that moves on its own while a person is walking somewhere is not human, it is broken.
      * And nothing may be being clicked this tick, for the reason given on {@link #interacting()}: the trace
      * Baritone aims its own pickaxe and blocks along follows the rotation it last told the server, and a
@@ -548,7 +549,7 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
      */
     private boolean canWander() {
         return this.target != null
-                && this.isWalking()
+                && (this.isWalking() || this.isSwimming())
                 && baritone.getPathingBehavior().isPathing()
                 && !this.interacting();
     }
@@ -560,6 +561,34 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
         if (!ctx.player().onGround() || ctx.player().isInWater() || ctx.player().isFallFlying()) {
             return false;
         }
+        return movingAlong();
+    }
+
+    /**
+     * Whether the player is swimming along.
+     * <p>
+     * The same deal as walking, as far as the head is concerned, which is why the stride sway is allowed in
+     * water as well: the game turns a swim by the yaw exactly as it turns a walk, so a degree of drift in
+     * the yaw is a degree of drift in the heading - which is what this sway is, and what
+     * {@code HeadWanderTest} bounds. The pitch is the part that is not the same: it steers the depth, so
+     * the wander leaves it alone and the sway only ever moves it by the six tenths of a degree that is the
+     * head moving rather than the body (see the note on the wander in {@code AimProcessor}).
+     * <p>
+     * Deliberately not a gate for anything else: the carry past a target
+     * ({@link #carriedPast}) is asked for on dry land only, because a few degrees of heading is worth more
+     * than the six tenths this takes and there is more than one reason to be careful in water.
+     */
+    private boolean isSwimming() {
+        if (!ctx.player().isInWater() || ctx.player().isFallFlying()) {
+            return false;
+        }
+        return movingAlong();
+    }
+
+    /**
+     * The speed half of both of those: is the player getting anywhere this tick, on the ground or in water.
+     */
+    private boolean movingAlong() {
         final double dx = ctx.player().getDeltaMovement().x;
         final double dz = ctx.player().getDeltaMovement().z;
         return dx * dx + dz * dz > IDLE_SPEED_SQ;

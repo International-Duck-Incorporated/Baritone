@@ -26,7 +26,7 @@ at the keyboard owns the camera and nothing here touches it.
 
 | what | where | the rule |
 | --- | --- | --- |
-| A standing bot drifts | `behavior/look/HeadWander.java` | A degree of yaw and six tenths of a degree of pitch, wandering over periods of two to five seconds - the same sway that runs under a walk, at `IDLE_FRACTION` of it, so standing and walking hand it over rather than switching it on and off. |
+| A standing bot drifts | `behavior/look/HeadWander.java` | A degree of yaw and six tenths of a degree of pitch, wandering over periods of two to five seconds - the same sway that runs under a walk, and under a swim, at `IDLE_FRACTION` of it when standing, so standing, walking and swimming hand it over rather than switching it on and off. |
 | ... and looks around | `behavior/look/IdleGlance.java` | A glance every three to eight seconds, held for under a second and given back, bounded to 28° of yaw and 7° of pitch, never outliving 100 ticks. Taken on the ticks with nothing aimed at and on the ones where an aim is held but the bot is standing still waiting on it - a door it cannot open, a block that has not updated, a path with nowhere to go this tick (`LookBehavior#updateHeadWander`) - so waiting for something is not the same as staring at it. |
 | ... and notices people | `behavior/LookBehavior.java#somethingNearby` | One glance in three goes to the nearest player or creature within twelve blocks that is neither invisible nor behind a wall. People look at people; a bot that never does is the thing that gets noticed. |
 | ... and moves its hands | `behavior/look/IdleFidget.java` | A swing at the air every ten to sixty seconds. The animation packet only - no click goes with it, so it cannot mine, place or break anything. |
@@ -71,9 +71,11 @@ a quarter faster); inventory moves are spaced by a redrawn interval rather than 
 - **The builder's transient rotations** (`BuilderProcess#hasAnyItemThatWouldPlace`) are written and
   restored inside one tick. Nothing outside that tick sees them.
 - **Water and gliding** are the two states where the movement reads the look back: sprint-swimming
-  drives the player's depth off the look vector's pitch, and the elytra solver solves for the
-  attitude it asked for. The sway, the idle glance and the pitch wander all sit those two out, so
-  nothing done to the camera can steer a swim or a glide.
+  drives the player's depth off the look vector's pitch, and the elytra solver solves for the attitude
+  it asked for. Everything that steers the body in those states is sat out: the pitch wander keeps its
+  pitch, the glance and the carry past a target are not asked for. What does not steer it is not - the
+  stride sway runs while swimming, because the game turns a swim by the yaw exactly as it turns a walk,
+  so a degree of drift in it is a degree of drift in the heading, which is what the sway already is.
 
 ## If you add something
 
