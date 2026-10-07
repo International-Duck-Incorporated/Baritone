@@ -26,6 +26,7 @@ import baritone.api.event.events.*;
 import baritone.api.event.events.type.EventState;
 import baritone.api.utils.IPlayerContext;
 import baritone.api.utils.Rotation;
+import baritone.api.utils.RotationUtils;
 import baritone.api.utils.input.Input;
 import baritone.behavior.look.AimDynamics;
 import baritone.behavior.look.ForkableRandom;
@@ -37,7 +38,9 @@ import baritone.behavior.look.ReactionDelay;
 import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
 import net.minecraft.network.protocol.game.ServerboundPunchPacket;
 import net.minecraft.world.InteractionHand;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.item.component.SwingAnimation;
+import net.minecraft.world.phys.Vec3;
 
 import java.util.ArrayDeque;
 import java.util.Deque;
@@ -92,6 +95,14 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
      * person would start looking around.
      */
     private static final double IDLE_SPEED_SQ = 0.02 * 0.02;
+
+    /**
+     * How close somebody else has to be for an idle glance to be allowed to land on them, in blocks. A
+     * person notices other people in the room they are standing in, not on the horizon; a head that turns
+     * to look at whoever is twelve blocks away is still someone noticing, and one that tracks the far side
+     * of the render distance is a camera.
+     */
+    private static final double INTEREST_RANGE = 12.0;
 
     private final IdleGlance idleGlance = new IdleGlance();
 
@@ -363,7 +374,7 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
                 // - it only runs while the player is standing still, where nothing downstream reads the
                 // facing - and it is why the walking wander, which does run while walking, does not go here.
                 final Rotation camera = new Rotation(ctx.player().getYRot(), ctx.player().getXRot());
-                final Rotation wanted = this.idleGlance.next(camera, allowed, this::idleStep);
+                final Rotation wanted = this.idleGlance.next(camera, allowed, this::idleStep, this::somethingNearby);
                 if (!allowed) {
                     // Not ours this tick, and that includes the sway: a leftover half degree rides on the
                     // rotation Baritone traces its own pickaxe and blocks along, and an idle drift is not
@@ -453,6 +464,36 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
         ctx.player().setYRot(this.wanderCamera.getYaw() + this.headWander.yaw() * fraction);
         ctx.player().setXRot(Rotation.clampPitch(
                 this.wanderCamera.getPitch() + this.headWander.pitch() * fraction));
+    }
+
+    /**
+     * Somebody nearby worth a glance, as an angle to look along, or null when there is nobody to notice.
+     * <p>
+     * Only ever asked as a glance is starting, so the search costs nothing on the ticks in between. The
+     * nearest one wins, because that is the one a person's eyes go to. Invisible things are skipped: a bot
+     * that turns to look at somebody it cannot see is answering a question nobody asked, and answering it
+     * wrongly. Anything with a wall between it and the player is skipped for the same reason, which is the
+     * difference between noticing a passer-by and turning to face a wall.
+     */
+    private Rotation somethingNearby() {
+        LivingEntity nearest = null;
+        double closest = INTEREST_RANGE * INTEREST_RANGE;
+        for (LivingEntity entity : ctx.world().getEntitiesOfClass(LivingEntity.class, ctx.player().getBoundingBox().inflate(INTEREST_RANGE))) {
+            if (entity == ctx.player() || !entity.isAlive() || entity.isInvisible()) {
+                continue;
+            }
+            final double distance = entity.distanceToSqr(ctx.player());
+            if (distance >= closest || !ctx.player().hasLineOfSight(entity)) {
+                continue;
+            }
+            closest = distance;
+            nearest = entity;
+        }
+        if (nearest == null) {
+            return null;
+        }
+        final Vec3 eyes = ctx.playerHead();
+        return RotationUtils.calcRotationFromVec3d(eyes, nearest.getEyePosition(), ctx.playerRotations());
     }
 
     private void unwindHeadWander() {

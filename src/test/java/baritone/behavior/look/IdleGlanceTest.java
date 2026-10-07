@@ -95,6 +95,75 @@ public class IdleGlanceTest {
     }
 
     @Test
+    public void aGlanceTakesAnInterestWhenThereIsSomethingToLookAt() {
+        final IdleGlance glance = new IdleGlance();
+        final Rotation camera = new Rotation(35f, 4f);
+        // well outside anywhere a wandering glance can go, so only the interest branch can explain a glance
+        // arriving there. 120 degrees away, and out of the pitch band as well.
+        final Rotation interest = new Rotation(155f, -20f);
+        int gestures = 0, interested = 0, active = 0, streak = 0, longest = 0;
+        float maxStep = 0f;
+        boolean thisGlanceWentToIt = false;
+        Rotation previous = null;
+        for (int t = 0; t < 120000; t++) {
+            final Rotation sent = glance.next(camera, true, IdleGlanceTest::step, () -> interest);
+            if (sent == null) {
+                if (previous != null) {
+                    // an interested glance is still a glance: it comes home, exactly, and then goes quiet
+                    assertEquals("the glance stopped away from home (yaw)", camera.getYaw(), previous.getYaw(), 1e-4f);
+                    assertEquals("the glance stopped away from home (pitch)", camera.getPitch(), previous.getPitch(), 1e-4f);
+                    gestures++;
+                    if (thisGlanceWentToIt) {
+                        interested++;
+                    }
+                    thisGlanceWentToIt = false;
+                }
+                longest = Math.max(longest, streak);
+                streak = 0;
+                previous = null;
+                continue;
+            }
+            if (Math.abs(Rotation.normalizeYaw(sent.getYaw() - camera.getYaw())) > 30f) {
+                thisGlanceWentToIt = true;
+            }
+            if (previous != null) {
+                maxStep = Math.max(maxStep, Math.abs(Rotation.normalizeYaw(sent.getYaw() - previous.getYaw())));
+            }
+            previous = sent;
+            streak++;
+            active++;
+        }
+        assertTrue("nothing ever went to what was offered", interested > 0);
+        // and about one glance in three does, no more: most glances still wander, because a head that goes
+        // to whoever is nearby every time it moves is a different kind of wrong
+        final double fraction = (double) interested / gestures;
+        assertTrue("the offer was taken " + (100.0 * fraction) + "% of the time", fraction > 0.20 && fraction < 0.50);
+        // the interest does not get to break the rules the wandering glances are held to: the turn there is
+        // rate limited like any other hand movement and the glance still cannot outlive its cap
+        assertTrue("an interested glance moved " + maxStep + " deg in one tick", maxStep <= AimDynamics.MAX_YAW_STEP + 0.01f);
+        assertTrue("an interested glance ran for " + longest + " ticks", longest <= 100);
+        assertTrue("the head was active " + (100.0 * active / 120000.0) + "% of the time", active < 120000 / 2);
+    }
+
+    @Test
+    public void nothingOfferedMeansNothingIsLookedAt() {
+        // the supplier answering null - there is nobody near - has to leave the glance exactly as it was
+        final IdleGlance glance = new IdleGlance();
+        final Rotation camera = new Rotation(35f, 4f);
+        float maxYawDeviation = 0f, maxPitchDeviation = 0f;
+        for (int t = 0; t < 6000; t++) {
+            final Rotation sent = glance.next(camera, true, IdleGlanceTest::step, () -> null);
+            if (sent == null) {
+                continue;
+            }
+            maxYawDeviation = Math.max(maxYawDeviation, Math.abs(Rotation.normalizeYaw(sent.getYaw() - camera.getYaw())));
+            maxPitchDeviation = Math.max(maxPitchDeviation, Math.abs(sent.getPitch() - camera.getPitch()));
+        }
+        assertTrue("a glance strayed more than 28 deg in yaw: " + maxYawDeviation, maxYawDeviation <= 28.5f);
+        assertTrue("a glance strayed more than 7 deg in pitch: " + maxPitchDeviation, maxPitchDeviation <= 7.5f);
+    }
+
+    @Test
     public void givesTheCameraBackWhenTheViewIsTakenOver() {
         final IdleGlance glance = new IdleGlance();
         final Rotation camera = new Rotation(0f, 0f);

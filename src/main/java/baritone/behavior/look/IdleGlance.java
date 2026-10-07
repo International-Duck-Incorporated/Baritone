@@ -20,6 +20,7 @@ package baritone.behavior.look;
 import baritone.api.utils.Rotation;
 
 import java.util.Random;
+import java.util.function.Supplier;
 
 /**
  * Decides when to look around, where at, and when to come back.
@@ -71,6 +72,22 @@ public final class IdleGlance {
      */
     private static final int MAX_AGE = 100;
 
+    /**
+     * How often a glance takes an interest in something nearby rather than wandering: about one in three.
+     * <p>
+     * A glance is taken every three to eight seconds, so with somebody in the neighbourhood this is a person
+     * looked at about every fifteen. It is the one thing that says a head belongs to somebody: a player
+     * standing next to a bot that never once looks at them reads as a machine, however well the bot's aim
+     * wanders otherwise. The rest of the glances wander as they always did, because a head that turns to
+     * face somebody every single time it moves is a different kind of wrong.
+     */
+    private static final float INTEREST_CHANCE = 0.35f;
+
+    /**
+     * What to fall back on when the caller has nothing nearby worth looking at.
+     */
+    private static final Supplier<Rotation> NO_INTEREST = () -> null;
+
     private final Random rand = new Random();
 
     private int cooldown = COOLDOWN_MIN;
@@ -87,6 +104,20 @@ public final class IdleGlance {
      * @return the rotation to send to the server, or null when this tick is not ours to take
      */
     public Rotation next(Rotation camera, boolean allowed, Stepper step) {
+        return this.next(camera, allowed, step, NO_INTEREST);
+    }
+
+    /**
+     * The same, with something nearby that a person might look at.
+     * <p>
+     * One glance in three goes to whatever is offered instead of wandering. Whether a glance is taken, how
+     * long it is held and where the head goes back to are all unchanged: an interest is where a glance is
+     * aimed, not a reason for the head to stay there.
+     *
+     * @param interest what is worth looking at, or null when nothing is. Only asked when a glance is
+     *                 starting, which is where the cost of working it out belongs
+     */
+    public Rotation next(Rotation camera, boolean allowed, Stepper step, Supplier<Rotation> interest) {
         if (!allowed) {
             if (this.aim != null) {
                 // Baritone has started doing something, or the player is moving again. Drop the
@@ -105,10 +136,17 @@ public final class IdleGlance {
             // same rotation, so a glance taken while a block was being broken would aim its pickaxe most of
             // a block off. Standing still with nothing clicked, nothing is reading the angle at all.
             this.home = camera;
-            this.aim = new Rotation(
-                    Rotation.normalizeYaw(camera.getYaw() + (this.rand.nextFloat() * 2.0f - 1.0f) * MAX_YAW),
-                    Rotation.clampPitch(camera.getPitch() + (this.rand.nextFloat() * 2.0f - 1.0f) * MAX_PITCH)
-            );
+            Rotation lookAt = null;
+            if (this.rand.nextFloat() < INTEREST_CHANCE) {
+                lookAt = interest.get();
+            }
+            if (lookAt == null) {
+                lookAt = new Rotation(
+                        Rotation.normalizeYaw(camera.getYaw() + (this.rand.nextFloat() * 2.0f - 1.0f) * MAX_YAW),
+                        Rotation.clampPitch(camera.getPitch() + (this.rand.nextFloat() * 2.0f - 1.0f) * MAX_PITCH)
+                );
+            }
+            this.aim = new Rotation(Rotation.normalizeYaw(lookAt.getYaw()), Rotation.clampPitch(lookAt.getPitch()));
             this.hold = HOLD_MIN + this.rand.nextInt(HOLD_MAX - HOLD_MIN + 1);
             this.age = 0;
             this.sent = camera;
