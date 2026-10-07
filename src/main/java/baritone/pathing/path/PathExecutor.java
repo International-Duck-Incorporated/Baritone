@@ -29,6 +29,7 @@ import baritone.behavior.PathingBehavior;
 import baritone.behavior.look.GazeAhead;
 import baritone.pathing.calc.AbstractNodeCostSearch;
 import baritone.pathing.movement.CalculationContext;
+import baritone.pathing.movement.HeadFirst;
 import baritone.pathing.movement.Movement;
 import baritone.pathing.movement.MovementHelper;
 import baritone.pathing.movement.movements.*;
@@ -89,6 +90,17 @@ public class PathExecutor implements IPathExecutor, Helper {
      * {@link Cadence#landingRest}.
      */
     private int landingRest;
+
+    /**
+     * The rule that the feet wait for the head at a sharp turn. See {@link HeadFirst}.
+     */
+    private final HeadFirst headFirst = new HeadFirst();
+
+    /**
+     * Squared horizontal speed below which the player counts as standing still, for {@link #letTheHeadLead}:
+     * the same figure the look behaviour uses to decide whether the hand may hesitate.
+     */
+    private static final double STANDING_SPEED_SQ = 0.02 * 0.02;
 
     public PathExecutor(PathingBehavior behavior, IPath path) {
         this.behavior = behavior;
@@ -256,6 +268,7 @@ public class PathExecutor implements IPathExecutor, Helper {
             onTick();
             return true;
         } else {
+            letTheHeadLead();
             sprintNextTick = shouldSprintNextTick();
             if (!sprintNextTick) {
                 ctx.player().setSprinting(false); // letting go of control doesn't make you stop sprinting actually
@@ -683,6 +696,33 @@ public class PathExecutor implements IPathExecutor, Helper {
     private void clearKeys() {
         // i'm just sick and tired of this snippet being everywhere lol
         behavior.baritone.getInputOverrideHandler().clearAllKeys();
+    }
+
+    /**
+     * Keeps the feet still while the head is still coming round to where they are being sent. See
+     * {@link HeadFirst} for the rule; this is the part of it that has to know about the game.
+     * <p>
+     * Run after the movement has set its keys and its target for the tick, so the head is being turned
+     * toward the new direction all the while: the hold is on the walking keys and the jump alone. The
+     * sneak that holds a bridge and both mouse buttons go around it, the way they go around every other
+     * beat in here. Nothing is held in the air or in water, and a walk under way is only stopped for a
+     * turn-around - the machine decides both, from what it is told here.
+     */
+    private void letTheHeadLead() {
+        final IInputOverrideHandler keys = behavior.baritone.getInputOverrideHandler();
+        final boolean asked = keys.isInputForcedDown(Input.MOVE_FORWARD) || keys.isInputForcedDown(Input.MOVE_BACK)
+                || keys.isInputForcedDown(Input.MOVE_LEFT) || keys.isInputForcedDown(Input.MOVE_RIGHT);
+        final boolean grounded = ctx.player().onGround() && !ctx.player().isInWater() && !ctx.player().isInLava();
+        final Vec3 velocity = ctx.player().getDeltaMovement();
+        final boolean standing = velocity.x * velocity.x + velocity.z * velocity.z < STANDING_SPEED_SQ;
+        // nobody asking the feet for anything is a head that is not behind them
+        final float headBehind = asked ? behavior.baritone.getLookBehavior().headBehind() : 0f;
+        if (!headFirst.hold(headBehind, standing, grounded)) {
+            return;
+        }
+        for (Input input : new Input[]{Input.MOVE_FORWARD, Input.MOVE_BACK, Input.MOVE_LEFT, Input.MOVE_RIGHT, Input.JUMP}) {
+            keys.setInputForceState(input, false);
+        }
     }
 
     private void cancel() {

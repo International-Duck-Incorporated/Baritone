@@ -60,6 +60,7 @@ a quarter faster); inventory moves are spaced by a redrawn interval rather than 
 | Which keys walk which way | `pathing/movement/MovementOption.java` | The eight combinations of four keys, compared by *angle* to the direction the movement asked for, never by a scaled distance. |
 | The camera and the keys are chosen together | `MovementOption#lookYaw`, `MovementHelper#moveTowardsWithSlightRotation` | The camera turns in whole 45° steps and the keys cover the rest, both measured against the angle the camera is being told to hold - because that is the angle the game turns the pressed keys by. Chosen separately, the two roundings disagree by a whole step and the bot walks 45° off its own path. |
 | A direction and its opposite are a beat apart | `pathing/movement/KeyBeat.java`, `InputOverrideHandler#beatTheKeys` | The four keys are decided fresh every tick, so a turn-around arrived as W becoming S in one tick - through the game's own input packet, to anybody watching. A reversal now costs one to two ticks of no keys while the hand repositions, and only a reversal: lifting a finger, landing a finger, and the W+S someone brakes with all answer the tick they are asked. Only at a run on the ground - sneaking along a bridge, backing away from a drop, water, air, and the elytra loop all get their keys immediately, because there the keys are a control loop and not fingers (`InputOverrideHandler#atAPace`). |
+| The feet wait for the head | `pathing/movement/HeadFirst.java`, `PathExecutor#letTheHeadLead` | The body is steered by the angle a movement asks for on the tick it asks, while the head eases there over the ticks after - so at a sharp turn the body used to set off while the head still faced the old way, a half turn walked backwards for as long as the head took to come round. The walking keys and the jump are now kept off until the head is inside 60° of the way the feet are going from a standstill (a quarter turn costs three ticks, a half turn eight), and at a walk only a turn sharper than 100° - a turn-around - stops the feet, for six ticks on a half turn. Never in the air or in water, never past ten ticks, and never twice for one turn; the sneak and the mouse buttons go around it. |
 
 ## Following
 
@@ -117,7 +118,7 @@ POST. `CameraWritesTest` counts them, so a fifth file fails the build with this 
   running game goes in its own class in `behavior/look` with a test next to it, the way `AimDynamics`,
   `IdleGlance`, `HeadWander`, `PitchWander`, `IdleFidget`, `GazeAhead` and `ReactionDelay` are - or, for
   a rule about the keys rather than the camera, in `pathing/movement` beside `MovementOption`, the way
-  `KeyBeat` is, and for a rule about what to do next rather than how to look doing it, beside the process
+  `KeyBeat` and `HeadFirst` are, and for a rule about what to do next rather than how to look doing it, beside the process
   that uses it, the way `FollowProgress` is.
 - Everything with a random source takes it through its constructor - `HeadWander`, `PitchWander`,
   `IdleGlance`, `IdleFidget`, `ReactionDelay`, `KeyBeat` - and the constructor with no argument is the
@@ -126,8 +127,8 @@ POST. `CameraWritesTest` counts them, so a fifth file fails the build with this 
 - The numbers are allowed to move; the invariants are not. `HumanlikeLookFuzzTest` runs the hand
   through twenty thousand hostile ticks and asserts that the aim never moves more than its tick limit,
   that a settled hand is always arrived, and that the sway never escapes its band. `AimDynamicsTest`,
-  `IdleGlanceTest`, `PitchWanderTest`, `IdleFidgetTest`, `GazeAheadTest`, `KeyBeatTest`, `FollowProgressTest`
-  and `CadenceTest` cover the rules themselves.
+  `IdleGlanceTest`, `PitchWanderTest`, `IdleFidgetTest`, `GazeAheadTest`, `KeyBeatTest`, `HeadFirstTest`,
+  `FollowProgressTest` and `CadenceTest` cover the rules themselves.
 - Behaviour that already exists as a setting - `randomLooking`, `randomLooking113`, `smoothLook`,
   `smoothLookTicks`, `blockBreakSpeed`, `mineGoalUpdateInterval`, `ticksBetweenInventoryMoves`,
   `autoTool` - keeps its meaning. Where a setting names an interval, the interval is now what the

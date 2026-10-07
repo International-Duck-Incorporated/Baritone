@@ -197,6 +197,29 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
         return this.processor;
     }
 
+    /**
+     * How far the head is from the direction the body is being sent, in degrees of yaw.
+     * <p>
+     * The two are different angles on purpose. The body is steered by the rotation the movement asked for,
+     * on the tick it asked ({@link #onPlayerRotationMove}); the head is where the aim has got to so far,
+     * which is a tick behind at best and most of a turn behind at the start of one. This is the gap between
+     * them, for the feet to wait on - see {@code HeadFirst}. Asked after the movement has set its target for
+     * the tick and before the aim has moved for it, which is the order the path executor runs in, so the
+     * head is last tick's aim; on the first tick of a target there is no aim yet and the head is wherever
+     * the player is actually looking, which under free look is the angle the server was last told.
+     *
+     * @return the gap, as a magnitude; zero when nothing is being aimed at, when the aim is not being
+     * driven at all ({@link Target.Mode#NONE}, where the head is the person's own and will never come
+     * round), and in a glide, where the keys are a control loop
+     */
+    public float headBehind() {
+        if (this.target == null || this.target.mode == Target.Mode.NONE || ctx.player().isFallFlying()) {
+            return 0f;
+        }
+        final Rotation head = this.aimRotation != null ? this.aimRotation : ctx.playerRotations();
+        return Math.abs(Rotation.normalizeYaw(head.getYaw() - this.target.rotation.getYaw()));
+    }
+
     @Override
     public boolean hasArrivedAt(Rotation rotation) {
         // One question with two sides to it, and the aim processor answers the second: what would the hand
