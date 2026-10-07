@@ -119,11 +119,9 @@ public final class IdleGlance {
      */
     public Rotation next(Rotation camera, boolean allowed, Stepper step, Supplier<Rotation> interest) {
         if (!allowed) {
-            if (this.aim != null) {
-                // Baritone has started doing something, or the player is moving again. Drop the
-                // glance where it stands; whatever happens next owns the aim from here.
-                this.reset();
-            }
+            // Baritone has started doing something, or the player is moving again. Drop the glance where
+            // it stands; whatever happens next owns the aim from here.
+            this.drop();
             return null;
         }
         if (this.aim == null) {
@@ -185,6 +183,18 @@ public final class IdleGlance {
     private boolean reached(Rotation rotation) {
         return Rotation.normalizeYaw(this.aim.getYaw() - rotation.getYaw()) == 0.0f
                 && Math.abs(this.aim.getPitch() - rotation.getPitch()) < 1e-4f;
+    }
+
+    /**
+     * Drops any glance in progress, where it stands, and starts the wait over.
+     * <p>
+     * This is what a tick that is not allowed to glance does, and it is also what a caller does on the
+     * ticks it knows a glance is not its to take - it needs no camera to be handed one for that.
+     */
+    public void drop() {
+        if (this.aim != null) {
+            this.reset();
+        }
     }
 
     /**

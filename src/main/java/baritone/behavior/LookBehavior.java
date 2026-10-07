@@ -447,10 +447,21 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
         // standing still while pathing is not walking, so both gates were shut and the head was held
         // exactly on the last angle it was given for as long as the wait lasted.
         final boolean walking = this.canWander();
-        if (!walking && !this.canGlanceSomewhere()) {
+        // The waiting half of that is also where the idle glance belongs, and for a while it was not
+        // there: the glance was only ever consulted by the idle path, which runs on the ticks with no
+        // target at all, so a bot standing still *with* one - the door, the wait, the block - swayed at
+        // half amplitude and never once looked up from what it was waiting for. That is the state this mod
+        // spends the most time in on a long job, and it was the last statue left. The glance is taken
+        // against the aimed camera and rides on top of it exactly as the idle path takes it, and its
+        // angles are handed back with the sway's, in POST.
+        final boolean waiting = !walking && this.canGlanceSomewhere();
+        if (!walking && !waiting) {
             // Mining, placing, or not ours to drive: fade the sway out rather than switching it off, so
             // that starting or stopping a walk does not step the head by a degree on one tick. The offsets
-            // are taken back off every tick anyway, so this only ever smooths the two ends.
+            // are taken back off every tick anyway, so this only ever smooths the two ends. Any glance in
+            // flight is dropped here, for the same reason one is dropped when Baritone starts doing
+            // something: the aim is about to be used again.
+            this.idleGlance.drop();
             this.headWander.recentre();
             return;
         }
@@ -461,9 +472,13 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
         // be added again on top of itself every tick and walk the view up into the sky at six degrees a
         // second.
         this.wanderCamera = new Rotation(ctx.player().getYRot(), ctx.player().getXRot());
-        ctx.player().setYRot(this.wanderCamera.getYaw() + this.headWander.yaw() * fraction);
-        ctx.player().setXRot(Rotation.clampPitch(
-                this.wanderCamera.getPitch() + this.headWander.pitch() * fraction));
+        // The glance's angles are absolute and are taken against the aimed camera rather than the swayed
+        // one, which is what the idle path does too: the two offsets ride on the same base and are handed
+        // back together in POST, so neither can take the head home while the other still holds it.
+        final Rotation glance = this.idleGlance.next(this.wanderCamera, waiting, this::idleStep, this::somethingNearby);
+        final Rotation base = glance != null ? glance : this.wanderCamera;
+        ctx.player().setYRot(base.getYaw() + this.headWander.yaw() * fraction);
+        ctx.player().setXRot(Rotation.clampPitch(base.getPitch() + this.headWander.pitch() * fraction));
     }
 
     /**
@@ -553,6 +568,10 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
      * What the question actually is: is anyone else driving the body? A process in control this tick means
      * Baritone is, whether it is executing, calculating or waiting. If none is, the person is playing, and
      * there is no business animating their head.
+     * <p>
+     * It is asked in two places and the answer means the same in both: on the ticks with no target at all,
+     * where the idle path applies the glance in place of an aim, and on the ticks that do have one, where
+     * the bot is standing still waiting for it - see {@link #updateHeadWander}.
      */
     private boolean canGlanceSomewhere() {
         return this.baritoneIsInControl() && standingStill() && !this.interacting();

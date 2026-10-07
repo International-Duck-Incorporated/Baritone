@@ -263,6 +263,44 @@ public class IdleGlanceTest {
     }
 
     @Test
+    public void aDroppedGlanceStartsTheWaitOver() {
+        // Wherever the caller knows the glance is not its to take but has no camera to hand it - the look
+        // behaviour reaches for this on the ticks a target is being held - the glance has to end the same
+        // way a disallowed tick ends it: dropped where it stands, and the wait started again.
+        final IdleGlance glance = new IdleGlance();
+        final Rotation camera = new Rotation(0f, 0f);
+        boolean started = false;
+        for (int t = 0; t < 400 && !started; t++) {
+            started = glance.next(camera, true, IdleGlanceTest::step) != null;
+        }
+        assertTrue("a glance never started", started);
+        glance.drop();
+        for (int t = 0; t < 59; t++) {
+            assertNull("the wait was not started over", glance.next(camera, true, IdleGlanceTest::step));
+        }
+        boolean again = false;
+        for (int t = 0; t < 102 && !again; t++) {
+            again = glance.next(camera, true, IdleGlanceTest::step) != null;
+        }
+        assertTrue("the glance never came back after being dropped", again);
+    }
+
+    @Test
+    public void droppingNothingLeavesTheWaitAlone() {
+        // drop is called on every tick this glance is not ours to take, so it has to be free when there is
+        // nothing to drop. If it restarted the wait every time, a bot that is walking would never glance
+        // again for as long as it walked.
+        final IdleGlance glance = new IdleGlance();
+        final Rotation camera = new Rotation(0f, 0f);
+        boolean started = false;
+        for (int t = 0; t < 400 && !started; t++) {
+            glance.drop();
+            started = glance.next(camera, true, IdleGlanceTest::step) != null;
+        }
+        assertTrue("a wait that is dropped every tick never ends", started);
+    }
+
+    @Test
     public void neverReturnsTheCameraInsteadOfAGlance() {
         // Regression guard: the state machine must either hand back a new rotation or nothing at all,
         // because the caller uses null to mean "this tick is not ours".
