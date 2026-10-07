@@ -71,8 +71,12 @@ import static baritone.api.pathing.movement.ActionCosts.COST_INF;
 
 public final class BuilderProcess extends BaritoneProcessHelper implements IBuilderProcess {
 
-    /** Ticks the builder lets the hand rest after a block goes down, before taking the next one on. */
-    private static final int PLACE_REST = 5;
+    /**
+     * Ticks the builder waits after it stops breaking a block before it will place one. Not a setting: it is
+     * a cushion for its own bookkeeping, so that the block it has just removed is really gone before it
+     * decides what belongs in that space.
+     */
+    private static final int PLACE_HOLD_OFF = 5;
 
     private static final Set<Property<?>> ORIENTATION_PROPS =
             ImmutableSet.of(
@@ -89,12 +93,13 @@ public final class BuilderProcess extends BaritoneProcessHelper implements IBuil
     private ISchematic schematic;
     private Vec3i origin;
     /**
-     * Times the rest between one block placed and the next. Five ticks - a quarter of a second - is the
-     * number this code has always used; what changes is that {@link Cadence.Run} draws the rest afresh each
-     * time instead of resetting a counter to the same figure, so a wall goes up at an unsteady rate rather
-     * than on a metronome, while the average stays exactly where the setting left it.
+     * Times the hold-off above. The wait was already five ticks; what changed is that it is drawn afresh
+     * from the tick the breaking stopped, instead of a counter being reset to the same figure every tick
+     * and then counting down from it - so the beat between a burst of breaking and the placing that follows
+     * it is not always exactly a quarter of a second. See {@link Cadence.Run}: a draw is four to six ticks,
+     * so the cushion is never more than a tick shorter than it used to be, and averages what it was.
      */
-    private final Cadence.Run placeRest = new Cadence.Run(new Random());
+    private final Cadence.Run placeHoldOff = new Cadence.Run(new Random());
     private boolean paused;
     private int layer;
     private int numRepeats;
@@ -453,10 +458,10 @@ public final class BuilderProcess extends BaritoneProcessHelper implements IBuil
         }
         approxPlaceable = approxPlaceable(36);
         if (baritone.getInputOverrideHandler().isInputForcedDown(Input.CLICK_LEFT)) {
-            // a block went down this tick, so the hand gets a moment before the next one is chosen
-            this.placeRest.run(PLACE_REST);
+            // still breaking, or only just finished: hold off on placing until the block is really gone
+            this.placeHoldOff.run(PLACE_HOLD_OFF);
         }
-        this.placeRest.advance();
+        this.placeHoldOff.advance();
         baritone.getInputOverrideHandler().clearAllKeys();
         if (paused) {
             return new PathingCommand(null, PathingCommandType.CANCEL_AND_SET_GOAL);
@@ -561,7 +566,7 @@ public final class BuilderProcess extends BaritoneProcessHelper implements IBuil
         }
         List<BlockState> desirableOnHotbar = new ArrayList<>();
         Optional<Placement> toPlace = searchForPlacables(bcc, desirableOnHotbar);
-        if (toPlace.isPresent() && isSafeToCancel && ctx.player().onGround() && !this.placeRest.running()) {
+        if (toPlace.isPresent() && isSafeToCancel && ctx.player().onGround() && !this.placeHoldOff.running()) {
             Rotation rot = toPlace.get().rot;
             baritone.getLookBehavior().updateTarget(rot, true);
             ctx.player().getInventory().setSelectedSlot(toPlace.get().hotbarSelection);
