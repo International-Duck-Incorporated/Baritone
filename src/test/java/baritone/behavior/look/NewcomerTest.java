@@ -167,6 +167,80 @@ public class NewcomerTest {
     }
 
     @Test
+    public void aBlowIsLookedRoundAtAFlinchLaterWhateverTheClockSays() {
+        for (int seed = 0; seed < SEEDS; seed++) {
+            final Newcomer newcomer = new Newcomer(new Random(seed));
+            final List<Integer> them = Collections.singletonList(3);
+            // they are company, long since looked at or never an arrival at all
+            for (int tick = 0; tick < 50; tick++) {
+                assertEquals(-1, newcomer.notice(them));
+            }
+            newcomer.struck(3);
+            int lookedOn = -1;
+            for (int tick = 1; tick <= 40; tick++) {
+                if (newcomer.notice(them) == 3) {
+                    assertEquals("seed " + seed + ": looked round twice at one blow", -1, lookedOn);
+                    lookedOn = tick;
+                }
+            }
+            assertTrue("seed " + seed + ": never looked round at who hit us", lookedOn != -1);
+            assertTrue("seed " + seed + ": looked round " + lookedOn + " ticks after the blow", lookedOn >= Newcomer.STRUCK_REACT_MIN && lookedOn <= Newcomer.STRUCK_REACT_MAX);
+        }
+    }
+
+    @Test
+    public void aBlowFromSomebodyBehindIsLookedRoundAtToo() {
+        final Newcomer newcomer = new Newcomer(new Random(2));
+        for (int tick = 0; tick < 10; tick++) {
+            newcomer.notice(NOBODY);
+        }
+        newcomer.struck(44); // never in view
+        int looked = -1;
+        for (int tick = 0; tick < 20 && looked == -1; tick++) {
+            looked = newcomer.notice(NOBODY);
+        }
+        assertEquals(44, looked);
+    }
+
+    @Test
+    public void aSecondBlowBeforeTheHeadHasTurnedIsTheSameFlinchAtTheLatest() {
+        for (int seed = 0; seed < SEEDS; seed++) {
+            final Newcomer newcomer = new Newcomer(new Random(seed));
+            newcomer.notice(NOBODY);
+            newcomer.struck(1);
+            newcomer.notice(NOBODY);
+            newcomer.struck(2);
+            int looks = 0;
+            int at = -1;
+            for (int tick = 0; tick < 40; tick++) {
+                final int look = newcomer.notice(NOBODY);
+                if (look != -1) {
+                    looks++;
+                    at = look;
+                }
+            }
+            assertEquals("seed " + seed, 1, looks);
+            assertEquals("seed " + seed, 2, at);
+        }
+    }
+
+    @Test
+    public void aBlowComesBeforeAnArrivalThatIsWaiting() {
+        for (int seed = 0; seed < SEEDS; seed++) {
+            final Newcomer newcomer = new Newcomer(new Random(seed));
+            newcomer.notice(NOBODY);
+            final List<Integer> arriving = Collections.singletonList(5);
+            newcomer.notice(arriving); // 5 has arrived, and the head is on its way to them
+            newcomer.struck(6);
+            int first = -1;
+            for (int tick = 0; tick < 40 && first == -1; tick++) {
+                first = newcomer.notice(arriving);
+            }
+            assertEquals("seed " + seed + ": the head went to the arrival before whoever hit it", 6, first);
+        }
+    }
+
+    @Test
     public void theSameSeedIsTheSameReaction() {
         final Newcomer a = new Newcomer(new Random(5));
         final Newcomer b = new Newcomer(new Random(5));

@@ -44,6 +44,7 @@ import net.minecraft.network.protocol.game.ServerboundPunchPacket;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.monster.Enemy;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.component.SwingAnimation;
 import net.minecraft.world.phys.BlockHitResult;
@@ -131,12 +132,20 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
      */
     private static final float ARRIVAL_FIELD = 100.0f;
 
+    /**
+     * How far away whoever just hit us can be and still be the one looked round at, in blocks: an arm's
+     * reach and a bit for a hand or a sword, a bow's worth for an arrow, and no further - at a greater
+     * distance a person hit does not know who did it, they know they were hit.
+     */
+    private static final double STRUCK_RANGE = 10.0;
+
     private final IdleGlance idleGlance = new IdleGlance();
 
     /**
      * Who has just walked up, for the glances to turn to. See {@link #noticeArrivals}.
      */
     private final Newcomer newcomer = new Newcomer();
+    private int lastHurtTime; // the player's hurtTime last tick, to tell a fresh blow from the tail of one
 
     /**
      * The small amount the head drifts off the bearing while walking. See {@link #updateHeadWander}.
@@ -295,7 +304,8 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
 
     /**
      * Turns the head to somebody who has just arrived, the way a person's turns: within half a second,
-     * once, and only to somebody in front of it with nothing in between. See {@link Newcomer} for the
+     * once, and only to somebody in front of it with nothing in between - or to whoever has just hit us,
+     * a flinch later and whichever way they are; see {@link #noticeBlows}. See {@link Newcomer} for the
      * noticing. The turning is a glance - the idle one if the body is standing, the walking one if it is
      * on a plain walk - prompted ahead of its clock and otherwise unchanged, so it is never taken while
      * anything is being clicked, never outlives its hold, and always comes home; what it costs is one
@@ -305,6 +315,7 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
         if (ctx.player() == null || ctx.world() == null) {
             return;
         }
+        this.noticeBlows();
         final List<Integer> inView = new ArrayList<>();
         final List<Double> distances = new ArrayList<>();
         for (Player other : ctx.world().players()) {
@@ -326,7 +337,7 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
         }
         final Supplier<Rotation> where = () -> {
             final Entity them = ctx.world().getEntity(arrived);
-            if (!(them instanceof Player) || !this.inView((Player) them)) {
+            if (!(them instanceof LivingEntity) || !this.canBeSeen((LivingEntity) them, INTEREST_RANGE)) {
                 return null; // gone again, or round a corner: nothing to look at
             }
             return RotationUtils.calcRotationFromVec3d(ctx.playerHead(), them.getEyePosition(), ctx.playerRotations());
@@ -344,19 +355,64 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
     }
 
     /**
+     * Tells {@link Newcomer} when we have just been hit, and by whom as far as can be told from here: the
+     * nearest player within {@link #STRUCK_RANGE} that can be seen, or failing one the nearest hostile. The
+     * client is not told who dealt a blow, only that one landed - {@code hurtTime} is set to ten and counts
+     * down - so this is a guess, and the guess a person makes: they look at whoever is closest and could
+     * have done it. A fall or a fire with nobody near is not looked round at, because there is nobody to
+     * look at.
+     */
+    private void noticeBlows() {
+        final int hurtTime = ctx.player().hurtTime;
+        final boolean freshBlow = hurtTime > this.lastHurtTime;
+        this.lastHurtTime = hurtTime;
+        if (!freshBlow) {
+            return;
+        }
+        LivingEntity culprit = null;
+        double closest = Double.MAX_VALUE;
+        for (LivingEntity entity : ctx.world().getEntitiesOfClass(LivingEntity.class, ctx.player().getBoundingBox().inflate(STRUCK_RANGE))) {
+            if (!(entity instanceof Player) && !(entity instanceof Enemy)) {
+                continue;
+            }
+            if (!this.canBeSeen(entity, STRUCK_RANGE)) {
+                continue;
+            }
+            // a player over a mob at any distance, the nearest otherwise
+            final double distance = entity.distanceToSqr(ctx.player()) - (entity instanceof Player ? STRUCK_RANGE * STRUCK_RANGE : 0);
+            if (distance < closest) {
+                closest = distance;
+                culprit = entity;
+            }
+        }
+        if (culprit != null) {
+            this.newcomer.struck(culprit.getId());
+        }
+    }
+
+    /**
      * Whether {@code other} is somebody the head could see arrive: another player, alive and visible,
      * within {@link #INTEREST_RANGE}, with a line of sight, and within {@link #ARRIVAL_FIELD} of where the
      * head is pointing.
      */
     private boolean inView(Player other) {
-        if (other == ctx.player() || !other.isAlive() || other.isInvisible() || other.isSpectator()) {
-            return false;
-        }
-        if (other.distanceToSqr(ctx.player()) > INTEREST_RANGE * INTEREST_RANGE || !ctx.player().hasLineOfSight(other)) {
+        if (!this.canBeSeen(other, INTEREST_RANGE)) {
             return false;
         }
         final Rotation bearing = RotationUtils.calcRotationFromVec3d(ctx.playerHead(), other.getEyePosition(), ctx.playerRotations());
         return Math.abs(Rotation.normalizeYaw(bearing.getYaw() - ctx.player().getYRot())) <= ARRIVAL_FIELD;
+    }
+
+    /**
+     * Whether {@code other} is there to be looked at from here: not us, alive, not invisible or
+     * spectating, within {@code range} blocks and with nothing in between. Which way the head is pointing
+     * is a separate question, and only asked of arrivals.
+     */
+    private boolean canBeSeen(LivingEntity other, double range) {
+        if (other == ctx.player() || !other.isAlive() || other.isInvisible() || other.isSpectator()) {
+            return false;
+        }
+        return other.distanceToSqr(ctx.player()) <= range * range && ctx.player().hasLineOfSight(other);
     }
 
     @Override

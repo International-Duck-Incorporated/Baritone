@@ -40,6 +40,9 @@ import java.util.Random;
  * the glance keeps all of its own rules - it is not taken while anything is being clicked, it does not
  * outlive its hold, it comes home - so this cannot point the crosshair anywhere the glance could not.
  * <p>
+ * The one thing that is not an arrival and still goes through here is a blow - see {@link #struck} -
+ * because the head's answer to it is the same kind of look, only quicker and whichever way it came from.
+ * <p>
  * Free of Minecraft; {@code NewcomerTest} drives it.
  */
 public final class Newcomer {
@@ -64,6 +67,14 @@ public final class Newcomer {
      */
     static final int LOOKS_APART = 80;
 
+    /**
+     * Ticks between being hit and the head turning to whoever did it: two to six, which is a flinch and
+     * not a decision. Quicker than noticing somebody arrive, because a blow is not in the corner of the
+     * eye, and allowed to come on the heels of another look, because it is not one.
+     */
+    static final int STRUCK_REACT_MIN = 2;
+    static final int STRUCK_REACT_MAX = 6;
+
     private static final int NOBODY = -1;
 
     private final Random rand;
@@ -73,6 +84,8 @@ public final class Newcomer {
     private int who = NOBODY;  // the arrival the pending look is for
     private int reactIn;
     private int sinceLook = LOOKS_APART;
+    private int struckBy = NOBODY; // whoever just hit us, until the head has turned to them
+    private int flinchIn;
 
     public Newcomer() {
         this(new Random());
@@ -96,6 +109,15 @@ public final class Newcomer {
     public int notice(List<Integer> inView) {
         this.tick++;
         this.sinceLook++;
+        if (this.struckBy != NOBODY) {
+            // whoever hit us comes before anyone who merely arrived, and before the clock
+            if (--this.flinchIn <= 0) {
+                final int look = this.struckBy;
+                this.struckBy = NOBODY;
+                this.sinceLook = 0;
+                return look;
+            }
+        }
         if (!this.primed) {
             for (int id : inView) {
                 this.lastSeen.put(id, this.tick);
@@ -133,6 +155,25 @@ public final class Newcomer {
         this.who = NOBODY;
         this.sinceLook = 0;
         return look;
+    }
+
+    /**
+     * We have just been hit, and {@code id} is the likeliest to have done it: the nearest player, or
+     * failing one the nearest hostile. The head turns to them a flinch later - see
+     * {@link #STRUCK_REACT_MIN} - whether or not they were in view, because a blow says where it came
+     * from, and instead of anything else that was waiting. A second blow before the head has turned is the
+     * same flinch, at whoever it names last. A person being punched looks round at who is punching them; that
+     * is the test every suspected bot gets, and a head that goes on staring at the horizon fails it.
+     */
+    public void struck(int id) {
+        if (id == NOBODY) {
+            return;
+        }
+        if (this.struckBy == NOBODY) {
+            this.flinchIn = STRUCK_REACT_MIN + this.rand.nextInt(STRUCK_REACT_MAX - STRUCK_REACT_MIN + 1);
+        }
+        this.struckBy = id;
+        this.who = NOBODY; // an arrival the head was about to turn to can wait; it will not now be looked at
     }
 
     /**
