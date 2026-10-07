@@ -38,6 +38,10 @@ import static org.junit.Assert.assertTrue;
  * machines that moves it - stuck. Those are the
  * failures that would not look like a bug in a short playtest; they would look like Baritone being strange
  * a few minutes in.
+ * <p>
+ * What it does not model is the pitch: the settle of a gaze nobody has an opinion about is covered by
+ * PitchWanderTest, and the aim here is asked for the target's own pitch, which is the case that has an
+ * opinion - a block to break, a face to place against.
  */
 public class HumanlikeLookFuzzTest {
 
@@ -79,7 +83,8 @@ public class HumanlikeLookFuzzTest {
      */
     private static Rotation tick(Random rand, double sensitivity, double speedSquared, Rotation wanted,
                                  Rotation camera, boolean pathing, boolean inControl, boolean interacting,
-                                 Rotation[] aim, int[] aimAge, Rotation[] lastWanted,
+                                 boolean blockInteract,
+                                 Rotation[] aim, int[] aimAge, Rotation[] lastWanted, Rotation[] turnFrom,
                                  IdleGlance[] glance, ReactionDelay[] reaction, HeadWander[] wander,
                                  int[] glanceCamera, float[] sway) {
         final Outcome outcome = new Outcome();
@@ -96,12 +101,27 @@ public class HumanlikeLookFuzzTest {
             final Rotation from = aim[0] != null ? aim[0] : camera;
             if (aim[0] == null || AimDynamics.separation(lastWanted[0], wanted) > ReactionDelay.NEW_DIRECTION_ANGLE) {
                 aimAge[0] = 0;
+                turnFrom[0] = from;
             }
             if (standingStill && reaction[0].holding(wanted)) {
                 aim[0] = from;
                 aimAge[0] = 0;
+                turnFrom[0] = from;
             } else {
-                final Rotation next = AimDynamics.humanStep(from, wanted, aimAge[0], sensitivity);
+                // What the hand is asked for is not always exactly what is being aimed at: while the body
+                // is walking and nothing is being clicked, a turn that is only a direction to travel is
+                // carried a little past where it is going. Anything about to be acted on - a face to place
+                // against, a block to break - is aimed at exactly, because the rotation this returns is the
+                // one Baritone traces its own pickaxe and blocks along. The pitch side of the same rule,
+                // which settles a gaze that nobody has an opinion about, is modelled in PitchWanderTest;
+                // here the pitch echoes the target, which is the blockInteract case.
+                final boolean carried = !blockInteract && !interacting && walking;
+                final Rotation to = carried ? AimDynamics.overshoot(turnFrom[0], wanted, aimAge[0]) : wanted;
+                assertTrue("a carried turn went " + AimDynamics.separation(to, wanted)
+                                + " deg past what it was walking at",
+                        AimDynamics.separation(to, wanted) <= AimDynamics.OVERSHOOT_MAX + 0.01f);
+                final Rotation next = AimDynamics.humanStep(from, to, aimAge[0], sensitivity,
+                        interacting ? AimDynamics.CLICK_EASE : AimDynamics.AIM_EASE);
                 assertTrue("the aim moved further than a flick in one tick",
                         AimDynamics.separation(aim[0] != null ? aim[0] : from, next) <= AimDynamics.MAX_YAW_STEP + 0.01f);
                 aim[0] = next;
@@ -112,6 +132,7 @@ public class HumanlikeLookFuzzTest {
         } else {
             aim[0] = null;
             aimAge[0] = 0;
+            turnFrom[0] = null;
             lastWanted[0] = null;
             reaction[0].clear();
             // the glance, which needs Baritone in control, the player still, and nothing being clicked - the
@@ -186,6 +207,7 @@ public class HumanlikeLookFuzzTest {
             Rotation aim = null;
             int aimAge = 0;
             Rotation lastWanted = null;
+            Rotation turnFrom = null;
             final IdleGlance glance = new IdleGlance();
             final ReactionDelay reaction = new ReactionDelay();
             // a fixed seed: the run is twenty thousand ticks of a fixed pseudo-random sequence, and it
@@ -204,6 +226,8 @@ public class HumanlikeLookFuzzTest {
                 // and the states this widened gate exists for are the ones where nothing is executing
                 final boolean inControl = pathing || rand.nextInt(10) > 4;
                 final boolean interacting = rand.nextInt(10) > 8;
+                // a target that is about to be acted on is aimed at exactly, which is most of them
+                final boolean blockInteract = rand.nextInt(10) > 2;
                 // walking, stopping, and standing around, with the speed crossing the idle threshold
                 final double speedSquared = rand.nextInt(100) < 45 ? 0.0 : 0.05 + rand.nextDouble() * 0.1;
                 final Rotation wanted = rand.nextInt(100) < 70 ? target(rand) : null;
@@ -211,6 +235,7 @@ public class HumanlikeLookFuzzTest {
                 final Rotation[] aimRef = {aim};
                 final int[] ageRef = {aimAge};
                 final Rotation[] lastRef = {lastWanted};
+                final Rotation[] turnRef = {turnFrom};
                 final IdleGlance[] glanceRef = {glance};
                 final ReactionDelay[] reactionRef = {reaction};
                 final HeadWander[] wanderRef = {wander};
@@ -218,11 +243,13 @@ public class HumanlikeLookFuzzTest {
                 final float[] swayRef = {sway};
 
                 final Rotation applied = tick(rand, sensitivity, speedSquared, wanted, camera, pathing, inControl,
-                        interacting, aimRef, ageRef, lastRef, glanceRef, reactionRef, wanderRef, glanceRef2, swayRef);
+                        interacting, blockInteract, aimRef, ageRef, lastRef, turnRef, glanceRef, reactionRef,
+                        wanderRef, glanceRef2, swayRef);
 
                 aim = aimRef[0];
                 aimAge = ageRef[0];
                 lastWanted = lastRef[0];
+                turnFrom = turnRef[0];
                 glanceActive = glanceRef2[0];
                 sway = swayRef[0];
 
@@ -307,17 +334,79 @@ public class HumanlikeLookFuzzTest {
         for (double sensitivity : SENSITIVITIES) {
             for (float fromYaw : new float[]{0f, 179f, -179f, 90f, -90f}) {
                 for (float toYaw : new float[]{0f, 179f, -179f, 90f, -90f}) {
-                    Rotation aim = new Rotation(fromYaw, 0f);
+                    final Rotation turnFrom = new Rotation(fromYaw, 0f);
+                    Rotation aim = turnFrom;
                     final Rotation to = new Rotation(toYaw, 0f);
                     int ticks = 0;
                     while (ticks < 60 && (Rotation.normalizeYaw(toYaw - aim.getYaw()) != 0f)) {
-                        aim = AimDynamics.humanStep(aim, to, ticks, sensitivity);
+                        // Walking with nothing being clicked, which is the worst case for this: the hand is
+                        // aiming a little past the target for the first sixteen ticks of the turn rather
+                        // than at it. Arrival is exact all the same, because the carry decays to nothing
+                        // long before the hand gets there - and if it ever did not, this is the test that
+                        // would say so, since every click in the mod waits on it.
+                        aim = AimDynamics.humanStep(aim, AimDynamics.overshoot(turnFrom, to, ticks), ticks, sensitivity);
                         ticks++;
                     }
                     assertEquals("never arrived from " + fromYaw + " to " + toYaw + " at sensitivity " + sensitivity,
                             toYaw, aim.getYaw(), 0f);
                     assertTrue("arrival took " + ticks + " ticks", ticks <= 60);
                 }
+            }
+        }
+    }
+
+    /**
+     * The carry, from both sides.
+     * <p>
+     * Walking, a turn that is only a direction of travel is allowed to go past where it is going and come
+     * back - that is what a hand does, and the arrival gates were measured against it. The moment the same
+     * turn ends in a click it is not, because the rotation the aim holds is the one Baritone traces its own
+     * pickaxe and blocks along: an aim that overshoots a block by eight percent of the turn is an aim that
+     * mines the block next to it on a long turn, and hits the wrong face on a short one.
+     */
+    @Test
+    public void aWalkingTurnIsCarriedAndAClickingOneIsNot() {
+        for (double sensitivity : SENSITIVITIES) {
+            for (float turn : new float[]{0f, 10f, 14f, 15f, 20f, 45f, 90f, 179f, -10f, -30f, -90f, -179f}) {
+                final Rotation to = new Rotation(turn, 0f);
+                final float direction = Math.signum(turn);
+
+                // carried: walking, nothing clicked
+                final Rotation turnFrom = new Rotation(0f, 0f);
+                Rotation aim = turnFrom;
+                float past = 0f;
+                int ticks = 0;
+                while (ticks < 60 && (Rotation.normalizeYaw(turn - aim.getYaw()) != 0f)) {
+                    aim = AimDynamics.humanStep(aim, AimDynamics.overshoot(turnFrom, to, ticks), ticks, sensitivity);
+                    past = Math.max(past, (aim.getYaw() - turn) * direction);
+                    ticks++;
+                }
+                assertEquals("a carried turn never landed exactly on it: " + turn + " deg at sensitivity " + sensitivity,
+                        turn, aim.getYaw(), 0f);
+                assertTrue("a carried turn took " + ticks + " ticks", ticks <= 60);
+                final float allowed = Math.min(Math.abs(turn) * AimDynamics.OVERSHOOT_FRACTION, AimDynamics.OVERSHOOT_MAX);
+                assertTrue("a " + turn + " deg turn was carried " + past + " deg past the target, over " + allowed,
+                        past <= allowed + 0.01f);
+                if (Math.abs(turn) < AimDynamics.OVERSHOOT_MIN_TURN) {
+                    assertEquals("a short turn was carried: " + turn + " deg", 0f, past, 0f);
+                }
+
+                // not carried: the same turn, ended in a click. The hand may still tap up to one mouse
+                // step over the target on the tick it zooms in - a fraction of a degree, taken back on the
+                // next tick - but never the degrees past that the carry is made of, which is at least a
+                // whole step at the coarsest sensitivity and two at the finest.
+                aim = turnFrom;
+                ticks = 0;
+                float tapped = 0f;
+                while (ticks < 60 && (Rotation.normalizeYaw(turn - aim.getYaw()) != 0f)) {
+                    aim = AimDynamics.humanStep(aim, to, ticks, sensitivity, AimDynamics.CLICK_EASE);
+                    tapped = Math.max(tapped, (aim.getYaw() - turn) * direction);
+                    ticks++;
+                }
+                assertTrue("an aim that was about to be clicked went " + tapped + " deg past the target: "
+                                + turn + " deg at sensitivity " + sensitivity,
+                        tapped <= Math.abs(AimDynamics.mouseToAngle(sensitivity, 1)) + 0.005f);
+                assertEquals("a clicked turn never landed exactly on it", turn, aim.getYaw(), 0f);
             }
         }
     }
