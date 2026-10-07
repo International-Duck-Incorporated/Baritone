@@ -179,7 +179,18 @@ public final class RotationUtils {
         if (pos instanceof BetterBlockPos) {
             pos = new BlockPos(pos.getX(), pos.getY(), pos.getZ());
         }
-        if (BaritoneAPI.getSettings().remainWithExistingLookDirection.value && ctx.isLookingAt(pos)) {
+        // Where on the block the hand is going: a point of the block's own, off its centre, see AimScatter.
+        // Worked out first because the question below - is the hand already where it is going - is asked
+        // about it.
+        final Optional<Rotation> somewhereOnIt = reachableScattered(ctx, pos, blockReachDistance, wouldSneak);
+        if (BaritoneAPI.getSettings().remainWithExistingLookDirection.value && ctx.isLookingAt(pos)
+                && (!somewhereOnIt.isPresent() || hasArrivedAt(ctx, somewhereOnIt.get()))) {
+            // The crosshair is on the block and the hand has got to where it was going on it, so it stays
+            // put. It used to stay put the moment the crosshair touched the block, which with a hand that
+            // eases is the moment it crosses the near edge: every block was aimed at just inside the edge
+            // it was approached from, which is as much of a pattern as the centre was. Now it carries on
+            // to its point, mining as it goes - the trace is on the block the whole way, which is all the
+            // click needs - and holds there.
             /*
              * why add 0.0001?
              * to indicate that we actually have a desired pitch
@@ -200,6 +211,9 @@ public final class RotationUtils {
             } else {
                 return Optional.of(hypothetical);
             }
+        }
+        if (somewhereOnIt.isPresent()) {
+            return somewhereOnIt;
         }
         Optional<Rotation> possibleRotation = reachableCenter(ctx, pos, blockReachDistance, wouldSneak);
         if (possibleRotation.isPresent()) {
@@ -261,6 +275,32 @@ public final class RotationUtils {
      */
     public static Optional<Rotation> reachableCenter(IPlayerContext ctx, BlockPos pos, double blockReachDistance, boolean wouldSneak) {
         return reachableOffset(ctx, pos, VecUtils.calculateBlockCenter(ctx.world(), pos), blockReachDistance, wouldSneak);
+    }
+
+    /**
+     * The same, for the block's own point rather than its centre: see {@link AimScatter}. A block with no
+     * collision box - a crop, a torch, a fire - keeps the centre, because its box is not where its outline
+     * is and the centre is already the most forgiving guess.
+     */
+    public static Optional<Rotation> reachableScattered(IPlayerContext ctx, BlockPos pos, double blockReachDistance, boolean wouldSneak) {
+        final VoxelShape shape = ctx.world().getBlockState(pos).getCollisionShape(ctx.world(), pos);
+        if (shape.isEmpty()) {
+            return Optional.empty();
+        }
+        final Vec3 centre = VecUtils.calculateBlockCenter(ctx.world(), pos);
+        final Vec3 extent = new Vec3(
+                shape.max(Direction.Axis.X) - shape.min(Direction.Axis.X),
+                shape.max(Direction.Axis.Y) - shape.min(Direction.Axis.Y),
+                shape.max(Direction.Axis.Z) - shape.min(Direction.Axis.Z)
+        );
+        return reachableOffset(ctx, pos, AimScatter.point(pos, centre, extent), blockReachDistance, wouldSneak);
+    }
+
+    /**
+     * Whether the hand has got to {@code rotation}, asked of the look behaviour that is moving it.
+     */
+    private static boolean hasArrivedAt(IPlayerContext ctx, Rotation rotation) {
+        return BaritoneAPI.getProvider().getBaritoneForPlayer(ctx.player()).getLookBehavior().hasArrivedAt(rotation);
     }
 
     @Deprecated

@@ -25,6 +25,7 @@ import baritone.api.behavior.look.ITickableAimProcessor;
 import baritone.api.event.events.*;
 import baritone.api.event.events.type.EventState;
 import baritone.api.utils.IPlayerContext;
+import baritone.api.utils.RayTraceUtils;
 import baritone.api.utils.Rotation;
 import baritone.api.utils.RotationUtils;
 import baritone.api.utils.input.Input;
@@ -42,6 +43,8 @@ import net.minecraft.network.protocol.game.ServerboundPunchPacket;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.item.component.SwingAnimation;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.ArrayDeque;
@@ -845,12 +848,34 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
      * {@link AimDynamics#CLICK_EASE}. Mining and placing both wait for the trace to be on the block before
      * they click - the game acts along the trace from wherever the crosshair really is - so the slower rate
      * is not safety there, it is ticks spent standing in front of a block the bot has already chosen.
-     * Everything else - walking, looking about, the idle sway - keeps {@link AimDynamics#AIM_EASE}.
+     * Everything else - walking, looking about, the idle sway - keeps {@link AimDynamics#AIM_EASE}, and so
+     * does the last of a click's turn once the crosshair is on the block and face being clicked
+     * ({@link #crosshairIsOn}): from there nothing is waiting on the hand - the pickaxe is already
+     * swinging at the right block - and the rest of the way to its point on the block is a hand settling,
+     * not a hand snapping the last few degrees because a click began.
      */
     private Rotation humanStep(Rotation from, Rotation to) {
-        final float ease = this.interacting() ? AimDynamics.CLICK_EASE : AimDynamics.AIM_EASE;
+        final float ease = this.interacting() && !this.crosshairIsOn(to) ? AimDynamics.CLICK_EASE : AimDynamics.AIM_EASE;
         final Rotation wanted = this.carriedPast(this.settledGaze(from, to));
         return AimDynamics.humanStep(from, wanted, this.aimAge, sensitivity(ctx), ease);
+    }
+
+    /**
+     * Whether the crosshair, where it really is, is already on the block and the face that aiming at
+     * {@code to} would put it on.
+     */
+    private boolean crosshairIsOn(Rotation to) {
+        final HitResult now = ctx.objectMouseOver();
+        if (now == null || now.getType() != HitResult.Type.BLOCK) {
+            return false;
+        }
+        final HitResult there = RayTraceUtils.rayTraceTowards(ctx.player(), to, ctx.playerController().getBlockReachDistance(), false);
+        if (there == null || there.getType() != HitResult.Type.BLOCK) {
+            return false;
+        }
+        final BlockHitResult here = (BlockHitResult) now;
+        final BlockHitResult wanted = (BlockHitResult) there;
+        return here.getBlockPos().equals(wanted.getBlockPos()) && here.getDirection() == wanted.getDirection();
     }
 
     /**
