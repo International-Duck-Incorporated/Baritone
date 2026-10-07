@@ -49,7 +49,9 @@ public class ReactionDelayTest {
     @Test
     public void aFreshTargetCostsAReaction() {
         for (int i = 0; i < 200; i++) {
-            final ReactionDelay delay = new ReactionDelay();
+            // one per draw, and the draws are numbers rather than the clock: two hundred react times is a
+            // distribution, and a distribution that is different every time it is read is not a test
+            final ReactionDelay delay = new ReactionDelay(new Random(i));
             final int held = holdLength(delay, yaw(90f), 50);
             assertTrue("a fresh target started moving immediately", held >= ReactionDelay.HOLD_MIN);
             assertTrue("a fresh target stalled for " + held + " ticks", held <= ReactionDelay.HOLD_MAX);
@@ -58,7 +60,7 @@ public class ReactionDelayTest {
 
     @Test
     public void trackingTheSameTargetCostsNothing() {
-        final ReactionDelay delay = new ReactionDelay();
+        final ReactionDelay delay = new ReactionDelay(new Random(2));
         delay.holding(yaw(90f));
         holdLength(delay, yaw(90f), 50);
         for (int t = 0; t < 200; t++) {
@@ -69,7 +71,7 @@ public class ReactionDelayTest {
     @Test
     public void theTargetCreepingForwardDoesNotReArm() {
         // this is what tracking a moving target or walking a path looks like: tiny changes every tick
-        final ReactionDelay delay = new ReactionDelay();
+        final ReactionDelay delay = new ReactionDelay(new Random(3));
         holdLength(delay, yaw(0f), 50);
         for (int t = 1; t <= 200; t++) {
             assertFalse("a " + t + " deg drift re-armed the reaction", delay.holding(yaw(t * 0.5f)));
@@ -78,7 +80,7 @@ public class ReactionDelayTest {
 
     @Test
     public void aRealChangeOfDirectionRearms() {
-        final ReactionDelay delay = new ReactionDelay();
+        final ReactionDelay delay = new ReactionDelay(new Random(4));
         holdLength(delay, yaw(0f), 50);
         final int held = holdLength(delay, yaw(-90f), 50);
         assertTrue("a reversal was started without a reaction", held >= ReactionDelay.HOLD_MIN);
@@ -87,7 +89,7 @@ public class ReactionDelayTest {
 
     @Test
     public void pitchCountsToo() {
-        final ReactionDelay delay = new ReactionDelay();
+        final ReactionDelay delay = new ReactionDelay(new Random(5));
         holdLength(delay, new Rotation(0f, 0f), 50);
         assertTrue("looking up was started without a reaction",
                 holdLength(delay, new Rotation(0f, 60f), 50) >= ReactionDelay.HOLD_MIN);
@@ -100,7 +102,7 @@ public class ReactionDelayTest {
     @Test
     public void theWrapPointIsMeasuredTheShortWay() {
         // 170 and -170 are twenty degrees apart, not three hundred and forty
-        final ReactionDelay delay = new ReactionDelay();
+        final ReactionDelay delay = new ReactionDelay(new Random(6));
         holdLength(delay, yaw(170f), 50);
         assertFalse("crossing the wrap point was mistaken for a new direction",
                 delay.holding(yaw(-170f)));
@@ -114,7 +116,7 @@ public class ReactionDelayTest {
         // Two targets alternating every tick, far enough apart to re-arm the pause every time. The hand has
         // to keep moving regardless: anything that waits for the aim to arrive - placing a block, breaking a
         // face - would otherwise wait forever.
-        final ReactionDelay delay = new ReactionDelay();
+        final ReactionDelay delay = new ReactionDelay(new Random(7));
         final Rotation a = yaw(90f);
         final Rotation b = yaw(-90f);
         int run = 0;
@@ -130,7 +132,7 @@ public class ReactionDelayTest {
 
     @Test
     public void clearingForgetsEverything() {
-        final ReactionDelay delay = new ReactionDelay();
+        final ReactionDelay delay = new ReactionDelay(new Random(8));
         holdLength(delay, yaw(0f), 50);
         delay.clear();
         assertTrue("a target after a clear was not treated as new", delay.holding(yaw(0f)));
@@ -142,7 +144,7 @@ public class ReactionDelayTest {
         // Two new directions in consecutive ticks legitimately chain, so the cap is per direction, not per
         // run of ticks.
         final Random rand = new Random(7);
-        final ReactionDelay delay = new ReactionDelay();
+        final ReactionDelay delay = new ReactionDelay(new Random(9));
         Rotation previous = null;
         for (int i = 0; i < 2000; i++) {
             final Rotation target = yaw(rand.nextFloat() * 360f - 180f);

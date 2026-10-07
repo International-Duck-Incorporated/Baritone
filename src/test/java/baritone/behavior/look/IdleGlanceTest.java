@@ -43,7 +43,7 @@ public class IdleGlanceTest {
 
     @Test
     public void neverMovesTheHeadWhenNotAllowed() {
-        final IdleGlance glance = new IdleGlance();
+        final IdleGlance glance = new IdleGlance(new Random(11));
         final Rotation camera = new Rotation(35f, 4f);
         for (int t = 0; t < 3000; t++) {
             assertNull("the glance fired while it was not allowed to", glance.next(camera, false, IdleGlanceTest::step));
@@ -129,7 +129,7 @@ public class IdleGlanceTest {
 
     @Test
     public void aGlanceTakesAnInterestWhenThereIsSomethingToLookAt() {
-        final IdleGlance glance = new IdleGlance();
+        final IdleGlance glance = new IdleGlance(new Random(12));
         final Rotation camera = new Rotation(35f, 4f);
         // well outside anywhere a wandering glance can go, so only the interest branch can explain a glance
         // arriving there. 120 degrees away, and out of the pitch band as well.
@@ -185,7 +185,7 @@ public class IdleGlanceTest {
         // ends of the yaw wrap, pitches past vertical - while the camera itself sits near the wrap point, and
         // holds it to the same rules every other glance is held to.
         final Random rand = new Random(20261007);
-        final IdleGlance glance = new IdleGlance();
+        final IdleGlance glance = new IdleGlance(new Random(13));
         final Rotation camera = new Rotation(179.5f, 42f);
         Rotation previous = null;
         int gestures = 0, longest = 0, streak = 0;
@@ -239,7 +239,7 @@ public class IdleGlanceTest {
 
     @Test
     public void givesTheCameraBackWhenTheViewIsTakenOver() {
-        final IdleGlance glance = new IdleGlance();
+        final IdleGlance glance = new IdleGlance(new Random(14));
         final Rotation camera = new Rotation(0f, 0f);
         boolean started = false;
         for (int t = 0; t < 400 && !started; t++) {
@@ -260,7 +260,7 @@ public class IdleGlanceTest {
 
     @Test
     public void stopsImmediatelyWhenItBecomesDisallowed() {
-        final IdleGlance glance = new IdleGlance();
+        final IdleGlance glance = new IdleGlance(new Random(15));
         final Rotation camera = new Rotation(0f, 0f);
         boolean started = false;
         for (int t = 0; t < 400 && !started; t++) {
@@ -275,7 +275,7 @@ public class IdleGlanceTest {
     public void resettingDropsAGlanceInProgress() {
         // What a world change needs: the glance was taken against a player who is no longer there, and the
         // rotation it would return to is an angle in a different level.
-        final IdleGlance glance = new IdleGlance();
+        final IdleGlance glance = new IdleGlance(new Random(16));
         final Rotation camera = new Rotation(0f, 0f);
         boolean started = false;
         for (int t = 0; t < 400 && !started; t++) {
@@ -300,7 +300,7 @@ public class IdleGlanceTest {
         // Wherever the caller knows the glance is not its to take but has no camera to hand it - the look
         // behaviour reaches for this on the ticks a target is being held - the glance has to end the same
         // way a disallowed tick ends it: dropped where it stands, and the wait started again.
-        final IdleGlance glance = new IdleGlance();
+        final IdleGlance glance = new IdleGlance(new Random(17));
         final Rotation camera = new Rotation(0f, 0f);
         boolean started = false;
         for (int t = 0; t < 400 && !started; t++) {
@@ -323,7 +323,7 @@ public class IdleGlanceTest {
         // drop is called on every tick this glance is not ours to take, so it has to be free when there is
         // nothing to drop. If it restarted the wait every time, a bot that is walking would never glance
         // again for as long as it walked.
-        final IdleGlance glance = new IdleGlance();
+        final IdleGlance glance = new IdleGlance(new Random(18));
         final Rotation camera = new Rotation(0f, 0f);
         boolean started = false;
         for (int t = 0; t < 400 && !started; t++) {
@@ -337,7 +337,7 @@ public class IdleGlanceTest {
     public void neverReturnsTheCameraInsteadOfAGlance() {
         // Regression guard: the state machine must either hand back a new rotation or nothing at all,
         // because the caller uses null to mean "this tick is not ours".
-        final IdleGlance glance = new IdleGlance();
+        final IdleGlance glance = new IdleGlance(new Random(19));
         final Rotation camera = new Rotation(12f, -3f);
         for (int t = 0; t < 2000; t++) {
             final Rotation sent = glance.next(camera, t % 7 != 0, IdleGlanceTest::step);
