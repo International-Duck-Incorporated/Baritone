@@ -30,10 +30,14 @@ import baritone.api.utils.input.Input;
 import baritone.behavior.look.AimDynamics;
 import baritone.behavior.look.ForkableRandom;
 import baritone.behavior.look.HeadWander;
+import baritone.behavior.look.IdleFidget;
 import baritone.behavior.look.IdleGlance;
 import baritone.behavior.look.PitchWander;
 import baritone.behavior.look.ReactionDelay;
 import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
+import net.minecraft.network.protocol.game.ServerboundPunchPacket;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.item.component.SwingAnimation;
 
 import java.util.ArrayDeque;
 import java.util.Deque;
@@ -103,6 +107,13 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
     private final ReactionDelay reaction = new ReactionDelay();
 
     /**
+     * The arm's own idle habit: a swing at the air every ten seconds to a minute. It lives here because the
+     * question it has to answer before doing anything - is the player standing still with nothing to do -
+     * is the one this behaviour already asks for the glance, and the answer is the same gate.
+     */
+    private final IdleFidget idleFidget = new IdleFidget();
+
+    /**
      * Where the camera was before the idle behaviour took the angles for this tick, so it can be handed
      * back before the frame is drawn. See {@link #updateIdleLook}. Covers the glance and the sway that
      * runs under it, because they are applied to the same angles and have to be handed back together.
@@ -151,6 +162,8 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
     public void onTick(TickEvent event) {
         if (event.getType() == TickEvent.Type.IN) {
             this.processor.tick();
+            // The fidget's clock runs every tick, walking or not; only taking the fidget is gated.
+            this.idleFidget.advance();
         }
     }
 
@@ -368,6 +381,15 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
                 this.idleCamera = camera;
                 ctx.player().setYRot(applied.getYaw());
                 ctx.player().setXRot(applied.getPitch());
+                if (this.idleFidget.take()) {
+                    // A swing at nothing. It is sent as the animation packet and nothing else - no click goes
+                    // out with it, so it cannot mine, place or break anything however the crosshair happens
+                    // to be pointing, which is what makes it safe to do while Baritone is holding still on
+                    // someone's behalf. The same two lines the block break helper sends for the arm that
+                    // never moves while it mines.
+                    ctx.player().swing(InteractionHand.MAIN_HAND, SwingAnimation.DEFAULT, false);
+                    ctx.player().connection.send(ServerboundPunchPacket.INSTANCE);
+                }
                 break;
             }
             case POST: {
