@@ -137,6 +137,26 @@ public final class Cadence {
     }
 
     /**
+     * Ticks the hands come off the walking keys when the direction reverses: one to two.
+     * <p>
+     * The four keys are decided from scratch every tick, so a direction that changed did so by flipping
+     * from one key to its opposite in a single tick - forward to back, left to right - with no hand ever
+     * in between. Nobody does that: the finger lifts, the hand finds the other key, and there is a beat of
+     * nothing in between. One or two ticks is fifty to a hundred milliseconds, which is about what a
+     * reposition takes. Only ever spent where a beat of standing is safe - see the gate in
+     * {@code InputOverrideHandler#beatTheKeys()}.
+     */
+    public static final int KEY_BEAT_MIN = 1;
+    public static final int KEY_BEAT_MAX = 2;
+
+    /**
+     * @return the beat, in ticks, between two opposite walking keys; inclusive of both ends
+     */
+    public static int keyBeat(Random rand) {
+        return KEY_BEAT_MIN + rand.nextInt(KEY_BEAT_MAX - KEY_BEAT_MIN + 1);
+    }
+
+    /**
      * How far a repeated action's interval is allowed to wander, in ticks, either side of the setting.
      */
     public static final int JITTER = 1;

@@ -23,7 +23,9 @@ import baritone.api.event.events.TickEvent;
 import baritone.api.utils.IInputOverrideHandler;
 import baritone.api.utils.input.Input;
 import baritone.behavior.Behavior;
+import baritone.pathing.movement.KeyBeat;
 import net.minecraft.client.player.KeyboardInput;
+import net.minecraft.world.phys.Vec3;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -45,6 +47,19 @@ public final class InputOverrideHandler extends Behavior implements IInputOverri
 
     private final BlockBreakHelper blockBreakHelper;
     private final BlockPlaceHelper blockPlaceHelper;
+
+    /**
+     * The beat between two opposite walking keys, held here so that it survives across movements, paths
+     * and process handovers - a reversal is usually the last keys of one movement and the first of the
+     * next, which is exactly the boundary every other piece of state dies at.
+     */
+    private final KeyBeat keyBeat = new KeyBeat();
+
+    /**
+     * Squared horizontal speed that counts as a run: a walk tops out at 0.216 blocks per tick and every
+     * sprint is at least 0.28, so 0.23 squared is the gap between them.
+     */
+    private static final double PACE_SQUARED = 0.23 * 0.23;
 
     public InputOverrideHandler(Baritone baritone) {
         super(baritone);
@@ -95,6 +110,7 @@ public final class InputOverrideHandler extends Behavior implements IInputOverri
 
         if (inControl()) {
             if (ctx.player().input.getClass() != PlayerMovementInput.class) {
+                keyBeat.reset(); // somebody else had the keys; the hands come to them fresh
                 ctx.player().input = new PlayerMovementInput(this);
             }
         } else {
@@ -102,6 +118,49 @@ public final class InputOverrideHandler extends Behavior implements IInputOverri
                 ctx.player().input = new KeyboardInput(ctx.minecraft().options);
             }
         }
+    }
+
+    /**
+     * The four walking keys as the fingers actually hold them this tick: asked for here, shaped by the
+     * beat between two opposite directions ({@link KeyBeat}), and pressed by {@link PlayerMovementInput}.
+     * <p>
+     * The beat is only spent where a tick of standing is what a person would do anyway - see
+     * {@link #atAPace()}. Everywhere else the keys answer the tick they are asked.
+     */
+    public final KeyBeat.Keys beatTheKeys(KeyBeat.Keys desired) {
+        return keyBeat.tick(desired, atAPace());
+    }
+
+    /**
+     * Whether the player is running along the ground somewhere a beat between two directions is a beat a
+     * person would take.
+     * <p>
+     * A running reversal is the visible one: full speed one way, and on the next tick a packet saying the
+     * other, with the head not even turning. It is also the safe one to pause - momentum carries on
+     * through a beat of no keys, and a path's tolerance eats that distance for breakfast. The cases where
+     * a pause would not be safe are all the cases where the player is not at a run: edging along a bridge
+     * or back from a drop (sneaking, or barely walking, or both), anything in water, anything in the air,
+     * and anything the elytra solver is flying - those keys answer the tick they are asked, because there
+     * the keys are not fingers, they are a control loop.
+     */
+    private boolean atAPace() {
+        if (ctx.player() == null) {
+            return false;
+        }
+        if (!ctx.player().onGround()
+                || ctx.player().isShiftKeyDown()
+                || isInputForcedDown(Input.SNEAK)
+                || ctx.player().isInWater()
+                || ctx.player().isInLava()
+                || ctx.player().getAbilities().flying) {
+            return false;
+        }
+        if (isInputForcedDown(Input.SPRINT) || ctx.player().isSprinting()) {
+            return true;
+        }
+        // still coasting: the sprint key came up a beat ago, but the player is moving at a run
+        final Vec3 velocity = ctx.player().getDeltaMovement();
+        return velocity.x * velocity.x + velocity.z * velocity.z >= PACE_SQUARED;
     }
 
     private boolean inControl() {

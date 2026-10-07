@@ -18,6 +18,7 @@
 package baritone.utils;
 
 import baritone.api.utils.input.Input;
+import baritone.pathing.movement.KeyBeat;
 import net.minecraft.client.player.ClientInput;
 import net.minecraft.world.phys.Vec2;
 
@@ -35,22 +36,30 @@ public class PlayerMovementInput extends ClientInput {
         float forwardImpulse = 0.0F;
         boolean jumping = handler.isInputForcedDown(Input.JUMP); // oppa gangnam style
 
-        boolean up = handler.isInputForcedDown(Input.MOVE_FORWARD);
+        // The four keys through the hand, not straight from the movement: a direction that reverses gets a
+        // beat of nothing in between, the way a person lets go and finds the other key. See KeyBeat.
+        final KeyBeat.Keys walking = handler.beatTheKeys(new KeyBeat.Keys(
+                handler.isInputForcedDown(Input.MOVE_FORWARD),
+                handler.isInputForcedDown(Input.MOVE_BACK),
+                handler.isInputForcedDown(Input.MOVE_LEFT),
+                handler.isInputForcedDown(Input.MOVE_RIGHT)));
+
+        boolean up = walking.forward();
         if (up) {
             forwardImpulse++;
         }
 
-        boolean down = handler.isInputForcedDown(Input.MOVE_BACK);
+        boolean down = walking.back();
         if (down) {
             forwardImpulse--;
         }
 
-        boolean left = handler.isInputForcedDown(Input.MOVE_LEFT);
+        boolean left = walking.left();
         if (left) {
             leftImpulse++;
         }
 
-        boolean right = handler.isInputForcedDown(Input.MOVE_RIGHT);
+        boolean right = walking.right();
         if (right) {
             leftImpulse--;
         }

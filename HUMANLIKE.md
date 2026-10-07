@@ -44,6 +44,7 @@ Nothing repeats on an interval that is always the same length. `utils/Cadence.ja
 | `Cadence.retargetDelay` | breaking an instant block | One to three ticks before the next one. |
 | `Cadence.Run` | the builder's hold-off after breaking | A rest timed from the thing that just happened; four to six ticks. |
 | `Cadence.Repeat` | the three goal rescans (mining, getting to a block, farming) | The setting, drawn afresh each time, first scan immediate. |
+| `Cadence.keyBeat` | the walking keys | One to two ticks of no keys between one direction and its opposite. |
 
 Other things that were on a grid and are not any more: the sprint key trails off over one to three
 ticks instead of stopping on the tick the movement stops asking (`Cadence.sprintHangover`,
@@ -56,6 +57,7 @@ a quarter faster); inventory moves are spaced by a redrawn interval rather than 
 | --- | --- | --- |
 | Which keys walk which way | `pathing/movement/MovementOption.java` | The eight combinations of four keys, compared by *angle* to the direction the movement asked for, never by a scaled distance. |
 | The camera and the keys are chosen together | `MovementOption#lookYaw`, `MovementHelper#moveTowardsWithSlightRotation` | The camera turns in whole 45° steps and the keys cover the rest, both measured against the angle the camera is being told to hold - because that is the angle the game turns the pressed keys by. Chosen separately, the two roundings disagree by a whole step and the bot walks 45° off its own path. |
+| A direction and its opposite are a beat apart | `pathing/movement/KeyBeat.java`, `InputOverrideHandler#beatTheKeys` | The four keys are decided fresh every tick, so a turn-around arrived as W becoming S in one tick - through the game's own input packet, to anybody watching. A reversal now costs one to two ticks of no keys while the hand repositions, and only a reversal: lifting a finger, landing a finger, and the W+S someone brakes with all answer the tick they are asked. Only at a run on the ground - sneaking along a bridge, backing away from a drop, water, air, and the elytra loop all get their keys immediately, because there the keys are a control loop and not fingers (`InputOverrideHandler#atAPace`). |
 
 ## Deliberate exceptions
 
@@ -105,15 +107,17 @@ POST. `CameraWritesTest` counts them, so a fifth file fails the build with this 
 
 - A new repeated interval goes through `Cadence`, and a new rule that can be expressed without a
   running game goes in its own class in `behavior/look` with a test next to it, the way `AimDynamics`,
-  `IdleGlance`, `HeadWander`, `PitchWander`, `IdleFidget` and `ReactionDelay` are.
+  `IdleGlance`, `HeadWander`, `PitchWander`, `IdleFidget` and `ReactionDelay` are - or, for a rule about
+  the keys rather than the camera, in `pathing/movement` beside `MovementOption`, the way `KeyBeat` is.
 - Everything with a random source takes it through its constructor - `HeadWander`, `PitchWander`,
-  `IdleGlance`, `IdleFidget`, `ReactionDelay` - and the constructor with no argument is the only one that
-  seeds itself from the clock. Every machine in a test run draws from that run's seed, because a failure
-  reported for a seed has to be reproducible by running that seed.
+  `IdleGlance`, `IdleFidget`, `ReactionDelay`, `KeyBeat` - and the constructor with no argument is the
+  only one that seeds itself from the clock. Every machine in a test run draws from that run's seed,
+  because a failure reported for a seed has to be reproducible by running that seed.
 - The numbers are allowed to move; the invariants are not. `HumanlikeLookFuzzTest` runs the hand
   through twenty thousand hostile ticks and asserts that the aim never moves more than its tick limit,
   that a settled hand is always arrived, and that the sway never escapes its band. `AimDynamicsTest`,
-  `IdleGlanceTest`, `PitchWanderTest`, `IdleFidgetTest` and `CadenceTest` cover the rules themselves.
+  `IdleGlanceTest`, `PitchWanderTest`, `IdleFidgetTest`, `KeyBeatTest` and `CadenceTest` cover the rules
+  themselves.
 - Behaviour that already exists as a setting - `randomLooking`, `randomLooking113`, `smoothLook`,
   `smoothLookTicks`, `blockBreakSpeed`, `mineGoalUpdateInterval`, `ticksBetweenInventoryMoves`,
   `autoTool` - keeps its meaning. Where a setting names an interval, the interval is now what the
