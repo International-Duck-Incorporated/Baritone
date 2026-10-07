@@ -20,6 +20,7 @@ package baritone.utils;
 import baritone.api.BaritoneAPI;
 import baritone.api.utils.IPlayerContext;
 import baritone.utils.accessor.IPlayerControllerMP;
+import net.minecraft.network.protocol.game.ServerboundPunchPacket;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.item.component.SwingAnimation;
 import net.minecraft.world.phys.BlockHitResult;
@@ -80,6 +81,20 @@ public final class BlockBreakHelper {
                 BaritoneAPI.getSettings().blockBreakSpeed.value - BASE_BREAK_DELAY);
     }
 
+    /**
+     * Swings the arm at the block being broken, and tells the server about it.
+     * <p>
+     * The swing on its own animates the hand locally and nothing else: the server is what shows the arm to
+     * the players around us, and it learns about a swing from the punch packet, not from the swing. Vanilla
+     * sends one on both of the paths this class mirrors - the tick a block is started on, and every tick it
+     * keeps being hit - so a bot without it breaks blocks in front of an arm that never moves, which is the
+     * one part of a person that no amount of camera work can stand in for.
+     */
+    private void swingArm() {
+        ctx.player().swing(InteractionHand.MAIN_HAND, SwingAnimation.DEFAULT, false);
+        ctx.player().connection.send(ServerboundPunchPacket.INSTANCE);
+    }
+
     public void tick(boolean isLeftClick) {
         if (!isLeftClick) {
             // Nothing is being asked for, so there is nothing to have arrived on.
@@ -108,12 +123,12 @@ public final class BlockBreakHelper {
             if (ctx.playerController().hasBrokenBlock()) {
                 ctx.playerController().syncHeldItem();
                 ctx.playerController().clickBlock(((BlockHitResult) trace).getBlockPos(), ((BlockHitResult) trace).getDirection());
-                ctx.player().swing(InteractionHand.MAIN_HAND, SwingAnimation.DEFAULT, false);
+                this.swingArm();
                 // and then take a beat before the next one, rather than chaining them tick after tick
                 breakDelayTimer = Math.max(breakDelayTimer, this.retargetDelay());
             } else {
                 if (ctx.playerController().onPlayerDamageBlock(((BlockHitResult) trace).getBlockPos(), ((BlockHitResult) trace).getDirection())) {
-                    ctx.player().swing(InteractionHand.MAIN_HAND, SwingAnimation.DEFAULT, false);
+                    this.swingArm();
                 }
                 if (ctx.playerController().hasBrokenBlock()) { // block broken this tick
                     // break delay timer only applies for multi-tick block breaks like vanilla
