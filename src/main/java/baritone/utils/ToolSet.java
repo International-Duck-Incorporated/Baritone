@@ -136,6 +136,31 @@ public class ToolSet {
         return getBestSlot(b, preferSilkTouch, false);
     }
 
+    /**
+     * How much faster another tool has to be before it is worth putting down what is already in hand and
+     * taking it out: a quarter again as fast.
+     * <p>
+     * The best tool for each block is the best tool for each block, and a bot that reaches for it every
+     * time swaps the item in its hand on the boundary between two blocks of a different kind - a mixed
+     * column, the dirt and the stone under a tree stump, the breakable block in front of a traverse - and
+     * that is not what a hand does. Somebody mining a run of mixed blocks holds what they have unless it is
+     * properly worse, because a scroll or a number key and the second take is a movement they would rather
+     * not make. A quarter is the difference between one tool and a materially quicker one; two pickaxes of
+     * different metals both do the job, and a shovel over a pickaxe in dirt is not a preference, it is
+     * four times the speed and worth the swap.
+     */
+    public static final double SWITCH_GAIN = 1.25;
+
+    /**
+     * Whether the better slot is worth taking over the one already in hand.
+     * <p>
+     * Pure, so that what counts as worth switching for can be tested without a world to mine in. See
+     * {@link #SWITCH_GAIN}.
+     */
+    public static boolean worthSwitching(double heldSpeed, double bestSpeed) {
+        return bestSpeed > heldSpeed * SWITCH_GAIN;
+    }
+
     public int getBestSlot(Block b, boolean preferSilkTouch, boolean pathingCalculation) {
 
         /*
@@ -145,6 +170,12 @@ public class ToolSet {
         if (!Baritone.settings().autoTool.value && pathingCalculation) {
             return player.getInventory().getSelectedSlot();
         }
+
+        final int held = player.getInventory().getSelectedSlot();
+        // Whether the item already in hand was one of the tools considered, and how fast it is against
+        // this block. A sword the user has told us not to mine with, or a tool that itemSaver is keeping
+        // back, was never a candidate and must not be held on to: those are the user's rules, not taste.
+        double heldSpeed = Double.NEGATIVE_INFINITY;
 
         int best = 0;
         double highestSpeed = Double.NEGATIVE_INFINITY;
@@ -161,6 +192,9 @@ public class ToolSet {
                 continue;
             }
             double speed = calculateSpeedVsBlock(itemStack, blockState);
+            if (i == held) {
+                heldSpeed = speed;
+            }
             boolean silkTouch = hasSilkTouch(itemStack);
             if (speed > highestSpeed) {
                 highestSpeed = speed;
@@ -178,7 +212,19 @@ public class ToolSet {
                 }
             }
         }
-        return best;
+
+        // Pathing cost estimates are about how long a block would take, not about the hand doing it, and
+        // nothing here should make a path cheaper or dearer than it was: the tools the user actually has
+        // are priced the way they always were.
+        if (pathingCalculation || best == held || heldSpeed == Double.NEGATIVE_INFINITY) {
+            return best;
+        }
+        // Silk touch is a drop, not a speed: a user who asked for it gets it, even when the plain tool in
+        // hand would mine just as quickly.
+        if (preferSilkTouch && hasSilkTouch(player.getInventory().getItem(best)) && !hasSilkTouch(player.getInventory().getItem(held))) {
+            return best;
+        }
+        return worthSwitching(heldSpeed, calculateSpeedVsBlock(player.getInventory().getItem(best), blockState)) ? best : held;
     }
 
     /**
