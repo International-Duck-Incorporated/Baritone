@@ -422,4 +422,68 @@ public class IdleGlanceTest {
         }
         assertEquals("one leg out and one leg back", 2, zeros);
     }
+    @Test
+    public void aPromptIsLookedAtAheadOfTheClock() {
+        for (int seed = 0; seed < 20; seed++) {
+            final IdleGlance glance = new IdleGlance(new Random(seed));
+            final Rotation camera = new Rotation(10f, 0f);
+            for (int t = 0; t < 20; t++) {
+                assertNull("seed " + seed + ": a glance before the first interval was up", glance.next(camera, true, IdleGlanceTest::step));
+            }
+            glance.prompt(() -> new Rotation(70f, 5f));
+            float nearest = 180f;
+            Rotation sent = glance.next(camera, true, IdleGlanceTest::step);
+            assertTrue("seed " + seed + ": no glance on the tick after the prompt", sent != null);
+            for (int t = 0; t < 40 && sent != null; t++) {
+                nearest = Math.min(nearest, Math.abs(Rotation.normalizeYaw(sent.getYaw() - 70f)));
+                sent = glance.next(camera, true, IdleGlanceTest::step);
+            }
+            assertTrue("seed " + seed + ": the prompted glance got no nearer than " + nearest + " degrees of them", nearest <= 1f);
+        }
+    }
+
+    @Test
+    public void aPromptAtSomebodyGoneIsNoGlance() {
+        final IdleGlance glance = new IdleGlance(new Random(3));
+        final Rotation camera = new Rotation(10f, 0f);
+        for (int t = 0; t < 20; t++) {
+            glance.next(camera, true, IdleGlanceTest::step);
+        }
+        glance.prompt(() -> null);
+        for (int t = 0; t < 30; t++) {
+            assertNull("a glance at nobody", glance.next(camera, true, IdleGlanceTest::step));
+        }
+    }
+
+    @Test
+    public void aPromptNotTakenInTimeIsDropped() {
+        final IdleGlance glance = new IdleGlance(new Random(4));
+        final Rotation camera = new Rotation(10f, 0f);
+        glance.prompt(() -> new Rotation(70f, 5f));
+        for (int t = 0; t <= IdleGlance.PROMPT_LASTS; t++) {
+            assertNull(glance.next(camera, false, IdleGlanceTest::step)); // busy the whole while
+        }
+        for (int t = 0; t < 15; t++) {
+            assertNull("a glance taken on a two second old prompt", glance.next(camera, true, IdleGlanceTest::step));
+        }
+    }
+
+    @Test
+    public void aPromptWaitsForTheGlanceAlreadyOut() {
+        final IdleGlance glance = new IdleGlance(new Random(5));
+        final Rotation camera = new Rotation(10f, 0f);
+        Rotation sent = null;
+        int tick = 0;
+        while (sent == null) {
+            sent = glance.next(camera, true, IdleGlanceTest::step);
+            assertTrue(++tick < 200);
+        }
+        // out on its own glance: the prompt does not wrench it round
+        final Rotation before = sent;
+        glance.prompt(() -> new Rotation(-80f, 0f));
+        sent = glance.next(camera, true, IdleGlanceTest::step);
+        assertTrue(sent != null);
+        assertTrue("the head jumped toward the prompt mid glance",
+                Math.abs(Rotation.normalizeYaw(sent.getYaw() - before.getYaw())) <= AimDynamics.MAX_YAW_STEP + 0.01f);
+    }
 }

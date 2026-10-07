@@ -33,6 +33,7 @@ at the keyboard owns the camera and nothing here touches it.
 | A standing bot drifts | `behavior/look/HeadWander.java` | A degree of yaw and six tenths of a degree of pitch, wandering over periods of two to five seconds - the same sway that runs under a walk, and under a swim, at `IDLE_FRACTION` of it when standing, so standing, walking and swimming hand it over rather than switching it on and off. |
 | ... and looks around | `behavior/look/IdleGlance.java` | A glance every three to eight seconds, held for under a second and given back, bounded to 28° of yaw and 7° of pitch, never outliving 100 ticks, and spun up over its first two ticks like any other turn (`AimDynamics.TURN_RAMP`) - both legs of it, out and home, since each is a turn of its own. Taken on the ticks with nothing aimed at and on the ones where an aim is held but the bot is standing still waiting on it - a door it cannot open, a block that has not updated, a path with nowhere to go this tick (`LookBehavior#updateHeadWander`) - so waiting for something is not the same as staring at it. One glance in four is down at the hand rather than around: a pitch gesture of 24 to 38 degrees below level, never up - somebody already looking at the floor checks what they are holding by doing nothing - held and given back like the rest, so an idle head moves in two dimensions instead of sweeping the horizon forever. |
 | ... and notices people | `behavior/LookBehavior.java#somethingNearby` | One glance in three goes to the nearest player or creature within twelve blocks that is neither invisible nor behind a wall. People look at people; a bot that never does is the thing that gets noticed. |
+| ... and sees who walks up | `behavior/look/Newcomer.java`, `LookBehavior#noticeArrivals` | Somebody arriving is not the same as somebody there. Another player coming into view - within twelve blocks, with a line of sight, in front of the head and no further round than a little past the shoulder - is looked at once, a quarter to seven tenths of a second after they appear, by whichever glance is running being prompted ahead of its clock: the idle one if the body is standing, the walking one if it is on a plain walk. The people in view on the first tick are not arrivals, somebody out of sight for under fifteen seconds has not arrived twice, a crowd arriving together is one look at the nearest, two looks are never under four seconds apart, somebody gone again before the head gets round to them is not looked at - a head that turns to where they were is a head that heard them - and a prompt not taken within two seconds is dropped. The prompted glance is the ordinary glance in all but when it starts, so it is still never taken while anything is being clicked, still never outlives its hold, still comes home, and the walking one still has to be welcome on the walk. Somebody arriving behind the head is not seen at all. |
 | ... and moves its hands | `behavior/look/IdleFidget.java` | A swing at the air every ten to sixty seconds. The animation packet only - no click goes with it, so it cannot mine, place or break anything. |
 | The arm swings while it mines | `utils/BlockBreakHelper.java` | Vanilla's own two lines: the swing and the punch packet. Without them the arm never moves for anyone else, however good the camera is. |
 
@@ -123,19 +124,19 @@ POST. `CameraWritesTest` counts them, so a fifth file fails the build with this 
 
 - A new repeated interval goes through `Cadence`, and a new rule that can be expressed without a
   running game goes in its own class in `behavior/look` with a test next to it, the way `AimDynamics`,
-  `IdleGlance`, `WalkGlance`, `HeadWander`, `PitchWander`, `IdleFidget`, `GazeAhead` and `ReactionDelay` are - or, for
+  `IdleGlance`, `WalkGlance`, `Newcomer`, `HeadWander`, `PitchWander`, `IdleFidget`, `GazeAhead` and `ReactionDelay` are - or, for
   a rule about the keys rather than the camera, in `pathing/movement` beside `MovementOption`, the way
   `KeyBeat`, `HeadFirst` and `StraightRun` are, for a rule about the hands in `utils` beside the helpers that press the buttons,
   the way `HotbarSwitch` is, and for a rule about what to do next rather than how to look doing it, beside the process
   that uses it, the way `FollowProgress` is.
 - Everything with a random source takes it through its constructor - `HeadWander`, `PitchWander`,
-  `IdleGlance`, `WalkGlance`, `IdleFidget`, `ReactionDelay`, `KeyBeat` - and the constructor with no argument is the
+  `IdleGlance`, `WalkGlance`, `Newcomer`, `IdleFidget`, `ReactionDelay`, `KeyBeat` - and the constructor with no argument is the
   only one that seeds itself from the clock. Every machine in a test run draws from that run's seed,
   because a failure reported for a seed has to be reproducible by running that seed.
 - The numbers are allowed to move; the invariants are not. `HumanlikeLookFuzzTest` runs the hand
   through twenty thousand hostile ticks and asserts that the aim never moves more than its tick limit,
   that a settled hand is always arrived, and that the sway never escapes its band. `AimDynamicsTest`,
-  `IdleGlanceTest`, `WalkGlanceTest`, `PitchWanderTest`, `IdleFidgetTest`, `GazeAheadTest`, `KeyBeatTest`, `HeadFirstTest`,
+  `IdleGlanceTest`, `WalkGlanceTest`, `NewcomerTest`, `PitchWanderTest`, `IdleFidgetTest`, `GazeAheadTest`, `KeyBeatTest`, `HeadFirstTest`,
   `StraightRunTest`, `FollowProgressTest`, `HotbarSwitchTest` and `CadenceTest` cover the rules themselves.
 - Behaviour that already exists as a setting - `randomLooking`, `randomLooking113`, `smoothLook`,
   `smoothLookTicks`, `blockBreakSpeed`, `mineGoalUpdateInterval`, `ticksBetweenInventoryMoves`,

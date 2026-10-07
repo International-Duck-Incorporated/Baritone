@@ -136,6 +136,12 @@ public final class WalkGlance {
     private static final float STOP_CHANCE = 0.1f;
     private static final float STOP_FOR_INTEREST_CHANCE = 0.34f;
 
+    /**
+     * How long a prompt - see {@link #prompt} - is kept for before it is dropped untaken: two seconds, the
+     * same as {@link IdleGlance#PROMPT_LASTS} and for the same reason.
+     */
+    static final int PROMPT_LASTS = 40;
+
     private enum Phase {NONE, OUT, HOLD, BACK}
 
     private final Random rand;
@@ -150,6 +156,8 @@ public final class WalkGlance {
     private float pitch;
     private boolean welcome;  // offered this tick
     private boolean stopping; // whether this glance is one the feet stop for
+    private Supplier<Rotation> prompted; // somewhere to look as soon as a glance may start, or null
+    private int promptAge;
 
     public WalkGlance() {
         this(new Random());
@@ -198,6 +206,9 @@ public final class WalkGlance {
      *                 only as a glance starts, so it may cost something.
      */
     public void advance(boolean allowed, Supplier<Rotation> interest) {
+        if (this.prompted != null && ++this.promptAge > PROMPT_LASTS) {
+            this.prompted = null;
+        }
         if (!allowed) {
             if (this.phase != Phase.NONE) {
                 // interrupted: come back, and count the whole interval again before the next one
@@ -215,10 +226,20 @@ public final class WalkGlance {
                     recover();
                     return;
                 }
+                if (this.prompted != null) {
+                    // somebody just arrived: this glance is at them, now, whatever the clock says - if they
+                    // are still there and within what a glance may turn to; otherwise there is no glance
+                    final Rotation at = this.prompted.get();
+                    this.prompted = null;
+                    if (at != null && glanceable(at)) {
+                        start(at, true);
+                    }
+                    return;
+                }
                 if (--this.cooldown > 0) {
                     return;
                 }
-                start(interest == null ? null : interest.get());
+                start(interest == null ? null : interest.get(), false);
                 return;
             case OUT:
                 this.elapsed++;
@@ -283,10 +304,25 @@ public final class WalkGlance {
         return this.phase == Phase.HOLD || (this.phase == Phase.OUT && this.elapsed * 2 >= this.length);
     }
 
-    private void start(Rotation interest) {
-        if (interest != null && this.rand.nextFloat() < INTEREST_CHANCE
-                && Math.abs(interest.getYaw()) <= MAX_INTEREST_YAW && Math.abs(interest.getPitch()) <= MAX_INTEREST_PITCH
-                && Math.abs(interest.getYaw()) >= MIN_YAW * 0.5f) {
+    /**
+     * Somewhere to look as soon as a glance may start, ahead of the clock: somebody who has just arrived,
+     * say - see {@link Newcomer}. Asked for where exactly when the glance starts, so that it is where they
+     * are and not where they were, and dropped if that is nowhere, further round than a glance goes, or
+     * after {@link #PROMPT_LASTS} ticks untaken. A glance already out finishes first, and the walk still
+     * has to be one the glance is welcome on: this is a prompt, not a permission.
+     */
+    public void prompt(Supplier<Rotation> where) {
+        this.prompted = where;
+        this.promptAge = 0;
+    }
+
+    private boolean glanceable(Rotation interest) {
+        return Math.abs(interest.getYaw()) <= MAX_INTEREST_YAW && Math.abs(interest.getPitch()) <= MAX_INTEREST_PITCH
+                && Math.abs(interest.getYaw()) >= MIN_YAW * 0.5f;
+    }
+
+    private void start(Rotation interest, boolean prompted) {
+        if (interest != null && (prompted || this.rand.nextFloat() < INTEREST_CHANCE) && glanceable(interest)) {
             // at the thing, near enough: a glance is not an aim, and an exact bearing would look like one
             this.yawAmplitude = interest.getYaw() + (this.rand.nextFloat() - 0.5f) * 4f;
             this.pitchAmplitude = interest.getPitch() + (this.rand.nextFloat() - 0.5f) * 2f;

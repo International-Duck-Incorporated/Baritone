@@ -310,6 +310,65 @@ public class WalkGlanceTest {
     }
 
     @Test
+    public void aPromptIsLookedAtAheadOfTheClockWhenTheWalkAllows() {
+        for (int seed = 0; seed < SEEDS; seed++) {
+            final WalkGlance glance = new WalkGlance(new Random(seed));
+            for (int t = 0; t < 20; t++) {
+                glance.advance(true, () -> null);
+                assertFalse("seed " + seed + ": a glance before the first interval was up", glance.out());
+            }
+            glance.prompt(() -> new Rotation(-50f, -4f));
+            float nearest = 180f;
+            for (int t = 0; t < 60; t++) {
+                glance.advance(true, () -> null);
+                nearest = Math.min(nearest, Math.abs(glance.yaw() + 50f));
+            }
+            assertTrue("seed " + seed + ": the prompted glance got no nearer than " + nearest + " degrees of them", nearest <= 3f);
+        }
+    }
+
+    @Test
+    public void aPromptIsNotAPermission() {
+        final WalkGlance glance = new WalkGlance(new Random(8));
+        glance.prompt(() -> new Rotation(-50f, -4f));
+        for (int t = 0; t < 20; t++) {
+            glance.advance(false, () -> null);
+            assertFalse("a glance on a walk it was not allowed on", glance.out());
+        }
+        // allowed again within the two seconds: taken then
+        glance.advance(true, () -> null);
+        assertTrue(glance.out());
+    }
+
+    @Test
+    public void aPromptAtSomebodyGoneOrTooFarRoundIsNoGlance() {
+        for (final Rotation where : new Rotation[]{null, new Rotation(150f, 0f), new Rotation(2f, 0f)}) {
+            final WalkGlance glance = new WalkGlance(new Random(9));
+            for (int t = 0; t < 20; t++) {
+                glance.advance(true, () -> null);
+            }
+            glance.prompt(() -> where);
+            for (int t = 0; t < 30; t++) {
+                glance.advance(true, () -> null);
+                assertFalse("a glance at " + where, glance.out());
+            }
+        }
+    }
+
+    @Test
+    public void aPromptNotTakenInTimeIsDropped() {
+        final WalkGlance glance = new WalkGlance(new Random(10));
+        glance.prompt(() -> new Rotation(-50f, -4f));
+        for (int t = 0; t <= WalkGlance.PROMPT_LASTS; t++) {
+            glance.advance(false, () -> null);
+        }
+        for (int t = 0; t < 15; t++) {
+            glance.advance(true, () -> null);
+            assertFalse("a glance taken on a two second old prompt", glance.out());
+        }
+    }
+
+    @Test
     public void theSameSeedIsTheSameWalk() {
         final WalkGlance a = new WalkGlance(new Random(99));
         final WalkGlance b = new WalkGlance(new Random(99));

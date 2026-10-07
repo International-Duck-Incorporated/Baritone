@@ -120,6 +120,13 @@ public final class IdleGlance {
      */
     private static final Supplier<Rotation> NO_INTEREST = () -> null;
 
+    /**
+     * How long a prompt - see {@link #prompt} - is kept for before it is dropped untaken: two seconds.
+     * Somebody who arrived two seconds ago has not arrived, they are there, and the ordinary glances will
+     * get round to them the ordinary way.
+     */
+    static final int PROMPT_LASTS = 40;
+
     private final Random rand;
 
     private int cooldown = COOLDOWN_MIN;
@@ -129,6 +136,8 @@ public final class IdleGlance {
     private Rotation aim;    // where the glance is pointed, null when none is running
     private Rotation home;   // where it started, and where it goes back to
     private Rotation sent;   // what the server was last told
+    private Supplier<Rotation> prompted; // somewhere to look as soon as a glance may start, or null
+    private int promptAge;
 
     public IdleGlance() {
         this(new Random());
@@ -180,6 +189,9 @@ public final class IdleGlance {
      */
     public Rotation next(Rotation camera, boolean allowed, boolean someoneElsesCamera, Stepper step,
                          Supplier<Rotation> interest) {
+        if (this.prompted != null && ++this.promptAge > PROMPT_LASTS) {
+            this.prompted = null;
+        }
         if (!allowed) {
             // Baritone has started doing something, or the player is moving again. Drop the glance where
             // it stands; whatever happens next owns the aim from here.
@@ -187,7 +199,7 @@ public final class IdleGlance {
             return null;
         }
         if (this.aim == null) {
-            if (--this.cooldown > 0) {
+            if (this.prompted == null && --this.cooldown > 0) {
                 return null;
             }
             // A glance is only taken while the player is standing still and nothing is being clicked. Both
@@ -195,11 +207,19 @@ public final class IdleGlance {
             // server was last told, so a glance is visible to it, and Baritone's own ray trace follows that
             // same rotation, so a glance taken while a block was being broken would aim its pickaxe most of
             // a block off. Standing still with nothing clicked, nothing is reading the angle at all.
-            this.home = camera;
             Rotation lookAt = null;
-            if (this.rand.nextFloat() < INTEREST_CHANCE) {
+            if (this.prompted != null) {
+                // somebody just arrived: this glance is at them, now, whatever the clock says - unless they
+                // are gone again, in which case there is nothing to look at and no glance is started
+                lookAt = this.prompted.get();
+                this.prompted = null;
+                if (lookAt == null) {
+                    return null;
+                }
+            } else if (this.rand.nextFloat() < INTEREST_CHANCE) {
                 lookAt = interest.get();
             }
+            this.home = camera;
             if (lookAt == null) {
                 lookAt = this.rand.nextFloat() < HAND_CHANCE
                         ? this.hand(camera)
@@ -245,6 +265,18 @@ public final class IdleGlance {
         }
         this.sent = wanted;
         return wanted;
+    }
+
+    /**
+     * Somewhere to look as soon as a glance may start, ahead of the clock: somebody who has just arrived,
+     * say - see {@link Newcomer}. Asked for where exactly when the glance starts, so that it is where they
+     * are and not where they were, and dropped if that is nowhere, or after {@link #PROMPT_LASTS} ticks
+     * untaken. A glance already out finishes first; everything else about a glance - that it is only taken
+     * when one is allowed, its hold, its coming home - is unchanged, which is what makes this safe to ask.
+     */
+    public void prompt(Supplier<Rotation> where) {
+        this.prompted = where;
+        this.promptAge = 0;
     }
 
     /**

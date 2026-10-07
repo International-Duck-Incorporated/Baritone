@@ -35,22 +35,28 @@ import baritone.behavior.look.GazeAhead;
 import baritone.behavior.look.HeadWander;
 import baritone.behavior.look.IdleFidget;
 import baritone.behavior.look.IdleGlance;
+import baritone.behavior.look.Newcomer;
 import baritone.behavior.look.PitchWander;
 import baritone.behavior.look.ReactionDelay;
 import baritone.behavior.look.WalkGlance;
 import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
 import net.minecraft.network.protocol.game.ServerboundPunchPacket;
 import net.minecraft.world.InteractionHand;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.component.SwingAnimation;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Deque;
+import java.util.List;
 import java.util.Optional;
 import java.util.Random;
+import java.util.function.Supplier;
 
 public final class LookBehavior extends Behavior implements ILookBehavior {
 
@@ -116,7 +122,21 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
      */
     private static final double INTEREST_RANGE = 12.0;
 
+    /**
+     * How far round from where the head is pointing somebody can be and still be seen arriving, in
+     * degrees of yaw: a little past the shoulder, which is about what a screen's field of view and the
+     * corner of an eye come to between them. Somebody arriving behind the head is not seen at all - a
+     * head that turns to them has seen through the back of its own skull - and the idle glances will come
+     * across them in their own time if the head happens to turn that way.
+     */
+    private static final float ARRIVAL_FIELD = 100.0f;
+
     private final IdleGlance idleGlance = new IdleGlance();
+
+    /**
+     * Who has just walked up, for the glances to turn to. See {@link #noticeArrivals}.
+     */
+    private final Newcomer newcomer = new Newcomer();
 
     /**
      * The small amount the head drifts off the bearing while walking. See {@link #updateHeadWander}.
@@ -269,7 +289,74 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
             // a lean not taken this tick is gone, and so is a welcome not repeated
             this.gazeAhead.tick();
             this.walkGlance.tick();
+            this.noticeArrivals();
         }
+    }
+
+    /**
+     * Turns the head to somebody who has just arrived, the way a person's turns: within half a second,
+     * once, and only to somebody in front of it with nothing in between. See {@link Newcomer} for the
+     * noticing. The turning is a glance - the idle one if the body is standing, the walking one if it is
+     * on a plain walk - prompted ahead of its clock and otherwise unchanged, so it is never taken while
+     * anything is being clicked, never outlives its hold, and always comes home; what it costs is one
+     * pass over the players in the room every tick, which is a short list and a ray each.
+     */
+    private void noticeArrivals() {
+        if (ctx.player() == null || ctx.world() == null) {
+            return;
+        }
+        final List<Integer> inView = new ArrayList<>();
+        final List<Double> distances = new ArrayList<>();
+        for (Player other : ctx.world().players()) {
+            if (!this.inView(other)) {
+                continue;
+            }
+            // nearest first, which is who a person's eyes go to when several arrive at once
+            final double distance = other.distanceToSqr(ctx.player());
+            int at = 0;
+            while (at < distances.size() && distances.get(at) <= distance) {
+                at++;
+            }
+            inView.add(at, other.getId());
+            distances.add(at, distance);
+        }
+        final int arrived = this.newcomer.notice(inView);
+        if (arrived == -1) {
+            return;
+        }
+        final Supplier<Rotation> where = () -> {
+            final Entity them = ctx.world().getEntity(arrived);
+            if (!(them instanceof Player) || !this.inView((Player) them)) {
+                return null; // gone again, or round a corner: nothing to look at
+            }
+            return RotationUtils.calcRotationFromVec3d(ctx.playerHead(), them.getEyePosition(), ctx.playerRotations());
+        };
+        this.idleGlance.prompt(where);
+        this.walkGlance.prompt(() -> {
+            final Rotation bearing = where.get();
+            if (bearing == null || this.wanderCamera == null) {
+                return null;
+            }
+            // the walking glance is an offset from the aim, not an angle; see WalkGlance
+            return new Rotation(Rotation.normalizeYaw(bearing.getYaw() - this.wanderCamera.getYaw()),
+                    bearing.getPitch() - this.wanderCamera.getPitch());
+        });
+    }
+
+    /**
+     * Whether {@code other} is somebody the head could see arrive: another player, alive and visible,
+     * within {@link #INTEREST_RANGE}, with a line of sight, and within {@link #ARRIVAL_FIELD} of where the
+     * head is pointing.
+     */
+    private boolean inView(Player other) {
+        if (other == ctx.player() || !other.isAlive() || other.isInvisible() || other.isSpectator()) {
+            return false;
+        }
+        if (other.distanceToSqr(ctx.player()) > INTEREST_RANGE * INTEREST_RANGE || !ctx.player().hasLineOfSight(other)) {
+            return false;
+        }
+        final Rotation bearing = RotationUtils.calcRotationFromVec3d(ctx.playerHead(), other.getEyePosition(), ctx.playerRotations());
+        return Math.abs(Rotation.normalizeYaw(bearing.getYaw() - ctx.player().getYRot())) <= ARRIVAL_FIELD;
     }
 
     @Override
