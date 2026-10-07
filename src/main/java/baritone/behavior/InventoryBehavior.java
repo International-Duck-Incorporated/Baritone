@@ -20,6 +20,7 @@ package baritone.behavior;
 import baritone.Baritone;
 import baritone.api.event.events.TickEvent;
 import baritone.api.utils.Helper;
+import baritone.utils.Cadence;
 import baritone.utils.ToolSet;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.Direction;
@@ -48,6 +49,15 @@ public final class InventoryBehavior extends Behavior implements Helper {
 
     int ticksSinceLastInventoryMove;
     int[] lastTickRequestedMove; // not everything asks every tick, so remember the request while coming to a halt
+
+    private final Random cadenceRand = new Random();
+
+    /**
+     * How long the next swap has to wait, in ticks: {@code ticksBetweenInventoryMoves}, with a tick of
+     * slack on either side, drawn when the last swap was made rather than read out of the setting every
+     * tick. See {@link Cadence#jitter}. Negative means nothing has been drawn yet.
+     */
+    private int swapInterval = -1;
 
     public InventoryBehavior(Baritone baritone) {
         super(baritone);
@@ -112,8 +122,9 @@ public final class InventoryBehavior extends Behavior implements Helper {
 
     private boolean requestSwapWithHotBar(int inInventory, int inHotbar) {
         lastTickRequestedMove = new int[]{inInventory, inHotbar};
-        if (ticksSinceLastInventoryMove < Baritone.settings().ticksBetweenInventoryMoves.value) {
-            logDebug("Inventory move requested but delaying " + ticksSinceLastInventoryMove + " " + Baritone.settings().ticksBetweenInventoryMoves.value);
+        final int interval = this.swapInterval();
+        if (ticksSinceLastInventoryMove < interval) {
+            logDebug("Inventory move requested but delaying " + ticksSinceLastInventoryMove + " " + interval);
             return false;
         }
         if (Baritone.settings().inventoryMoveOnlyIfStationary.value && !baritone.getInventoryPauserProcess().stationaryForInventoryMove()) {
@@ -123,7 +134,16 @@ public final class InventoryBehavior extends Behavior implements Helper {
         ctx.playerController().windowClick(ctx.player().inventoryMenu.containerId, inInventory < 9 ? inInventory + 36 : inInventory, inHotbar, ContainerInput.SWAP, ctx.player());
         ticksSinceLastInventoryMove = 0;
         lastTickRequestedMove = null;
+        this.swapInterval = -1; // and the next one gets its own interval
         return true;
+    }
+
+    private int swapInterval() {
+        if (this.swapInterval < 0) {
+            this.swapInterval = Cadence.jitter(this.cadenceRand,
+                    Baritone.settings().ticksBetweenInventoryMoves.value);
+        }
+        return this.swapInterval;
     }
 
     private int firstValidThrowaway() { // TODO offhand idk

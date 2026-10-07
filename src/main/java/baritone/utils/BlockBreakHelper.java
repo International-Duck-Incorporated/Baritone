@@ -60,6 +60,15 @@ public final class BlockBreakHelper {
         return Cadence.retargetDelay(this.retargetRand);
     }
 
+    /**
+     * The same for a break that took time: {@code blockBreakSpeed} is how long the next block is left
+     * alone for, and leaving it alone for exactly that long, every block, is the metronome again.
+     */
+    int breakDelay() {
+        return Cadence.jitter(this.retargetRand,
+                BaritoneAPI.getSettings().blockBreakSpeed.value - BASE_BREAK_DELAY);
+    }
+
     public void tick(boolean isLeftClick) {
         if (breakDelayTimer > 0) {
             breakDelayTimer--;
@@ -82,7 +91,7 @@ public final class BlockBreakHelper {
                 }
                 if (ctx.playerController().hasBrokenBlock()) { // block broken this tick
                     // break delay timer only applies for multi-tick block breaks like vanilla
-                    breakDelayTimer = BaritoneAPI.getSettings().blockBreakSpeed.value - BASE_BREAK_DELAY;
+                    breakDelayTimer = this.breakDelay();
                     // must reset controller's destroy delay to prevent the client from delaying itself unnecessarily
                     ((IPlayerControllerMP) ctx.minecraft().gameMode).setDestroyDelay(0);
                 }

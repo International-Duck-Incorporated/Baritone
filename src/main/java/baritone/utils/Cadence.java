@@ -47,4 +47,34 @@ public final class Cadence {
     public static int retargetDelay(Random rand) {
         return RETARGET_DELAY_MIN + rand.nextInt(RETARGET_DELAY_MAX - RETARGET_DELAY_MIN + 1);
     }
+
+    /**
+     * How far a repeated action's interval is allowed to wander, in ticks, either side of the setting.
+     */
+    public static final int JITTER = 1;
+
+    /**
+     * A fixed interval with a tick of slack on either side.
+     * <p>
+     * Everything that repeats on a setting - placing a block every {@code rightClickSpeed} ticks, the
+     * pause after a block breaks, an inventory move - repeats on <em>exactly</em> that interval, forever,
+     * which is a rhythm no person produces: hold a stopwatch to someone building a wall and the gaps are
+     * three ticks, four, three, three, five. The eye does not read "5.0 blocks per second" as fast, it
+     * reads the metronome, and it is one of the few tells that survives a good camera and a plausible
+     * reaction time.
+     * <p>
+     * A tick either way is 50 milliseconds: enough to break the periodicity, far too little to change how
+     * the activity looks or how long it takes. Intervals the setting has already set to one tick cannot be
+     * shortened and are left alone.
+     *
+     * @param ticks the interval the setting asks for
+     * @return the interval to actually wait, in ticks
+     */
+    public static int jitter(Random rand, int ticks) {
+        if (ticks <= 1) {
+            return ticks;
+        }
+        final int drawn = ticks - JITTER + rand.nextInt(JITTER * 2 + 1);
+        return Math.max(1, drawn);
+    }
 }

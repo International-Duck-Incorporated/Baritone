@@ -73,4 +73,42 @@ public class CadenceTest {
         assertTrue("mean pause " + mean + " ticks is longer than a reaction", mean < 5.0);
         assertTrue("mean pause " + mean + " ticks is barely a pause", mean > 1.0);
     }
+
+    @Test
+    public void everyJitteredIntervalIsWithinATickOfTheSetting() {
+        final Random rand = new Random(2026);
+        for (int setting = 0; setting <= 40; setting++) {
+            for (int i = 0; i < 500; i++) {
+                final int drawn = Cadence.jitter(rand, setting);
+                assertTrue("an interval of " + setting + " ticks became " + drawn, drawn >= 1 || setting <= 0);
+                assertTrue("an interval of " + setting + " ticks became " + drawn,
+                        Math.abs(drawn - setting) <= Cadence.JITTER);
+            }
+        }
+    }
+
+    @Test
+    public void jitterActuallyVariesTheInterval() {
+        // The whole point is that a setting stops being a metronome. A drawing function that always
+        // returned its argument would pass every bound above and change nothing at all.
+        final Random rand = new Random(7);
+        final Set<Integer> seen = new HashSet<>();
+        for (int i = 0; i < 2000; i++) {
+            seen.add(Cadence.jitter(rand, 4));
+        }
+        assertEquals("a four tick interval can only ever be four ticks", 3, seen.size());
+        assertTrue(seen.contains(3) && seen.contains(4) && seen.contains(5));
+    }
+
+    @Test
+    public void anIntervalOfOneTickIsLeftAlone() {
+        // rightClickSpeed and friends can be set to one tick, meaning "as fast as the game will let me".
+        // There is no jitter below one, and a zero must stay zero rather than being rounded up to a pause
+        // somebody did not ask for.
+        final Random rand = new Random(5);
+        for (int i = 0; i < 100; i++) {
+            assertEquals(1, Cadence.jitter(rand, 1));
+            assertEquals(0, Cadence.jitter(rand, 0));
+        }
+    }
 }

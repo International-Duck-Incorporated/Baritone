@@ -25,11 +25,14 @@ import net.minecraft.world.item.component.SwingAnimation;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 
+import java.util.Random;
+
 public class BlockPlaceHelper {
     // base ticks between places caused by tick logic
     private static final int BASE_PLACE_DELAY = 1;
 
     private final IPlayerContext ctx;
+    private final Random placeRand = new Random();
     private int rightClickTimer;
 
     BlockPlaceHelper(IPlayerContext playerContext) {
@@ -45,7 +48,9 @@ public class BlockPlaceHelper {
         if (!rightClickRequested || ctx.player().isHandsBusy() || mouseOver == null || mouseOver.getType() != HitResult.Type.BLOCK) {
             return;
         }
-        rightClickTimer = Baritone.settings().rightClickSpeed.value - BASE_PLACE_DELAY;
+        // not exactly rightClickSpeed ticks apart, every time: see Cadence.jitter
+        rightClickTimer = Cadence.jitter(this.placeRand,
+                Baritone.settings().rightClickSpeed.value - BASE_PLACE_DELAY);
         for (InteractionHand hand : InteractionHand.values()) {
             if (ctx.playerController().processRightClickBlock(ctx.player(), ctx.world(), hand, (BlockHitResult) mouseOver) == InteractionResult.SUCCESS) {
                 ctx.player().swing(hand, SwingAnimation.DEFAULT, false);
