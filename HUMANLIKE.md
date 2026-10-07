@@ -18,7 +18,7 @@ opt-in: a bot that has to be told to look alive is a bot that looks dead by defa
 | The hand shakes in two directions, not one | `behavior/look/AimDynamics.java`, `LookBehavior.tick` | The aim adds a wander of `randomLooking113` degrees either side of where it is aiming, a fresh draw each tick smoothed so it drifts rather than shivers. Both angles draw it, which is what upstream's own note ("How many degrees to randomize the yaw") left to the yaw alone: the pitch took only the hundredth of a degree `randomLooking` adds, which the mouse grid swallows whole, so a bot breaking a block moved its head by a degree or two sideways and by nothing at all vertically - measured on a settled aim at the default sensitivity, the pitch wandered two hundredths of a degree, below a single mouse pixel at every sensitivity there is, and now wanders a third of a degree either side with three and a half degrees peak to peak, as the yaw always did. The two angles are drawn separately - a hand that moved along a line would be a hand that is being moved - and the pitch is left alone in water and in a glide, where it is a control and not a decoration. |
 | The hand calls itself arrived | `behavior/look/AimDynamics.java`, `ILookBehavior#hasArrivedAt` | "Is the aim here yet" is asked of the aim, not of a hundredth-of-a-degree comparison against the target: a settled hand sits a fraction of a degree off, because it is easing and the tremor is still shaking it. |
 | A target with no opinion about the pitch | `behavior/look/PitchWander.java`, `LookBehavior#settledGaze` | The gaze settles a few degrees this way and that every few seconds - triangular around level, a degree a tick, ten degrees out at the extremes - instead of holding one angle for a whole journey, and it settles *on the aim*, which is the angle the server is told and the one the arm is traced along. Only where the pitch is decoration: a swim travels by the pitch it is looking along and a glide solves for it, so in water and in the air the pitch stays where the movement put it, and a target that holds an opinion about the pitch - a block to break, a face to place against - is aimed at exactly. |
-| Something moved the mouse | `behavior/look/IdleGlance.java` | A glance is dropped the moment the view is taken over, and the angles are handed back exactly. |
+| Something moved the mouse | `behavior/look/IdleGlance.java` | A glance is dropped the moment the view is taken over - asked only of a camera somebody is looking through, because a camera of Baritone's own is moved by the glance itself - and the angles are handed back exactly. |
 
 ## Standing around
 
@@ -64,7 +64,10 @@ a quarter faster); inventory moves are spaced by a redrawn interval rather than 
   a crash rather than a personality trait.
 - **Under free look** (`freeLook`, `antiCheatCompatibility`), the rotations Baritone drives are sent to
   the server while the player's own camera is handed back untouched. Everyone else sees the aim move;
-  the person at the keyboard sees their own view.
+  the person at the keyboard sees their own view. What is sent is the same either way, and so is the rule
+  about a glance being taken over: only a view somebody is looking through can be taken over, so a
+  free-look-off player watching the bot work sees the same sway and the same glances that everyone else
+  does, on a camera the aim already owns.
 - **Anything about to be clicked** is aimed at exactly, whatever the rest of the aim is doing: a block to
   break, a face to place against, a door. The trace follows those angles to the centimetre, and the
   movement waits for them before it clicks - so the carry past a target and the one-tick sway and glance

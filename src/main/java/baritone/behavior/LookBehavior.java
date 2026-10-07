@@ -137,6 +137,11 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
      * runs under it, because they are applied to the same angles and have to be handed back together.
      */
     private Rotation idleCamera;
+    /**
+     * The angle the idle head's offsets ride on while the camera is ours, which is not the camera then: see
+     * the PRE branch of {@link #updateIdleLook}. Null whenever the idle head is not the one driving.
+     */
+    private Rotation idleBase;
 
     /**
      * The player's own rotation before the walking wander was applied, or null when it is not applied.
@@ -233,6 +238,8 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
                 }
 
                 this.prevRotation = new Rotation(ctx.player().getYRot(), ctx.player().getXRot());
+                // the aim is writing the camera again, so the idle head's base is a stale angle from now on
+                this.idleBase = null;
                 final Rotation wanted = this.processor.peekRotation(this.target.rotation);
                 if (ctx.player().isFallFlying()) {
                     // Elytra is a control loop: the flight path is solved assuming the angles it asked for
@@ -336,6 +343,7 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
         this.lastWanted = null;
         this.wanderCamera = null;
         this.idleCamera = null;
+        this.idleBase = null;
         this.idleGlance.reset();
         this.reaction.clear();
         this.smoothYawBuffer.clear();
@@ -385,8 +393,24 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
                 // - it only runs while the player is standing still, where nothing downstream reads the
                 // facing - and it is why the walking wander, which does run while walking, does not go here.
                 final Rotation camera = new Rotation(ctx.player().getYRot(), ctx.player().getXRot());
-                final Rotation wanted = this.idleGlance.next(camera, allowed, this::idleStep, this::somethingNearby);
+                // The base the glance and the sway ride on, which is the camera only while the camera is the
+                // player's: their view has the head's own offsets taken back off it at the end of every tick,
+                // so there is nothing of ours left on it to read. When the camera is ours they stay on it, and
+                // reading it again makes the offsets ride on themselves - each tick's sway added to the last
+                // tick's, which is a slow oscillation of the sum rather than of the sway. Measured over a
+                // hundred minutes of standing about, the view the person is looking through drifts 41 degrees
+                // from the angle the head is actually holding; remembering the base instead holds it to half a
+                // degree, which is the sway's own amplitude. The old handback hid all of this by putting the
+                // camera back every tick, which is exactly why it cannot simply be switched off.
+                final boolean theirs = thePersonKeepsTheirView();
+                if (!theirs && this.idleBase == null) {
+                    this.idleBase = camera;
+                }
+                final Rotation base = theirs ? camera : this.idleBase;
+                final Rotation wanted = this.idleGlance.next(base, allowed, theirs, this::idleStep,
+                        this::somethingNearby);
                 if (!allowed) {
+                    this.idleBase = null;
                     // Not ours this tick, and that includes the sway: a leftover half degree rides on the
                     // rotation Baritone traces its own pickaxe and blocks along, and an idle drift is not
                     // worth pointing the crosshair at the wrong block for. Standing still with nothing
@@ -394,12 +418,12 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
                     return;
                 }
                 // The sway rides on top of whatever the glance is doing, including nothing: read against
-                // the camera rather than the glance's own angle, it cannot be mistaken for the glance's
+                // the base rather than the glance's own angle, it cannot be mistaken for the glance's
                 // bookkeeping, which stays exactly where it was and so still arrives and still comes home.
-                final Rotation base = wanted != null ? wanted : camera;
+                final Rotation riding = wanted != null ? wanted : base;
                 final Rotation applied = new Rotation(
-                        base.getYaw() + this.headWander.idleYaw(),
-                        Rotation.clampPitch(base.getPitch() + this.headWander.idlePitch()));
+                        riding.getYaw() + this.headWander.idleYaw(),
+                        Rotation.clampPitch(riding.getPitch() + this.headWander.idlePitch()));
                 this.idleCamera = camera;
                 ctx.player().setYRot(applied.getYaw());
                 ctx.player().setXRot(applied.getPitch());
@@ -416,8 +440,11 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
             }
             case POST: {
                 if (this.idleCamera != null) {
-                    ctx.player().setYRot(this.idleCamera.getYaw());
-                    ctx.player().setXRot(this.idleCamera.getPitch());
+                    // Handed back only to somebody whose view it is; see thePersonKeepsTheirView.
+                    if (thePersonKeepsTheirView()) {
+                        ctx.player().setYRot(this.idleCamera.getYaw());
+                        ctx.player().setXRot(this.idleCamera.getPitch());
+                    }
                     this.idleCamera = null;
                 }
                 break;
@@ -524,10 +551,36 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
 
     private void unwindHeadWander() {
         if (this.wanderCamera != null) {
-            ctx.player().setYRot(this.wanderCamera.getYaw());
-            ctx.player().setXRot(this.wanderCamera.getPitch());
+            // The same rule as the idle head's, with one extra clause. Nobody who is not looking through
+            // this camera needs the angles taken back off it, but leaving them on only costs nothing while
+            // something rewrites the camera from scratch every tick - which the aim does, and only when it
+            // is being applied at all (a target under {@code Mode.NONE} writes nothing and would let the
+            // sway build on itself). What the server was told does not change either way: the packet went
+            // out with the sway on it, between this and the aim's own handback.
+            if (thePersonKeepsTheirView() || this.prevRotation == null) {
+                ctx.player().setYRot(this.wanderCamera.getYaw());
+                ctx.player().setXRot(this.wanderCamera.getPitch());
+            }
             this.wanderCamera = null;
         }
+    }
+
+    /**
+     * Whether the view on the person's screen is theirs or the bot's.
+     * <p>
+     * Free look is the setting that decides it, and the aim already follows it: with free look on, the
+     * angles Baritone drives are carried out to the server by the client's own rotation packet and the
+     * person's camera is handed back untouched, so the aim is something only everybody else sees. With it
+     * off, the person has said they want to watch the bot do the work, and the aim is written onto their
+     * camera and stays there.
+     * <p>
+     * The head has to follow the same rule as the aim, or the mod takes the camera for one thing and not for
+     * the other: a free-look-off player would be looking through a camera pinned exactly to the block centre
+     * their bot is walking at, with none of the sway and none of the glances that everyone else can see,
+     * which is the turret this fork exists to not be. The angles the server is told are the same either way.
+     */
+    private static boolean thePersonKeepsTheirView() {
+        return Baritone.settings().freeLook.value;
     }
 
     /**

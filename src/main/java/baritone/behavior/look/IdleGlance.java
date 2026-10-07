@@ -85,6 +85,10 @@ public final class IdleGlance {
     /**
      * How far the view may move away from where a glance started before the glance gives up. Movement
      * here means somebody moved the mouse themselves, and the polite thing is to get out of the way.
+     * <p>
+     * Only ever asked about a view somebody is looking through: a camera of the bot's own is moved by the
+     * glance itself, and measuring it would give up on every wide gesture. See the five argument
+     * {@code next}.
      */
     private static final float TAKEN_OVER = 20.0f;
 
@@ -150,6 +154,24 @@ public final class IdleGlance {
      *                 starting, which is where the cost of working it out belongs
      */
     public Rotation next(Rotation camera, boolean allowed, Stepper step, Supplier<Rotation> interest) {
+        return this.next(camera, allowed, true, step, interest);
+    }
+
+    /**
+     * The same, with the caller saying whether the camera it hands over belongs to the player.
+     * <p>
+     * It is the difference between a view and a vantage point. A camera somebody is looking through can be
+     * taken away from the glance - they move the mouse and the glance is pointing somewhere they are not -
+     * and that is what {@link #TAKEN_OVER} is for. A camera of Baritone's own cannot be taken over by
+     * anybody, and the gesture is what is moving it, so measuring it against where the gesture started
+     * would abandon every glance wider than {@code TAKEN_OVER}: most of the wander draws, and every look at
+     * the hand, none of which is ever that narrow. Those are held to the promise the class is built on
+     * instead - out, held, and home again.
+     *
+     * @param someoneElsesCamera whether {@code camera} is the player's own view rather than the bot's
+     */
+    public Rotation next(Rotation camera, boolean allowed, boolean someoneElsesCamera, Stepper step,
+                         Supplier<Rotation> interest) {
         if (!allowed) {
             // Baritone has started doing something, or the player is moving again. Drop the glance where
             // it stands; whatever happens next owns the aim from here.
@@ -182,8 +204,9 @@ public final class IdleGlance {
             this.hold = HOLD_MIN + this.rand.nextInt(HOLD_MAX - HOLD_MIN + 1);
             this.age = 0;
             this.sent = camera;
-        } else if (Math.abs(Rotation.normalizeYaw(camera.getYaw() - this.home.getYaw())) > TAKEN_OVER
-                || Math.abs(camera.getPitch() - this.home.getPitch()) > TAKEN_OVER) {
+        } else if (someoneElsesCamera
+                && (Math.abs(Rotation.normalizeYaw(camera.getYaw() - this.home.getYaw())) > TAKEN_OVER
+                || Math.abs(camera.getPitch() - this.home.getPitch()) > TAKEN_OVER)) {
             this.reset();
             return null;
         }

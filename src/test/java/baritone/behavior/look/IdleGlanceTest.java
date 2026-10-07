@@ -258,6 +258,49 @@ public class IdleGlanceTest {
         assertTrue("the glance kept going after the camera was moved out from under it", backedOff);
     }
 
+    /**
+     * The other half of that rule, and the half that costs something if it is missing: a camera nobody is
+     * looking through cannot be taken over by anybody, and the gesture is what moves it. Measuring it
+     * against where the gesture started would abandon every glance wider than {@code TAKEN_OVER} - most of
+     * the wander draws and every look at the hand, neither of which is ever that narrow - and leave the head
+     * pointing wherever the abandoned gesture got to.
+     */
+    @Test
+    public void aCameraOfOurOwnIsNeverTakenOver() {
+        for (int seed = 1; seed <= 40; seed++) {
+            final IdleGlance glance = new IdleGlance(new Random(seed));
+            Rotation camera = new Rotation(12f, 3f);
+            Rotation homeOfGesture = null;
+            Rotation lastOfGesture = null;
+            int gestures = 0;
+            float furthest = 0f, widest = 0f;
+            for (int t = 0; t < 6000; t++) {
+                final Rotation wanted = glance.next(camera, true, false, IdleGlanceTest::step, () -> null);
+                if (wanted != null) {
+                    if (homeOfGesture == null) {
+                        homeOfGesture = camera;
+                        furthest = 0f;
+                    }
+                    lastOfGesture = wanted;
+                    // free look off: this angle is what the packet carried and what the camera keeps, so the
+                    // tick after it is looking at this, which is the camera of a bot nobody is looking through
+                    camera = wanted;
+                    furthest = Math.max(furthest, AimDynamics.separation(homeOfGesture, wanted));
+                } else if (homeOfGesture != null) {
+                    gestures++;
+                    widest = Math.max(widest, furthest);
+                    assertTrue("a " + furthest + " degree gesture ended somewhere else: " + lastOfGesture
+                                    + " instead of " + homeOfGesture,
+                            Math.abs(Rotation.normalizeYaw(lastOfGesture.getYaw() - homeOfGesture.getYaw())) < 1e-4f
+                                    && Math.abs(lastOfGesture.getPitch() - homeOfGesture.getPitch()) < 1e-4f);
+                    homeOfGesture = null;
+                }
+            }
+            assertTrue("seed " + seed + " took no glance in six thousand ticks", gestures > 0);
+            assertTrue("seed " + seed + " never looked more than " + widest + " degrees anywhere", widest > 5f);
+        }
+    }
+
     @Test
     public void stopsImmediatelyWhenItBecomesDisallowed() {
         final IdleGlance glance = new IdleGlance(new Random(15));
