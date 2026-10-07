@@ -49,6 +49,25 @@ public final class Cadence {
     }
 
     /**
+     * Ticks between the crosshair arriving on a block and the first swing at it: one or two.
+     * <p>
+     * Everything that swings at a block waits for the aim before it starts, because that is what the
+     * callers gate the click on - the trace has to land on the block, and the trace follows the aim. The
+     * swing itself, though, used to be in the same tick the crosshair arrived, which is a thing no hand
+     * does: aim, then press, with a reaction in between. One or two ticks is fifty to a hundred
+     * milliseconds, which is about as short as that reaction gets.
+     */
+    public static final int SIGHT_SETTLE_MIN = 1;
+    public static final int SIGHT_SETTLE_MAX = 2;
+
+    /**
+     * @return the pause, in ticks, before the first swing at a block the crosshair has just arrived on
+     */
+    public static int sightSettle(Random rand) {
+        return SIGHT_SETTLE_MIN + rand.nextInt(SIGHT_SETTLE_MAX - SIGHT_SETTLE_MIN + 1);
+    }
+
+    /**
      * How far a repeated action's interval is allowed to wander, in ticks, either side of the setting.
      */
     public static final int JITTER = 1;

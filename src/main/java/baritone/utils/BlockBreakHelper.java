@@ -40,6 +40,17 @@ public final class BlockBreakHelper {
     private boolean wasHitting;
     private int breakDelayTimer = 0;
 
+    /**
+     * Whether the previous tick was also asked to click, which is how the rising edge - the moment the
+     * crosshair has just arrived on a new block - is recognised.
+     */
+    private boolean wasClicking;
+
+    /**
+     * Counts down the beat between arriving on a block and swinging at it. See {@link Cadence#sightSettle}.
+     */
+    private int sightTimer;
+
     BlockBreakHelper(IPlayerContext ctx) {
         this.ctx = ctx;
     }
@@ -70,6 +81,21 @@ public final class BlockBreakHelper {
     }
 
     public void tick(boolean isLeftClick) {
+        if (!isLeftClick) {
+            // Nothing is being asked for, so there is nothing to have arrived on.
+            this.wasClicking = false;
+            this.sightTimer = 0;
+        } else if (!this.wasClicking) {
+            // The first tick of a click. The callers only set this once the trace lands on the block, so
+            // this is the tick the crosshair arrived, and a hand presses a beat after that rather than in
+            // the same tick. Every request this replaces is set again next tick while the block is there.
+            this.sightTimer = Cadence.sightSettle(this.retargetRand);
+        }
+        this.wasClicking = isLeftClick;
+        if (this.sightTimer > 0) {
+            this.sightTimer--;
+            return;
+        }
         if (breakDelayTimer > 0) {
             breakDelayTimer--;
             return;

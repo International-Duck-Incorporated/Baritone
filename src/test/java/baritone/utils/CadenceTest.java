@@ -75,6 +75,25 @@ public class CadenceTest {
     }
 
     @Test
+    public void theFirstSwingWaitsForTheCrosshair() {
+        // A hand that swings in the same tick its crosshair arrives is a hand that has already decided to
+        // swing. One or two ticks of reaction is as short as that gets, and it must never be zero.
+        assertTrue("a zero settle means swinging the tick the crosshair arrives",
+                Cadence.SIGHT_SETTLE_MIN >= 1);
+        assertTrue("the settle is a reaction, not a nap", Cadence.SIGHT_SETTLE_MAX <= 4);
+        final Random rand = new Random(31415);
+        final Set<Integer> seen = new HashSet<>();
+        for (int i = 0; i < 1000; i++) {
+            final int settle = Cadence.sightSettle(rand);
+            seen.add(settle);
+            assertTrue("settle " + settle + " below the minimum", settle >= Cadence.SIGHT_SETTLE_MIN);
+            assertTrue("settle " + settle + " above the maximum", settle <= Cadence.SIGHT_SETTLE_MAX);
+        }
+        assertEquals("the settle should be able to take every value in its range",
+                Cadence.SIGHT_SETTLE_MAX - Cadence.SIGHT_SETTLE_MIN + 1, seen.size());
+    }
+
+    @Test
     public void everyJitteredIntervalIsWithinATickOfTheSetting() {
         final Random rand = new Random(2026);
         for (int setting = 0; setting <= 40; setting++) {
