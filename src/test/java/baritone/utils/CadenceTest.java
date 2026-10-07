@@ -75,10 +75,12 @@ public class CadenceTest {
     }
 
     @Test
-    public void theFirstSwingWaitsForTheCrosshair() {
-        // A hand that swings in the same tick its crosshair arrives is a hand that has already decided to
-        // swing. One or two ticks of reaction is as short as that gets, and it must never be zero.
-        assertTrue("a zero settle means swinging the tick the crosshair arrives",
+    public void theFirstClickWaitsForTheCrosshair() {
+        // A hand that clicks in the same tick its crosshair arrives is a hand that has already decided to
+        // click. One or two ticks of reaction is as short as that gets, and it must never be zero. Both
+        // the pickaxe and the block in hand draw this, so it is the reaction to arriving on a face, not a
+        // property of either button.
+        assertTrue("a zero settle means clicking the tick the crosshair arrives",
                 Cadence.SIGHT_SETTLE_MIN >= 1);
         assertTrue("the settle is a reaction, not a nap", Cadence.SIGHT_SETTLE_MAX <= 4);
         final Random rand = new Random(31415);

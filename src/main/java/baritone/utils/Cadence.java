@@ -49,13 +49,18 @@ public final class Cadence {
     }
 
     /**
-     * Ticks between the crosshair arriving on a block and the first swing at it: one or two.
+     * Ticks between the crosshair arriving on a block and the click that follows it: one or two.
      * <p>
-     * Everything that swings at a block waits for the aim before it starts, because that is what the
-     * callers gate the click on - the trace has to land on the block, and the trace follows the aim. The
-     * swing itself, though, used to be in the same tick the crosshair arrived, which is a thing no hand
-     * does: aim, then press, with a reaction in between. One or two ticks is fifty to a hundred
+     * Everything that breaks or places a block waits for the aim before it starts, because that is what
+     * the callers gate the click on - the trace has to land on the block, and the trace follows the aim.
+     * The click itself, though, used to be in the same tick the crosshair arrived, which is a thing no
+     * hand does: aim, then press, with a reaction in between. One or two ticks is fifty to a hundred
      * milliseconds, which is about as short as that reaction gets.
+     * <p>
+     * Both buttons draw it, and both spend it per arrival rather than per block, so a run of blocks mined
+     * or a run of blocks placed without the crosshair ever leaving a face only pays it once. The one place
+     * it is deliberately not spent is a block placed in mid air: that one is timed against the jump arc
+     * the player is already on.
      */
     public static final int SIGHT_SETTLE_MIN = 1;
     public static final int SIGHT_SETTLE_MAX = 2;
