@@ -31,6 +31,7 @@ import baritone.behavior.look.AimDynamics;
 import baritone.behavior.look.ForkableRandom;
 import baritone.behavior.look.HeadWander;
 import baritone.behavior.look.IdleGlance;
+import baritone.behavior.look.PitchWander;
 import baritone.behavior.look.ReactionDelay;
 import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
 
@@ -612,12 +613,14 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
 
         protected final IPlayerContext ctx;
         private final ForkableRandom rand;
+        private final PitchWander pitchWander;
         private double randomYawOffset;
         private double randomPitchOffset;
 
         public AbstractAimProcessor(IPlayerContext ctx) {
             this.ctx = ctx;
             this.rand = new ForkableRandom();
+            this.pitchWander = new PitchWander();
         }
 
         private AbstractAimProcessor(final AbstractAimProcessor source) {
@@ -625,6 +628,12 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
             this.rand = source.rand.fork();
             this.randomYawOffset = source.randomYawOffset;
             this.randomPitchOffset = source.randomPitchOffset;
+            // A fork of the noise is a fork of the same hand, so the offsets are carried over; the pitch
+            // wander is not, because the things that fork - the elytra flight solver, which calls this
+            // processor hundreds of times a tick to try out a route - advance it every call, and a habit
+            // that lives in seconds has no meaning at that rate. Starting the fork at level is the
+            // harmless answer: at worst the simulated gaze is a degree or two from the real one.
+            this.pitchWander = new PitchWander();
         }
 
         @Override
@@ -634,10 +643,13 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
             float desiredYaw = rotation.getYaw();
             float desiredPitch = rotation.getPitch();
 
-            // In other words, the target doesn't care about the pitch, so it used playerRotations().getPitch()
-            // and it's safe to adjust it to a normal level
+            // In other words, the target doesn't care about the pitch: it asked for the player's own, which
+            // is the idiom for a target with an opinion about the yaw only, and that is how every walking
+            // target is built. So the pitch is free, and it does what a person's does while they walk - it
+            // settles a few degrees this way and that over the seconds rather than holding one angle for the
+            // whole journey. See PitchWander.
             if (desiredPitch == prev.getPitch()) {
-                desiredPitch = nudgeToLevel(desiredPitch);
+                desiredPitch = this.pitchWander.step(desiredPitch);
             }
 
             desiredYaw += this.randomYawOffset * AimDynamics.TREMOR_GAIN;
@@ -668,6 +680,9 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
             // result back up so the settings keep the amplitude they always had.
             this.randomYawOffset = AimDynamics.smoothOffset(this.randomYawOffset, (float) rawYaw113);
             this.randomPitchOffset = AimDynamics.smoothOffset(this.randomPitchOffset, (float) rawPitchOffset);
+
+            // and the gaze the pitch settles on, which turns over in the seconds rather than the ticks
+            this.pitchWander.advance();
         }
 
         @Override
@@ -703,18 +718,6 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
         }
 
         protected abstract Rotation getPrevRotation();
-
-        /**
-         * Nudges the player's pitch to a regular level. (Between {@code -20} and {@code 10}, increments are by {@code 1})
-         */
-        private float nudgeToLevel(float pitch) {
-            if (pitch < -20) {
-                return pitch + 1;
-            } else if (pitch > 10) {
-                return pitch - 1;
-            }
-            return pitch;
-        }
 
         private float calculateMouseMove(float current, float target) {
             final float delta = target - current;
