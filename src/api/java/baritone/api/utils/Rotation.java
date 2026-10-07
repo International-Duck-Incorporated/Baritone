@@ -160,23 +160,15 @@ public class Rotation {
     }
 
     /**
-     * Gets the distance between a starting yaw and an offset yaw.
-     * Distance can be negative if the offset yaw is behind of the starting yaw.
+     * The signed distance between two yaw angles, taken the short way round: positive when {@code yaw} is
+     * clockwise of {@code offsetYaw}, negative the other way, and never further from zero than half a turn.
      *
      * @param yaw The initial yaw
      * @param offsetYaw The offset yaw
      * @return The distance between the yaws
      */
     public static float yawDistanceFromOffset(float yaw, float offsetYaw) {
-        if ((yaw > 0 ^ offsetYaw > 0) && ((yaw > 90 || yaw < -90) ^ (offsetYaw > 90 || offsetYaw < -90))) {
-            if (yaw < 0) {
-                return 360 + (yaw - offsetYaw);
-            } else {
-                return 360 - (yaw - offsetYaw);
-            }
-        } else {
-            return yaw - offsetYaw;
-        }
+        return normalizeYaw(yaw - offsetYaw);
     }
 
     @Override
