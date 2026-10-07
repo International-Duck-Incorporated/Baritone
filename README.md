@@ -105,6 +105,8 @@ Here are some links to help to get started:
 
 - [Usage (chat control)](USAGE.md)
 
+- [What makes this fork look human](HUMANLIKE.md) (camera, timing, idle behaviour)
+
 ## Stars over time
 
 [![Stargazers over time](https://starchart.cc/cabaletta/baritone.svg)](https://starchart.cc/cabaletta/baritone)
