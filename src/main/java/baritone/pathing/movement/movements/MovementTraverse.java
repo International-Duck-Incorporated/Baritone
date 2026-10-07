@@ -29,6 +29,7 @@ import baritone.pathing.movement.CalculationContext;
 import baritone.pathing.movement.Movement;
 import baritone.pathing.movement.MovementHelper;
 import baritone.pathing.movement.MovementState;
+import baritone.pathing.movement.StraightRun;
 import baritone.utils.BlockStateInterface;
 import com.google.common.collect.ImmutableSet;
 import net.minecraft.core.BlockPos;
@@ -350,7 +351,10 @@ public class MovementTraverse extends Movement {
                 }
                 return state;
             }
-            MovementHelper.moveTowardsWithSlightRotation(ctx, state, dest);
+            // facing the diagonal for the first blocks of a heading and the way itself once the walk has
+            // gone that way a while: see StraightRun
+            MovementHelper.moveTowardsWithSlightRotation(ctx, state, dest,
+                    StraightRun.settled(baritone.getPathingBehavior().getCurrent(), this));
             return state;
         }
     }

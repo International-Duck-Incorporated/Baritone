@@ -236,4 +236,18 @@ public class KeyBeatTest {
             assertTrue("drawn " + drawn + " above the maximum", drawn <= Cadence.KEY_BEAT_MAX);
         }
     }
+    @Test
+    public void theKeysWalkAtTheAngleTheGameTurnsThemBy() {
+        // forward is the facing, left is a right angle anticlockwise of it, and the diagonals are between:
+        // the arithmetic Entity.getInputVector does, which is what the feet-wait-for-the-head rule measures
+        // the body's direction with
+        assertEquals(0f, W.yawOffset(), 1e-6f);
+        assertEquals(180f, Math.abs(S.yawOffset()), 1e-6f);
+        assertEquals(-90f, A.yawOffset(), 1e-6f);
+        assertEquals(90f, D.yawOffset(), 1e-6f);
+        assertEquals(-45f, W_A.yawOffset(), 1e-6f);
+        assertEquals(45f, W_D.yawOffset(), 1e-6f);
+        assertEquals("keys that cancel out walk nowhere", 0f, W_S.yawOffset(), 1e-6f);
+        assertEquals(0f, NONE.yawOffset(), 1e-6f);
+    }
 }

@@ -77,14 +77,30 @@ public record MovementOption(Input input1, Input input2, float motionX, float mo
     }
 
     /**
+     * The most steps the camera is ever left behind the way the feet are going: one, which is forty-five
+     * degrees, which is the diagonal a person walks with two keys while looking where they are going.
+     * <p>
+     * Without this the camera was anchored to whatever step it happened to be nearest and the keys covered
+     * the whole of the rest of the turn, which is a bot that walks a route backwards on S because it was
+     * facing away when it was told to go, and crab-walks every corner on A or D with its head still on the
+     * old heading. Four keys can press those, and nobody uses them for more than a step or two: the body
+     * goes where the eyes go, within a diagonal.
+     */
+    private static final int MAX_STEPS = 1;
+
+    /**
      * The yaw to look along while the keys for {@code idealYaw} are pressed, so that they come out pointing
      * at it.
      * <p>
-     * The camera turns in whole steps of {@code STEP} degrees - the same grid the combinations sit on - and
-     * the keys cover the rest of the turn, which is why the snap is anchored at the direction the movement
-     * wants rather than at the direction the player happens to be facing: the remainder is then a whole
-     * number of steps, something a set of keys can actually press. The camera never has to turn more than
-     * half a step.
+     * The camera turns in whole steps of {@code STEP} degrees - the same grid the combinations sit on -
+     * and the keys cover the rest of the turn, which is why the snap is anchored at the direction the
+     * movement wants rather than at the direction the player happens to be facing: the remainder is then a
+     * whole number of steps, something a set of keys can actually press. Of the steps on that grid, the one
+     * nearest the player's facing is held, within {@link #MAX_STEPS} of the direction asked for: inside half
+     * a step of it the camera faces it outright and the keys are W, and anywhere further round the camera
+     * is brought to the diagonal on the near side and the keys are W with A or D. A camera already on the
+     * grid is never asked to turn more than half a step, and the direction of travel is never more than a
+     * diagonal off wherever the camera is told to be.
      * <p>
      * This has to be computed together with the keys and not separately from them, because the game applies
      * them together: what the pressed combination means is measured from the yaw the player is holding at
@@ -97,8 +113,26 @@ public record MovementOption(Input input1, Input input2, float motionX, float mo
      * @return the yaw to hold while the combination for {@code idealYaw} is pressed
      */
     public static float lookYaw(float facingYaw, float idealYaw) {
-        final float steps = Mth.floor((facingYaw - idealYaw + HALF_STEP) / STEP);
+        final float offset = Rotation.normalizeYaw(facingYaw - idealYaw);
+        final int steps = Math.max(-MAX_STEPS, Math.min(MAX_STEPS, Mth.floor((offset + HALF_STEP) / STEP)));
         return Rotation.normalizeYaw(idealYaw + STEP * steps);
+    }
+
+    /**
+     * The same, for a walk that has been going the same way long enough for the head to have straightened
+     * onto it.
+     * <p>
+     * The diagonal is how a person walks the first step or two of a new heading, and a staircase of them -
+     * the zig-zag a path makes toward a goal off the axes - is walked facing the diagonal the whole way, the
+     * keys alternating under a steady head. A long straight is not: a few blocks in, the head comes round to
+     * face the way the feet are going and the keys become W alone. Which of the two a walk is at is the
+     * caller's to say ({@link StraightRun}); when it is settled the camera is told the direction itself and
+     * the keys are the forward key, which is the same walk at a different angle of the head.
+     *
+     * @param settled whether the walk has gone this way for long enough to face it outright
+     */
+    public static float lookYaw(float facingYaw, float idealYaw, boolean settled) {
+        return settled ? Rotation.normalizeYaw(idealYaw) : lookYaw(facingYaw, idealYaw);
     }
 
     /**

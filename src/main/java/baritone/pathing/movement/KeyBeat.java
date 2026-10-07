@@ -69,6 +69,21 @@ public final class KeyBeat {
         }
 
         /**
+         * The way these keys walk, as an angle off the yaw the player is holding: 0 for forward, 180 for
+         * back, -90 for left and 90 for right, and the diagonals between - the same arithmetic the game
+         * does when it turns the pressed combination into motion. Zero for no keys, and for keys that
+         * cancel out.
+         */
+        public float yawOffset() {
+            final int forward = this.forwardAxis();
+            final int left = this.leftAxis();
+            if (forward == 0 && left == 0) {
+                return 0f;
+            }
+            return (float) Math.toDegrees(Math.atan2(-left, forward));
+        }
+
+        /**
          * Whether going from this to {@code next} reverses a direction a finger is on: one axis is held
          * one way here and the other way there. Appearing out of nothing is not a reversal (the hand was
          * already moving to the key), and a key let go of is not one either (letting go is instant, always).

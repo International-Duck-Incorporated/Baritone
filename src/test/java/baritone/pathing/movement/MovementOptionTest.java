@@ -154,8 +154,69 @@ public class MovementOptionTest {
         }
         assertTrue("the bot walked " + worstError + " degrees off the direction the movement asked for",
                 worstError < 1f);
-        assertTrue("the camera was told to turn " + worstTurn + " degrees, more than half a step",
-                worstTurn <= 22.5f + 1e-3f);
+        // the camera is brought round to within a diagonal of the way, and no further: facing straight
+        // away from it, that is a turn of three steps, to the diagonal on the near side
+        assertTrue("the camera was told to turn " + worstTurn + " degrees, more than the three steps to a diagonal",
+                worstTurn <= 135f + 1e-3f);
+    }
+
+    @Test
+    public void theBodyGoesWhereTheEyesGoWithinADiagonal() {
+        // The keys that take a person sideways and backwards exist, and nobody walks a route on them: the
+        // camera is brought to within one step of the direction asked for, so the keys pressed are always
+        // W, or W with one of A and D. A bot that was told to go while facing away used to walk the whole
+        // way there on S, head on the horizon behind it.
+        for (float facing = -180f; facing < 180f; facing += 0.25f) {
+            for (float ideal = -180f; ideal < 180f; ideal += 0.25f) {
+                final float held = MovementOption.lookYaw(facing, ideal);
+                assertTrue("the camera was left " + Math.abs(Rotation.normalizeYaw(held - ideal))
+                                + " degrees off the way at facing " + facing + " toward " + ideal,
+                        Math.abs(Rotation.normalizeYaw(held - ideal)) <= 45f + 1e-3f);
+                final Optional<MovementOption> pressed = MovementOption.closest(
+                        (float) Math.sin(held * DEG), (float) Math.cos(held * DEG),
+                        (float) Math.sin(ideal * DEG), (float) Math.cos(ideal * DEG));
+                assertTrue(pressed.isPresent());
+                assertEquals("a key other than forward was walked on, facing " + facing + " toward " + ideal,
+                        Input.MOVE_FORWARD, pressed.get().input1());
+            }
+        }
+    }
+
+    @Test
+    public void withinHalfAStepTheCameraFacesTheWayOutright() {
+        // ... and the keys are W alone, because a person who is nearly facing where they are going turns the
+        // rest of the way rather than leaning on a second key
+        for (float ideal = -180f; ideal < 180f; ideal += 7.5f) {
+            for (float off = -22f; off <= 22f; off += 2f) {
+                final float held = MovementOption.lookYaw(Rotation.normalizeYaw(ideal + off), ideal);
+                assertEquals("the camera did not face the way from " + off + " degrees off it",
+                        0f, Rotation.normalizeYaw(held - ideal), 1e-3f);
+            }
+        }
+    }
+
+    @Test
+    public void aSettledWalkFacesTheWayWhateverTheFacing() {
+        for (float facing = -180f; facing < 180f; facing += 5f) {
+            for (float ideal = -180f; ideal < 180f; ideal += 5f) {
+                assertEquals("a settled walk was not faced", 0f,
+                        Rotation.normalizeYaw(MovementOption.lookYaw(facing, ideal, true) - ideal), 1e-3f);
+                assertEquals("an unsettled walk changed", MovementOption.lookYaw(facing, ideal),
+                        MovementOption.lookYaw(facing, ideal, false), 1e-6f);
+            }
+        }
+    }
+
+    @Test
+    public void aStaircaseIsWalkedFacingTheDiagonal() {
+        // The zig-zag a path makes toward a goal off the axes: north, east, north, east. A person walks it
+        // looking north-east with the keys alternating under a steady head, and so does this - the camera
+        // on the diagonal asks for the diagonal again from either leg of the staircase.
+        final float north = 180f;  // minecraft yaw: south is 0, west is 90, north is 180, east is -90
+        final float east = -90f;
+        final float diagonal = -135f;  // north-east
+        assertEquals(diagonal, MovementOption.lookYaw(diagonal, north), 1e-3f);
+        assertEquals(diagonal, MovementOption.lookYaw(diagonal, east), 1e-3f);
     }
 
     @Test
@@ -173,7 +234,7 @@ public class MovementOptionTest {
         // camera turning a step is paid for entirely by a different combination of the same keys, so the
         // bot does not so much as lean while its head moves.
         for (float ideal = -180f; ideal < 180f; ideal += 11.25f) {
-            for (int step = -4; step <= 4; step++) {
+            for (int step = -1; step <= 1; step++) {
                 for (float side = -0.25f; side <= 0.25f; side += 0.5f) {
                     final float fence = ideal + 22.5f + 45f * step;
                     final float facing = Rotation.normalizeYaw(fence + side);

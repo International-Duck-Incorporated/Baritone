@@ -30,6 +30,7 @@ import baritone.behavior.look.GazeAhead;
 import baritone.pathing.calc.AbstractNodeCostSearch;
 import baritone.pathing.movement.CalculationContext;
 import baritone.pathing.movement.HeadFirst;
+import baritone.pathing.movement.KeyBeat;
 import baritone.pathing.movement.Movement;
 import baritone.pathing.movement.MovementHelper;
 import baritone.pathing.movement.movements.*;
@@ -710,13 +711,15 @@ public class PathExecutor implements IPathExecutor, Helper {
      */
     private void letTheHeadLead() {
         final IInputOverrideHandler keys = behavior.baritone.getInputOverrideHandler();
-        final boolean asked = keys.isInputForcedDown(Input.MOVE_FORWARD) || keys.isInputForcedDown(Input.MOVE_BACK)
-                || keys.isInputForcedDown(Input.MOVE_LEFT) || keys.isInputForcedDown(Input.MOVE_RIGHT);
+        final KeyBeat.Keys walking = new KeyBeat.Keys(
+                keys.isInputForcedDown(Input.MOVE_FORWARD), keys.isInputForcedDown(Input.MOVE_BACK),
+                keys.isInputForcedDown(Input.MOVE_LEFT), keys.isInputForcedDown(Input.MOVE_RIGHT));
         final boolean grounded = ctx.player().onGround() && !ctx.player().isInWater() && !ctx.player().isInLava();
         final Vec3 velocity = ctx.player().getDeltaMovement();
         final boolean standing = velocity.x * velocity.x + velocity.z * velocity.z < STANDING_SPEED_SQ;
-        // nobody asking the feet for anything is a head that is not behind them
-        final float headBehind = asked ? behavior.baritone.getLookBehavior().headBehind() : 0f;
+        // nobody asking the feet for anything is a head that is not behind them; otherwise the gap is to
+        // where the keys actually take the body, which is off the steering yaw by the keys' own angle
+        final float headBehind = walking.isEmpty() ? 0f : behavior.baritone.getLookBehavior().headBehind(walking.yawOffset());
         if (!headFirst.hold(headBehind, standing, grounded)) {
             return;
         }

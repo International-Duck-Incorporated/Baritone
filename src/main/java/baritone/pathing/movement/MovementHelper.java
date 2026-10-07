@@ -692,7 +692,14 @@ public interface MovementHelper extends ActionCosts, Helper {
         ).ifPresent(selection -> selection.setInputs(state));
     }
 
-    static void moveTowardsWithSlightRotation(IPlayerContext ctx, MovementState state, BlockPos dest) {
+    /**
+     * Walks toward {@code dest} with the camera on the step grid and the keys covering the rest, the way a
+     * person walks a route with four keys and a mouse. See {@link MovementOption#lookYaw}.
+     *
+     * @param settled whether the walk has been going this way long enough for the head to have come round
+     *                and face it, which is {@link StraightRun}'s to say
+     */
+    static void moveTowardsWithSlightRotation(IPlayerContext ctx, MovementState state, BlockPos dest, boolean settled) {
         float idealYaw = RotationUtils.calcRotationFromVec3d(
                 ctx.playerHead(),
                 VecUtils.getBlockPosCenter(dest),
@@ -705,7 +712,7 @@ public interface MovementHelper extends ActionCosts, Helper {
         // the player happens to be facing. Picking them separately let the two roundings disagree by a whole
         // step and walked the bot 45 degrees off its own path.
         final Rotation look = new Rotation(
-                MovementOption.lookYaw(ctx.playerRotations().getYaw(), idealYaw),
+                MovementOption.lookYaw(ctx.playerRotations().getYaw(), idealYaw, settled),
                 ctx.playerRotations().getPitch()
         );
         // Not a block interaction, however much the camera stepping looks like one: this target is where the
