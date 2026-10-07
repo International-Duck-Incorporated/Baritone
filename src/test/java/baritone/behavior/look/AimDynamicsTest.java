@@ -92,6 +92,43 @@ public class AimDynamicsTest {
     }
 
     @Test
+    public void aTurnThatEndsInAClickHurriesWithoutSnapping() {
+        // Everything that breaks or places a block holds the click back until the crosshair is on it, so a
+        // slow hand there is paid for in ticks standing in front of a block already decided on. A hand on
+        // its way to something it is about to click goes, rather than drifting there - but the ceiling still
+        // holds, because a hurry is not a teleport, and a hand that crosses ninety degrees in one tick is
+        // the thing this whole file exists to prevent.
+        final Rotation to = new Rotation(90f, 40f);
+        Rotation aim = new Rotation(0f, 0f);
+        int hurried = 0;
+        while (hurried < 60 && (Rotation.normalizeYaw(to.getYaw() - aim.getYaw()) != 0f || aim.getPitch() != to.getPitch())) {
+            final Rotation next = AimDynamics.humanStep(aim, to, hurried, SENSITIVITY, AimDynamics.CLICK_EASE);
+            assertTrue("a clicking hand moved " + Math.abs(Rotation.normalizeYaw(next.getYaw() - aim.getYaw()))
+                            + " degrees of yaw in one tick",
+                    Math.abs(Rotation.normalizeYaw(next.getYaw() - aim.getYaw())) <= AimDynamics.MAX_YAW_STEP + 1e-3f);
+            assertTrue("a clicking hand moved " + Math.abs(next.getPitch() - aim.getPitch())
+                            + " degrees of pitch in one tick",
+                    Math.abs(next.getPitch() - aim.getPitch()) <= AimDynamics.MAX_PITCH_STEP + 1e-3f);
+            aim = next;
+            hurried++;
+        }
+        assertEquals("the clicking hand never arrived on yaw", to.getYaw(), aim.getYaw(), 1e-4f);
+        assertEquals("the clicking hand never arrived on pitch", to.getPitch(), aim.getPitch(), 1e-4f);
+        assertTrue("a right angle took " + hurried + " ticks with a click waiting at the end of it",
+                hurried <= 8);
+        assertTrue("a turn of " + hurried + " ticks is a snap, not a hurry", hurried >= 3);
+
+        aim = new Rotation(0f, 0f);
+        int leisurely = 0;
+        while (leisurely < 60 && (Rotation.normalizeYaw(to.getYaw() - aim.getYaw()) != 0f || aim.getPitch() != to.getPitch())) {
+            aim = AimDynamics.humanStep(aim, to, leisurely, SENSITIVITY);
+            leisurely++;
+        }
+        assertTrue("the hurry has to actually be quicker than the ordinary aim: " + hurried + " vs " + leisurely,
+                hurried < leisurely);
+    }
+
+    @Test
     public void turnsTakeAHumanAmountOfTime() {
         // 20 ticks is one second. A correction should land inside a fraction of one, and a reversal
         // should not take longer than a person needs to physically turn around.

@@ -72,6 +72,19 @@ public final class AimDynamics {
     public static final float AIM_EASE = 0.5f;
 
     /**
+     * The same fraction for a turn that ends in a click, which is the whole way.
+     * <p>
+     * Aiming at something to click on is not the same job as walking. Everything that breaks or places a
+     * block waits for the crosshair to be on it first, because the trace the game actually acts along is
+     * taken from wherever the player is really looking - so a slow hand there is not a safer hand, it is a
+     * bot standing in front of a block it has already decided about, waiting for its own crosshair. Somebody
+     * about to click does not drift toward the block either: they put the crosshair on it, quickly and
+     * deliberately. The ceiling is untouched, so this is a hurry and not a snap - a right angle still takes
+     * five ticks of a hand at its fastest.
+     */
+    public static final float CLICK_EASE = 1.0f;
+
+    /**
      * Fraction of full speed available on the first, second, third... tick of a turn.
      * <p>
      * A hand does not go from still to its top speed in a single tick; the muscles spin up. Without this a
@@ -121,9 +134,18 @@ public final class AimDynamics {
      * without ever reaching it, so the last sub-pixel remainder is taken in full.
      */
     public static Rotation step(Rotation from, Rotation to, float maxYaw, float maxPitch, double sensitivity) {
+        return step(from, to, maxYaw, maxPitch, sensitivity, AIM_EASE);
+    }
+
+    /**
+     * The same, with the fraction of the remaining angle as a parameter.
+     *
+     * @param ease how much of what is left to cover this tick, before the ceiling is applied
+     */
+    public static Rotation step(Rotation from, Rotation to, float maxYaw, float maxPitch, double sensitivity, float ease) {
         return new Rotation(
-                steppedAngle(from.getYaw(), to.getYaw(), maxYaw, sensitivity),
-                steppedAngle(from.getPitch(), to.getPitch(), maxPitch, sensitivity)
+                steppedAngle(from.getYaw(), to.getYaw(), maxYaw, sensitivity, ease),
+                steppedAngle(from.getPitch(), to.getPitch(), maxPitch, sensitivity, ease)
         ).clamp();
     }
 
@@ -131,8 +153,15 @@ public final class AimDynamics {
      * One tick of movement for a turn that is {@code aimAge} ticks old, so it spins up first.
      */
     public static Rotation humanStep(Rotation from, Rotation to, int aimAge, double sensitivity) {
+        return humanStep(from, to, aimAge, sensitivity, AIM_EASE);
+    }
+
+    /**
+     * The same, at a given rate. See {@link #AIM_EASE} and {@link #CLICK_EASE} for the two that are used.
+     */
+    public static Rotation humanStep(Rotation from, Rotation to, int aimAge, double sensitivity, float ease) {
         final float ramp = ramp(aimAge);
-        return step(from, to, MAX_YAW_STEP * ramp, MAX_PITCH_STEP * ramp, sensitivity);
+        return step(from, to, MAX_YAW_STEP * ramp, MAX_PITCH_STEP * ramp, sensitivity, ease);
     }
 
     /**
@@ -146,6 +175,13 @@ public final class AimDynamics {
      * still exactly on the pixel grid.
      */
     public static float steppedAngle(float current, float target, float maxStep, double sensitivity) {
+        return steppedAngle(current, target, maxStep, sensitivity, AIM_EASE);
+    }
+
+    /**
+     * The same, with the fraction of what is left to cover as a parameter.
+     */
+    public static float steppedAngle(float current, float target, float maxStep, double sensitivity, float ease) {
         // the delta has to be wrapped, or a turn across the 180 degree boundary goes the long way round
         final float delta = Rotation.normalizeYaw(target - current);
         final float minStep = Math.abs(mouseToAngle(sensitivity, 1));
@@ -153,7 +189,7 @@ public final class AimDynamics {
             // less than one pixel of mouse movement left: land it, don't creep toward it forever
             return Rotation.normalizeYaw(target);
         }
-        final float step = Math.max(-maxStep, Math.min(maxStep, delta * AIM_EASE));
+        final float step = Math.max(-maxStep, Math.min(maxStep, delta * ease));
         final float snapped = Math.round(step / minStep) * minStep;
         return Rotation.normalizeYaw(current + Math.max(-maxStep, Math.min(maxStep, snapped)));
     }

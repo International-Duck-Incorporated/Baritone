@@ -541,9 +541,16 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
      * step eases out, so the aim decelerates into the target instead of arriving at full speed and
      * stopping dead, and it is quantized to whole mouse pixels, which is what lets the aim settle
      * exactly on target instead of hunting around it forever.
+     * <p>
+     * The third is a rate: a turn that is being made in order to click something runs at
+     * {@link AimDynamics#CLICK_EASE}. Mining and placing both wait for the trace to be on the block before
+     * they click - the game acts along the trace from wherever the crosshair really is - so the slower rate
+     * is not safety there, it is ticks spent standing in front of a block the bot has already chosen.
+     * Everything else - walking, looking about, the idle sway - keeps {@link AimDynamics#AIM_EASE}.
      */
     private Rotation humanStep(Rotation from, Rotation to) {
-        return AimDynamics.humanStep(from, to, this.aimAge, sensitivity(ctx));
+        final float ease = this.interacting() ? AimDynamics.CLICK_EASE : AimDynamics.AIM_EASE;
+        return AimDynamics.humanStep(from, to, this.aimAge, sensitivity(ctx), ease);
     }
 
     /**
