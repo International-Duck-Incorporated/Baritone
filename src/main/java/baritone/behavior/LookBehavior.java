@@ -727,6 +727,19 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
             this.pitchWander = new PitchWander();
         }
 
+        /**
+         * Whether this body is free to let its gaze settle where it likes.
+         * <p>
+         * Two states where it is not, and both of them are places the movement follows the look: water,
+         * where sprint-swimming drives the player's depth off the look vector's pitch, and a glide, where
+         * the flight solver solves for the attitude it asked for. Everywhere else the pitch is decoration -
+         * on the ground the keys are turned by the yaw alone - which is what makes it the one angle a
+         * walking bot is allowed to be careless with. See {@link #peekRotation}.
+         */
+        private boolean pitchIsAFreeAngle() {
+            return !ctx.player().isInWater() && !ctx.player().isFallFlying();
+        }
+
         @Override
         public final Rotation peekRotation(final Rotation rotation) {
             final Rotation prev = this.getPrevRotation();
@@ -739,7 +752,22 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
             // target is built. So the pitch is free, and it does what a person's does while they walk - it
             // settles a few degrees this way and that over the seconds rather than holding one angle for the
             // whole journey. See PitchWander.
-            if (desiredPitch == prev.getPitch()) {
+            //
+            // Free is a claim about the body, though, and it is not true in water or in the air. A target
+            // that echoes the player's pitch hands that pitch to the wander, and in those two states the
+            // movement reads it back instead of ignoring it: the game's own swim code pulls the player's
+            // vertical velocity toward the look vector's pitch, so a gaze that has settled ten degrees down
+            // is a swimmer who slowly sinks - and the gaze keeps settling while they do, so the depth keeps
+            // changing under a path that was drawn at one height. A glide is the sharper version of the same
+            // mistake: the elytra solver picks its attitude from the angles it asked for last tick, which is
+            // why flying snaps rather than eases a page further down, and a wander there is a wander in the
+            // controls of a machine that is keeping itself in the air.
+            //
+            // So the pitch is wandered only where the body walks by its yaw. The other two head behaviours
+            // already sit both of these states out - see the note on {@link LookBehavior#isWalking} - and
+            // this one has the most reason to, because what it moves is not the angle the keys are paired
+            // with but the angle the body travels by.
+            if (desiredPitch == prev.getPitch() && this.pitchIsAFreeAngle()) {
                 desiredPitch = this.pitchWander.step(desiredPitch);
             }
 

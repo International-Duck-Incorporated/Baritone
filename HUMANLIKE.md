@@ -15,7 +15,7 @@ opt-in: a bot that has to be told to look alive is a bot that looks dead by defa
 | The aim eases instead of snapping | `behavior/look/AimDynamics.java` | Whole mouse pixels, converted with the player's own sensitivity, capped at 18°/tick of yaw and 9° of pitch. Turns spin up over their first two ticks and ease out as they arrive. |
 | The hand takes a beat to notice | `behavior/look/ReactionDelay.java` | Two to four ticks before the aim starts moving to a target it was not already pointing at. Only while standing still: the walking code reads the facing, so a lagging aim mid-walk steers. |
 | The hand calls itself arrived | `behavior/look/AimDynamics.java`, `ILookBehavior#hasArrivedAt` | "Is the aim here yet" is asked of the aim, not of a hundredth-of-a-degree comparison against the target: a settled hand sits a fraction of a degree off, because it is easing and the tremor is still shaking it. |
-| A target with no opinion about the pitch | `behavior/look/PitchWander.java` | The gaze settles a few degrees this way and that every few seconds - triangular around level, a degree a tick, ten degrees out at the extremes - instead of holding one angle for a whole journey. |
+| A target with no opinion about the pitch | `behavior/look/PitchWander.java` | The gaze settles a few degrees this way and that every few seconds - triangular around level, a degree a tick, ten degrees out at the extremes - instead of holding one angle for a whole journey. Only where the pitch is decoration: a swim travels by the pitch it is looking along and a glide solves for it, so in water and in the air the pitch stays where the movement put it. |
 | Something moved the mouse | `behavior/look/IdleGlance.java` | A glance is dropped the moment the view is taken over, and the angles are handed back exactly. |
 
 ## Standing around
@@ -65,6 +65,10 @@ a quarter faster); inventory moves are spaced by a redrawn interval rather than 
   the person at the keyboard sees their own view.
 - **The builder's transient rotations** (`BuilderProcess#hasAnyItemThatWouldPlace`) are written and
   restored inside one tick. Nothing outside that tick sees them.
+- **Water and gliding** are the two states where the movement reads the look back: sprint-swimming
+  drives the player's depth off the look vector's pitch, and the elytra solver solves for the
+  attitude it asked for. The sway, the idle glance and the pitch wander all sit those two out, so
+  nothing done to the camera can steer a swim or a glide.
 
 ## If you add something
 
