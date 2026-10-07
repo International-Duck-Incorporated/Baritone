@@ -246,7 +246,15 @@ public final class InventoryBehavior extends Behavior implements Helper {
             for (int i = 9; i < 36; i++) {
                 if (desired.test(inv.get(i))) {
                     if (select) {
-                        requestSwapWithHotBar(i, 7);
+                        // The move can be turned down - it waits for the gap between two inventory moves to
+                        // come round, and for a stationary moment when it has been told to - and when it is
+                        // turned down the item is not in the hand and the slot about to be selected does not
+                        // hold it. Saying yes here anyway is how the farming process came to right-click at
+                        // farmland with an empty hand, having first switched into a slot holding something
+                        // it had not asked for. Whoever asked has to wait for the item to actually be there.
+                        if (!requestSwapWithHotBar(i, 7)) {
+                            return false;
+                        }
                         p.getInventory().setSelectedSlot(7);
                     }
                     return true;
