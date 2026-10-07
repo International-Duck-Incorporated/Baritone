@@ -278,8 +278,13 @@ public final class PathRenderer implements IRenderer {
             y2 = 0;
             minY -= renderPosY;
             maxY -= renderPosY;
-            drawDankLitGoalBox(bufferBuilder, stack, color, minX, maxX, minZ, maxZ, minY, maxY, y1, y2, setupRender);
-            drawGoalXZBeacon(stack, ctx, (GoalXZ) goal, minY, maxY, partialTicks, color);
+            if (settings.renderGoalXZBeacon.value) {
+                // the beam runs the whole height of the world, so it stands in for the full-height goal box
+                // (see #renderGoalXZBeacon; #renderGoalAnimated controls whether it scrolls)
+                drawGoalXZBeacon(stack, ctx, goalPos, minY, maxY, partialTicks, color);
+            } else {
+                drawDankLitGoalBox(bufferBuilder, stack, color, minX, maxX, minZ, maxZ, minY, maxY, y1, y2, setupRender);
+            }
         } else if (goal instanceof GoalComposite) {
             // Simple way to determine if goals can be batched, without having some sort of GoalRenderer
             boolean batch = Arrays.stream(((GoalComposite) goal).goals()).allMatch(IGoalRenderPos.class::isInstance);
