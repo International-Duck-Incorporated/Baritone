@@ -83,6 +83,12 @@ public class PathExecutor implements IPathExecutor, Helper {
     private int sprintHangover;
     private final Random cadenceRand = new Random();
 
+    /**
+     * Ticks left of the beat after a fall landed before the keys move again. See
+     * {@link Cadence#landingRest}.
+     */
+    private int landingRest;
+
     public PathExecutor(PathingBehavior behavior, IPath path) {
         this.behavior = behavior;
         this.ctx = behavior.ctx;
@@ -102,6 +108,15 @@ public class PathExecutor implements IPathExecutor, Helper {
         }
         if (pathPosition >= path.length()) {
             return true; // stop bugging me, I'm done
+        }
+        if (this.landingRest > 0) {
+            if (ctx.player().onGround() && ctx.world().getFluidState(ctx.playerFeet()).isEmpty()) {
+                // a fall just landed, and finding your footing takes a beat; see Cadence#landingRest
+                this.landingRest--;
+                clearKeys();
+                return true; // standing on solid ground is as safe to cancel as it gets
+            }
+            this.landingRest = 0; // into water, or back in the air: the rest was for the landing
         }
         Movement movement = (Movement) path.movements().get(pathPosition);
         BetterBlockPos whereAmI = ctx.playerFeet();
@@ -230,6 +245,10 @@ public class PathExecutor implements IPathExecutor, Helper {
             return true;
         }
         if (movementStatus == SUCCESS) {
+            if (movement.getDirection().getY() < 0) {
+                // the beat a person takes after a fall lands, before the feet move again
+                this.landingRest = Cadence.landingRest(this.cadenceRand, -movement.getDirection().getY());
+            }
             pathPosition++;
             onChangeInPathPosition();
             onTick();
@@ -652,6 +671,7 @@ public class PathExecutor implements IPathExecutor, Helper {
             ret.costEstimateIndex = costEstimateIndex;
             ret.ticksOnCurrent = ticksOnCurrent;
             ret.sprintHangover = sprintHangover; // continuing the same run, so not a boundary the player can feel
+            ret.landingRest = landingRest; // and the landing beat goes on across the splice too
             return ret;
         }).orElseGet(this::cutIfTooLong); // dont actually call cutIfTooLong every tick if we won't actually use it, use a method reference
     }
@@ -674,6 +694,7 @@ public class PathExecutor implements IPathExecutor, Helper {
             }
             ret.ticksOnCurrent = ticksOnCurrent;
             ret.sprintHangover = sprintHangover; // continuing the same run, so not a boundary the player can feel
+            ret.landingRest = landingRest; // and the landing beat goes on across the trim too
             return ret;
         }
         return this;

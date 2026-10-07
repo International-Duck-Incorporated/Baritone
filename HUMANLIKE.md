@@ -45,6 +45,7 @@ Nothing repeats on an interval that is always the same length. `utils/Cadence.ja
 | `Cadence.Run` | the builder's hold-off after breaking | A rest timed from the thing that just happened; four to six ticks. |
 | `Cadence.Repeat` | the three goal rescans (mining, getting to a block, farming) | The setting, drawn afresh each time, first scan immediate. |
 | `Cadence.keyBeat` | the walking keys | One to two ticks of no keys between one direction and its opposite. |
+| `Cadence.landingRest` | a fall that lands | A jittered beat of standing after the feet touch down, longer for a longer drop. A fall is the one moment stopping is free, and a path that runs straight on the landing tick is the one thing a person never does. Skipped for drops under three blocks - steps and hops - and for a landing in water, where standing is swimming. |
 
 Other things that were on a grid and are not any more: the sprint key trails off over one to three
 ticks instead of stopping on the tick the movement stops asking (`Cadence.sprintHangover`,

@@ -351,4 +351,39 @@ public class CadenceTest {
             assertEquals(0, Cadence.jitter(rand, 0));
         }
     }
+
+    @Test
+    public void aStepOffACurbIsNotAFall() {
+        // descends and hops are one and two blocks, and people walk straight out of those
+        final Random rand = new Random(42);
+        assertEquals("a one block drop got a rest", 0, Cadence.landingRest(rand, 1));
+        assertEquals("a two block drop got a rest", 0, Cadence.landingRest(rand, 2));
+    }
+
+    @Test
+    public void aLandingBeatIsARealBeat() {
+        // the moment the feet touch the ground after a fall is the one moment stopping is free, and it
+        // must actually stop: a zero would be the tick-the-feet-land walk-on that this exists to kill
+        final Random rand = new Random(2024);
+        final Set<Integer> seen = new HashSet<>();
+        for (int i = 0; i < 1000; i++) {
+            final int rest = Cadence.landingRest(rand, 4);
+            assertTrue("a landing rest of " + rest + " ticks is not a beat", rest >= 1);
+            assertTrue("a landing rest of " + rest + " ticks is a nap", rest <= 5);
+            seen.add(rest);
+        }
+        assertTrue("every landing rest is the same length: " + seen, seen.size() > 1);
+    }
+
+    @Test
+    public void aLongerFallRestsLonger() {
+        // drawn from the same sequence, so the jitter is the same and the difference is the fall
+        for (int seed = 0; seed < 100; seed++) {
+            final Random same1 = new Random(seed);
+            final Random same2 = new Random(seed);
+            final int hop = Cadence.landingRest(same1, 3);
+            final int drop = Cadence.landingRest(same2, 40);
+            assertTrue("a 40 block drop rested " + drop + " against " + hop + " for a 3 block one", drop > hop);
+        }
+    }
 }

@@ -157,6 +157,31 @@ public final class Cadence {
     }
 
     /**
+     * Ticks a bot stands still after a fall lands: two to four, with a tick of slack either side, and
+     * more for a drop that actually hurt.
+     * <p>
+     * A path that goes over a cliff runs straight on the tick the feet touch the ground, which is the one
+     * thing a person never does: the landing takes a beat - find your footing, look up, go. It is also the
+     * one moment in a fall where stopping is free: the movement already ended, the player is standing on
+     * something, and the next movement has not asked for a key yet. Falls shorter than
+     * {@link #LANDING_FALL_MIN} are steps and hops, and people walk straight out of those.
+     */
+    public static final int LANDING_FALL_MIN = 3;
+
+    /**
+     * @param fallHeight how far the player just fell, in blocks
+     * @return the rest, in ticks, to stand after landing it; zero for a fall that does not count
+     */
+    public static int landingRest(Random rand, int fallHeight) {
+        if (fallHeight < LANDING_FALL_MIN) {
+            return 0;
+        }
+        // three or four blocks is nothing; a drop gets a longer beat the further it was
+        final int base = 2 + Math.min(2, (fallHeight - LANDING_FALL_MIN) / 5);
+        return jitter(rand, base);
+    }
+
+    /**
      * How far a repeated action's interval is allowed to wander, in ticks, either side of the setting.
      */
     public static final int JITTER = 1;
