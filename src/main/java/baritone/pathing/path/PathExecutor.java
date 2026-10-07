@@ -38,6 +38,9 @@ import baritone.utils.BlockStateInterface;
 import baritone.utils.Cadence;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Vec3i;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.DoorBlock;
+import net.minecraft.world.level.block.FenceGateBlock;
 import net.minecraft.world.phys.Vec3;
 import java.util.*;
 
@@ -253,6 +256,7 @@ public class PathExecutor implements IPathExecutor, Helper {
             return true;
         }
         leanGazeAhead(movement);
+        welcomeGlance(movement);
         MovementStatus movementStatus = movement.update();
         if (movementStatus == UNREACHABLE || movementStatus == FAILED) {
             logDebug("Movement returns status " + movementStatus);
@@ -326,6 +330,46 @@ public class PathExecutor implements IPathExecutor, Helper {
         final IMovement next = path.movements().get(pathPosition + 1);
         final Rotation toNext = RotationUtils.calcRotationFromVec3d(ctx.playerHead(), VecUtils.getBlockPosCenter(next.getDest()), ctx.playerRotations());
         gaze.offer(toNext, GazeAhead.LEAN * (1 - dist / GAZE_LEAD_DISTANCE));
+    }
+
+    /**
+     * Tells the walking glance whether this is a tick it is welcome on. See
+     * {@link baritone.behavior.look.WalkGlance}: a plain walk along the flat, with two more of them to
+     * come, so that the head has a couple of blocks to come back in before anything needs it - a glance
+     * takes under half a second to come back from, and a block at a run is a fifth of one. Water and the
+     * air are not walks, and a walk is plain when nothing on it is broken, placed or opened.
+     */
+    private void welcomeGlance(Movement movement) {
+        if (!ctx.player().onGround() || ctx.player().isInWater() || pathPosition + 2 >= path.length()) {
+            return;
+        }
+        if (plainWalk(movement) && plainWalk(path.movements().get(pathPosition + 1)) && plainWalk(path.movements().get(pathPosition + 2))) {
+            behavior.baritone.getLookBehavior().walkGlance().welcome();
+        }
+    }
+
+    private boolean plainWalk(IMovement movement) {
+        if (!(movement instanceof MovementTraverse) && !(movement instanceof MovementDiagonal)) {
+            return false;
+        }
+        if (movement.getDirection().getY() != 0) {
+            return false;
+        }
+        final Movement m = (Movement) movement;
+        // the caches are filled a few lines up in onTick for every movement within ten of this one
+        if (m.toBreakCached == null || m.toPlaceCached == null || !m.toBreakCached.isEmpty() || !m.toPlaceCached.isEmpty()) {
+            return false;
+        }
+        // a door or a gate is opened rather than broken, so it is in neither list, and it is the one thing
+        // a traverse with nothing to break still clicks
+        final BetterBlockPos dest = movement.getDest();
+        for (BlockPos pos : new BlockPos[]{dest, dest.above(), movement.getSrc(), movement.getSrc().above()}) {
+            final Block block = ctx.world().getBlockState(pos).getBlock();
+            if (block instanceof DoorBlock || block instanceof FenceGateBlock) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private Pair<Double, BlockPos> closestPathPos(IPath path) {

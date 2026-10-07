@@ -699,7 +699,8 @@ public interface MovementHelper extends ActionCosts, Helper {
      * @param settled whether the walk has been going this way long enough for the head to have come round
      *                and face it, which is {@link StraightRun}'s to say
      */
-    static void moveTowardsWithSlightRotation(IPlayerContext ctx, MovementState state, BlockPos dest, boolean settled) {
+    static void moveTowardsWithSlightRotation(IBaritone baritone, MovementState state, BlockPos dest, boolean settled) {
+        final IPlayerContext ctx = baritone.getPlayerContext();
         float idealYaw = RotationUtils.calcRotationFromVec3d(
                 ctx.playerHead(),
                 VecUtils.getBlockPosCenter(dest),
@@ -711,8 +712,13 @@ public interface MovementHelper extends ActionCosts, Helper {
         // combination is picked against the angle the camera is being told to hold, not against the angle
         // the player happens to be facing. Picking them separately let the two roundings disagree by a whole
         // step and walked the bot 45 degrees off its own path.
+        //
+        // The facing it is measured against is the aim's, not the player's rotation: the player's carries
+        // the sway and the walking glance on top of the aim, and a glance of forty degrees to the side
+        // read as the facing would move the camera onto the next step of the grid and swap the keys under
+        // it for the rest of the walk. The glance is a look, not a change of heading.
         final Rotation look = new Rotation(
-                MovementOption.lookYaw(ctx.playerRotations().getYaw(), idealYaw, settled),
+                MovementOption.lookYaw(baritone.getLookBehavior().headRotation().getYaw(), idealYaw, settled),
                 ctx.playerRotations().getPitch()
         );
         // Not a block interaction, however much the camera stepping looks like one: this target is where the

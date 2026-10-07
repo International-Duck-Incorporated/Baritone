@@ -353,7 +353,7 @@ public class MovementTraverse extends Movement {
             }
             // facing the diagonal for the first blocks of a heading and the way itself once the walk has
             // gone that way a while: see StraightRun
-            MovementHelper.moveTowardsWithSlightRotation(ctx, state, dest,
+            MovementHelper.moveTowardsWithSlightRotation(baritone, state, dest,
                     StraightRun.settled(baritone.getPathingBehavior().getCurrent(), this));
             return state;
         }

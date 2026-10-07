@@ -36,6 +36,7 @@ import baritone.behavior.look.IdleFidget;
 import baritone.behavior.look.IdleGlance;
 import baritone.behavior.look.PitchWander;
 import baritone.behavior.look.ReactionDelay;
+import baritone.behavior.look.WalkGlance;
 import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
 import net.minecraft.network.protocol.game.ServerboundPunchPacket;
 import net.minecraft.world.InteractionHand;
@@ -162,6 +163,13 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
      */
     private final GazeAhead gazeAhead = new GazeAhead();
 
+    /**
+     * The look to the side a person takes now and then on a long walk. The path executor says on which
+     * ticks the walk is plain enough for one; see {@link #updateHeadWander}, which is where it rides on
+     * top of the aim, and {@link WalkGlance} for why it is an offset and not an angle.
+     */
+    private final WalkGlance walkGlance = new WalkGlance();
+
     public LookBehavior(Baritone baritone) {
         super(baritone);
         this.processor = new AimProcessor(baritone.getPlayerContext());
@@ -176,6 +184,14 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
      */
     public GazeAhead gazeAhead() {
         return this.gazeAhead;
+    }
+
+    /**
+     * The walking glance, for the path to welcome on the ticks it is welcome. {@code PathExecutor} is the
+     * only thing that says so, and it is only ever read here; the camera is still written in one place.
+     */
+    public WalkGlance walkGlance() {
+        return this.walkGlance;
     }
 
     @Override
@@ -220,8 +236,16 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
         if (this.target == null || this.target.mode == Target.Mode.NONE || ctx.player().isFallFlying()) {
             return 0f;
         }
-        final Rotation head = this.aimRotation != null ? this.aimRotation : ctx.playerRotations();
-        return Math.abs(Rotation.normalizeYaw(head.getYaw() - (this.target.rotation.getYaw() + keysOffset)));
+        return Math.abs(Rotation.normalizeYaw(this.headRotation().getYaw() - (this.target.rotation.getYaw() + keysOffset)));
+    }
+
+    @Override
+    public Rotation headRotation() {
+        // The aim is where the hand has got to; the sway and the walking glance are added on top of it
+        // every tick and taken off again, and are in the player's rotation for anything that reads that.
+        // On the first tick of a target there is no aim yet, and the head is wherever the player is
+        // looking - under free look, the angle the server was last told.
+        return this.aimRotation != null ? this.aimRotation : ctx.playerRotations();
     }
 
     @Override
@@ -239,8 +263,9 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
             this.processor.tick();
             // The fidget's clock runs every tick, walking or not; only taking the fidget is gated.
             this.idleFidget.advance();
-            // a lean not taken this tick is gone
+            // a lean not taken this tick is gone, and so is a welcome not repeated
             this.gazeAhead.tick();
+            this.walkGlance.tick();
         }
     }
 
@@ -287,7 +312,11 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
         switch (event.getState()) {
             case PRE: {
                 if (this.target.mode == Target.Mode.NONE) {
-                    // Just return for PRE, we still want to set target to null on POST
+                    // Just return for PRE, we still want to set target to null on POST. The hand is not
+                    // driving, so there is no aim: anything that asks where the head is gets the player's
+                    // own rotation, and the next target that is driven starts from the camera and not
+                    // from wherever the hand last was.
+                    this.aimRotation = null;
                     return;
                 }
 
@@ -531,7 +560,10 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
             // Nothing is being aimed at, so the idle path owns this sway - the same state, at half the
             // amplitude - and it has already advanced or faded it for this tick, in the one place where
             // the glance's angles are written. Doing it here as well would fade out what that just faded
-            // in, every tick, and leave the head nailed to the bearing after all.
+            // in, every tick, and leave the head nailed to the bearing after all. The walking glance has
+            // no aim to ride on either, and is only told so; a walk that ends with one still out is a
+            // walk whose last two movements were not plain, and that is not one it is welcome on.
+            this.walkGlance.advance(false, null);
             return;
         }
         // Two ways for the head to be swaying while something is still being aimed at. Walking along the
@@ -558,6 +590,16 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
             // something: the aim is about to be used again.
             this.idleGlance.drop();
             this.headWander.recentre();
+            // The walking glance is the one offset that cannot simply not be added: it is tens of degrees,
+            // and a head that is forty degrees to the left on one tick and on the block the next has
+            // snapped. It comes back at the speed of a look instead, and until it is back it is still on
+            // the camera - which keeps the trace honest, and so keeps the click waiting on the head.
+            this.walkGlance.advance(false, null);
+            if (this.walkGlance.out()) {
+                this.wanderCamera = new Rotation(ctx.player().getYRot(), ctx.player().getXRot());
+                ctx.player().setYRot(this.wanderCamera.getYaw() + this.walkGlance.yaw());
+                ctx.player().setXRot(Rotation.clampPitch(this.wanderCamera.getPitch() + this.walkGlance.pitch()));
+            }
             return;
         }
         this.headWander.advance();
@@ -572,8 +614,23 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
         // back together in POST, so neither can take the head home while the other still holds it.
         final Rotation glance = this.idleGlance.next(this.wanderCamera, waiting, this::idleStep, this::somethingNearby);
         final Rotation base = glance != null ? glance : this.wanderCamera;
-        ctx.player().setYRot(base.getYaw() + this.headWander.yaw() * fraction);
-        ctx.player().setXRot(Rotation.clampPitch(base.getPitch() + this.headWander.pitch() * fraction));
+        // The walking glance rides on the same base, as an offset. It is welcome when the walk is plain
+        // and the target is not something about to be clicked - a block to break, a face to place against
+        // - and not otherwise; standing still waiting is the idle glance's turn, not this one's, and a head
+        // the aim is not driving at all (Mode.NONE: the person's own view, walked along) is not ours to
+        // turn by forty degrees. Something nearby worth looking at is offered as a way off the aim, which
+        // is what the glance is made of.
+        this.walkGlance.advance(walking && this.walkGlance.welcomed() && !this.target.blockInteract
+                && this.target.mode != Target.Mode.NONE, () -> {
+            final Rotation nearby = this.somethingNearby();
+            if (nearby == null) {
+                return null;
+            }
+            return new Rotation(Rotation.normalizeYaw(nearby.getYaw() - this.wanderCamera.getYaw()),
+                    nearby.getPitch() - this.wanderCamera.getPitch());
+        });
+        ctx.player().setYRot(base.getYaw() + this.walkGlance.yaw() + this.headWander.yaw() * fraction);
+        ctx.player().setXRot(Rotation.clampPitch(base.getPitch() + this.walkGlance.pitch() + this.headWander.pitch() * fraction));
     }
 
     /**

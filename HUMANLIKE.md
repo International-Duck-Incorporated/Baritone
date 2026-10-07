@@ -19,6 +19,7 @@ opt-in: a bot that has to be told to look alive is a bot that looks dead by defa
 | The hand calls itself arrived | `behavior/look/AimDynamics.java`, `ILookBehavior#hasArrivedAt` | "Is the aim here yet" is asked of the aim, not of a hundredth-of-a-degree comparison against the target: a settled hand sits a fraction of a degree off, because it is easing and the tremor is still shaking it. |
 | The gaze leans onto the line ahead | `behavior/look/GazeAhead.java`, `PathExecutor#leanGazeAhead` | A person walking a route has their head around the corner before their feet are: in the last two blocks of a walk the aim leans up to halfway toward where the path goes next, more the closer it gets. On a straight line the two directions are the same and the lean is nothing. Never off the walking direction by more than 60° - a path that doubles back gets an over-the-shoulder glance, not a head facing backwards while the feet walk forwards - and never onto a target about to be clicked, which every rule in this fork aims at exactly. Falls, climbs, jumps and parkour run-ups steer on the angles they are given and take no lean at all. The lean is on the *gaze* only: the movement's own rotation is what the game turns the pressed keys by (`LookBehavior#onPlayerRotationMove`), and it is kept exactly as asked for, so the head leads the body round the corner and never drags it there. |
 | A target with no opinion about the pitch | `behavior/look/PitchWander.java`, `LookBehavior#settledGaze` | The gaze settles a few degrees this way and that every few seconds - triangular around level, a degree a tick, ten degrees out at the extremes - instead of holding one angle for a whole journey, and it settles *on the aim*, which is the angle the server is told and the one the arm is traced along. Only where the pitch is decoration: a swim travels by the pitch it is looking along and a glide solves for it, so in water and in the air the pitch stays where the movement put it, and a target that holds an opinion about the pitch - a block to break, a face to place against - is aimed at exactly. |
+| The eyes go to the side of the road | `behavior/look/WalkGlance.java`, `PathExecutor#welcomeGlance` | Every five to fifteen seconds of plain walking the head turns twelve to forty degrees to one side - more, at something actually there: the nearest animal or player in view, up to seventy degrees off the way - eases there over half a second, holds for anything from a flick to a second, and eases back to exactly nothing, at the speed of a look (`AimDynamics.IDLE_YAW_STEP`) and never faster. It is an offset on the aim rather than an angle of its own, so it rides round a corner with the head under it and cannot leave the head somewhere stale when it ends. Welcome only on a plain walk along the flat with two more plain ones to come - nothing to break, place or open, no jump, drop, water or parkour - and the moment the walk stops being plain, or anything is about to be clicked, it comes back at the full looking speed and the count starts over; a walk that is all corners and jumps never glances at all. The keys are chosen against the aim and not against the sent rotation (`ILookBehavior#headRotation`), so a look to the side is not read as a change of heading. |
 | Something moved the mouse | `behavior/look/IdleGlance.java` | A glance is dropped the moment the view is taken over - asked only of a camera somebody is looking through, because a camera of Baritone's own is moved by the glance itself - and the angles are handed back exactly. |
 
 ## Standing around
@@ -94,7 +95,7 @@ a quarter faster); inventory moves are spaced by a redrawn interval rather than 
   so a degree of drift in it is a degree of drift in the heading, which is what the sway already is.
 
 The camera is written in four files, and that is a rule rather than an observation: `LookBehavior` (the aim,
-the glance and the sway, all of them eased), `BuilderProcess#hasAnyItemThatWouldPlace` (an angle borrowed and
+the glances and the sway, all of them eased), `BuilderProcess#hasAnyItemThatWouldPlace` (an angle borrowed and
 given back inside the same tick so the game can be asked which way round a block would be placed), and the
 two mixin bridges that carry the aim and the elytra solver, each of which puts the player's own angles back in
 POST. `CameraWritesTest` counts them, so a fifth file fails the build with this list beside it.
@@ -118,18 +119,18 @@ POST. `CameraWritesTest` counts them, so a fifth file fails the build with this 
 
 - A new repeated interval goes through `Cadence`, and a new rule that can be expressed without a
   running game goes in its own class in `behavior/look` with a test next to it, the way `AimDynamics`,
-  `IdleGlance`, `HeadWander`, `PitchWander`, `IdleFidget`, `GazeAhead` and `ReactionDelay` are - or, for
+  `IdleGlance`, `WalkGlance`, `HeadWander`, `PitchWander`, `IdleFidget`, `GazeAhead` and `ReactionDelay` are - or, for
   a rule about the keys rather than the camera, in `pathing/movement` beside `MovementOption`, the way
   `KeyBeat`, `HeadFirst` and `StraightRun` are, and for a rule about what to do next rather than how to look doing it, beside the process
   that uses it, the way `FollowProgress` is.
 - Everything with a random source takes it through its constructor - `HeadWander`, `PitchWander`,
-  `IdleGlance`, `IdleFidget`, `ReactionDelay`, `KeyBeat` - and the constructor with no argument is the
+  `IdleGlance`, `WalkGlance`, `IdleFidget`, `ReactionDelay`, `KeyBeat` - and the constructor with no argument is the
   only one that seeds itself from the clock. Every machine in a test run draws from that run's seed,
   because a failure reported for a seed has to be reproducible by running that seed.
 - The numbers are allowed to move; the invariants are not. `HumanlikeLookFuzzTest` runs the hand
   through twenty thousand hostile ticks and asserts that the aim never moves more than its tick limit,
   that a settled hand is always arrived, and that the sway never escapes its band. `AimDynamicsTest`,
-  `IdleGlanceTest`, `PitchWanderTest`, `IdleFidgetTest`, `GazeAheadTest`, `KeyBeatTest`, `HeadFirstTest`,
+  `IdleGlanceTest`, `WalkGlanceTest`, `PitchWanderTest`, `IdleFidgetTest`, `GazeAheadTest`, `KeyBeatTest`, `HeadFirstTest`,
   `StraightRunTest`, `FollowProgressTest` and `CadenceTest` cover the rules themselves.
 - Behaviour that already exists as a setting - `randomLooking`, `randomLooking113`, `smoothLook`,
   `smoothLookTicks`, `blockBreakSpeed`, `mineGoalUpdateInterval`, `ticksBetweenInventoryMoves`,

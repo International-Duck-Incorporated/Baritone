@@ -54,6 +54,20 @@ public interface ILookBehavior extends IBehavior {
     boolean hasArrivedAt(Rotation rotation);
 
     /**
+     * Where the head is, as far as the hand knows: the rotation the aim has got to so far, before the sway
+     * and the glances that ride on top of it for everyone else to see; or the player's own rotation when
+     * nothing is being aimed at.
+     * <p>
+     * This is the angle for anything that chooses what to do next from where the head is - which way to
+     * turn, which keys to press - as opposed to {@link #hasArrivedAt}, which is about where the head
+     * actually is. The things that ride on top are not a direction, they are a habit: a choice made from
+     * them is a choice made from a look to the side, and feeds that look back into the steering.
+     *
+     * @return the rotation the hand is holding, or the player's own when it holds nothing
+     */
+    Rotation headRotation();
+
+    /**
      * The aim processor instance for this {@link ILookBehavior}, which is responsible for applying additional,
      * deterministic transformations to the target rotation set by {@link #updateTarget}.
      *
