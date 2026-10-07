@@ -75,7 +75,6 @@ There are about a hundred settings, but here are some fun / interesting / import
 - `allowParkour`
 - `allowParkourPlace`
 - `blockPlacementPenalty`
-- `renderCachedChunks` (and `cachedChunksOpacity`) <-- very fun but you need a beefy computer
 - `avoidance` (avoidance of mobs / mob spawners)
 - `legitMine`
 - `followRadius`

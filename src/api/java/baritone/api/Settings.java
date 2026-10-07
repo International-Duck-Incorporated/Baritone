@@ -816,22 +816,21 @@ public final class Settings {
     public final Setting<Boolean> blacklistClosestOnFailure = new Setting<>(true);
 
     /**
-     * 😎 Render cached chunks as semitransparent. Doesn't work with OptiFine 😭 Rarely randomly crashes, see <a href="https://github.com/cabaletta/baritone/issues/327">this issue</a>.
-     * <p>
-     * Can be very useful on servers with low render distance. After enabling, you may need to reload the world in order for it to have an effect
-     * (e.g. disconnect and reconnect, enter then exit the nether, die and respawn, etc). This may literally kill your FPS and CPU because
-     * every chunk gets recompiled twice as much as normal, since the cached version comes into range, then the normal one comes from the server for real.
-     * <p>
-     * Note that flowing water is cached as AVOID, which is rendered as lava. As you get closer, you may therefore see lava falls being replaced with water falls.
-     * <p>
-     * SOLID is rendered as stone in the overworld, netherrack in the nether, and end stone in the end
+     * Nothing in this fork draws the cached chunks: the renderer that read this was part of the old chunk
+     * renderer and went with it. The setting is kept so that mods using the API, and settings files that
+     * already name it, do not break, and it is Java-only so that a switch that does nothing is not offered
+     * to a player. The cache itself is very much alive - it is what exploring and searching read, see
+     * {@link #cachedChunksExpirySeconds}.
      */
+    @Deprecated
+    @JavaOnly
     public final Setting<Boolean> renderCachedChunks = new Setting<>(false);
 
     /**
-     * 0.0f = not visible, fully transparent (instead of setting this to 0, turn off renderCachedChunks)
-     * 1.0f = fully opaque
+     * As above: with nothing rendering the cached chunks there is no opacity to set.
      */
+    @Deprecated
+    @JavaOnly
     public final Setting<Float> cachedChunksOpacity = new Setting<>(0.5f);
 
     /**
