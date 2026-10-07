@@ -396,7 +396,10 @@ public final class Settings {
     public final Setting<Integer> rightClickSpeed = new Setting<>(4);
 
     /**
-     * How many degrees to randomize the yaw every tick. Set to 0 to disable
+     * How many degrees the yaw and the pitch wander by every tick. This is the one that shakes the aim:
+     * {@link #randomLooking} adds its draw on top, but it defaults to a hundredth of a degree, so setting
+     * this to 0 is what turns the wander off. The two angles are drawn independently, and the pitch is left
+     * alone in water and in a glide, where it is a control rather than a decoration.
      */
     public final Setting<Double> randomLooking113 = new Setting<>(2d);
 

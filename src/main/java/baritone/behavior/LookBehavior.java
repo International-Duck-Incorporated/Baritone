@@ -888,19 +888,28 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
             final double rawYawOffset = (this.rand.nextDouble() - 0.5) * Baritone.settings().randomLooking.value;
             final double rawPitchOffset = (this.rand.nextDouble() - 0.5) * Baritone.settings().randomLooking.value;
 
-            // randomLooking113
-            double random = this.rand.nextDouble() - 0.5;
-            if (Math.abs(random) < 0.1) {
-                random *= 4;
-            }
-            final double rawYaw113 = rawYawOffset + random * Baritone.settings().randomLooking113.value;
+            // randomLooking113: the wander proper, and on both axes. It was drawn into the yaw alone, and
+            // the pitch took only the hundredth of a degree randomLooking adds - small enough that the
+            // mouse grid swallows it whole, so a bot breaking a block moved its head sideways by a degree
+            // or two and up and down by nothing at all. Each axis draws for itself, because a hand that
+            // wandered along a line would be a hand that is being moved.
+            final double rawYaw113 = rawYawOffset + AimDynamics.tremor(this.rand.nextDouble(),
+                    Baritone.settings().randomLooking113.value);
+            final double rawPitch113 = rawPitchOffset + AimDynamics.tremor(this.rand.nextDouble(),
+                    Baritone.settings().randomLooking113.value);
 
-            // Both of those draw fresh noise every single tick, and at 20Hz that is not a hand, it is a
+            // All of those draw fresh noise every single tick, and at 20Hz that is not a hand, it is a
             // shiver: uncorrelated jitter is something no person produces and the eye reads it as a
             // machine. Low pass them so the offset wanders the way an unsteady wrist does, and scale the
             // result back up so the settings keep the amplitude they always had.
             this.randomYawOffset = AimDynamics.smoothOffset(this.randomYawOffset, (float) rawYaw113);
-            this.randomPitchOffset = AimDynamics.smoothOffset(this.randomPitchOffset, (float) rawPitchOffset);
+            // The pitch is only the hand's to wander where the body is not travelling by it: in water it is
+            // the swimmer's depth and in a glide it is the attitude the flight solver is holding, which is
+            // the same rule pitchIsAFreeAngle answers before a gaze is settled. A bot that holds its depth
+            // only because the camera is looking down is not a person, however well the camera moves.
+            this.randomPitchOffset = this.pitchIsAFreeAngle()
+                    ? AimDynamics.smoothOffset(this.randomPitchOffset, (float) rawPitch113)
+                    : 0.0;
 
             // and the gaze the pitch settles on, which turns over in the seconds rather than the ticks
             this.pitchWander.advance();

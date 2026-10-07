@@ -316,18 +316,18 @@ public class AimDynamicsTest {
     /** A thousand seconds of a settled aim. */
     private static final int SETTLED_RUN = 20000;
 
+    /** The default of {@code randomLooking}, the second and far smaller draw every tick carries. */
+    private static final double TREMOR_FINE_SETTING = 0.01;
+
     /**
-     * One tick's draw of the aim shake, as {@code LookBehavior.tick} makes it: a flat draw scaled by the
-     * setting, with small draws spread out rather than left bunched at nothing, plus the tiny second draw
-     * from {@code randomLooking}. Modelled rather than called because the behaviour that makes it needs a
-     * Minecraft client; the shape is the part that matters here.
+     * One axis of one tick's draw of the aim shake, as {@code LookBehavior.tick} makes it: a draw from the
+     * setting that sizes the wander, plus the tiny one from {@code randomLooking}, both shaped the same way.
+     * Called rather than modelled - the shaping is the part that has to stay honest, and only the ticks that
+     * draw it need a Minecraft client.
      */
-    private static double tremorDraw(Random rand) {
-        double raw = rand.nextDouble() - 0.5;
-        if (Math.abs(raw) < 0.1) {
-            raw *= 4;
-        }
-        return raw * TREMOR_SETTING + (rand.nextDouble() - 0.5) * 0.01;
+    private static double tremorDraw(Random rand, double wander) {
+        return AimDynamics.tremor(rand.nextDouble(), wander)
+                + AimDynamics.tremor(rand.nextDouble(), TREMOR_FINE_SETTING);
     }
 
     /**
@@ -352,7 +352,7 @@ public class AimDynamicsTest {
         int exact = 0;
         float worst = 0.0f;
         for (int t = 0; t < SETTLED_RUN; t++) {
-            offset = AimDynamics.smoothOffset((float) offset, (float) tremorDraw(rand));
+            offset = AimDynamics.smoothOffset((float) offset, (float) tremorDraw(rand, TREMOR_SETTING));
             final Rotation wanted = new Rotation(
                     target.getYaw() + (float) offset * AimDynamics.TREMOR_GAIN,
                     target.getPitch());
@@ -375,6 +375,45 @@ public class AimDynamicsTest {
         assertTrue("a settled hand was " + worst + " degrees from its aim", worst <= AimDynamics.ARRIVED_ANGLE);
         // for the record, the question the gates used to ask: the angles coincide on almost no tick at all
         assertTrue("the hundredth of a degree test was answered " + exact + " times", exact < settled / 20);
+    }
+
+    /**
+     * The shake both angles get, measured the way the eye sees it.
+     * <p>
+     * This is the test that would have caught the pitch sitting still. Upstream drew the wander setting into
+     * the yaw and left the pitch to {@code randomLooking}, whose default is a hundredth of a degree: the
+     * pitch was a two hundredth of a degree from where it aimed, on average, which is not a hand resting on
+     * a mouse, and the roll of a two degree wander is exactly what made the bot look like one.
+     */
+    @Test
+    public void bothAnglesOfTheHandWanderByTheSameAmount() {
+        final Random rand = new Random(7);
+        double yaw = 0.0;
+        double pitch = 0.0;
+        int agreeingSigns = 0;
+        int drawn = 0;
+        for (int t = 0; t < SETTLED_RUN; t++) {
+            final double y = tremorDraw(rand, TREMOR_SETTING);
+            final double p = tremorDraw(rand, TREMOR_SETTING);
+            yaw += Math.abs(y);
+            pitch += Math.abs(p);
+            if (y >= 0 == p >= 0) {
+                agreeingSigns++;
+            }
+            drawn++;
+        }
+        final double meanYaw = yaw / drawn;
+        final double meanPitch = pitch / drawn;
+        assertTrue("the yaw wandered " + meanYaw + " degrees, the pitch " + meanPitch,
+                meanPitch > meanYaw * 0.9 && meanPitch < meanYaw * 1.1);
+        // what the pitch used to be: a hundredth of a degree, times the spread-out small draws, is a
+        // thousandth of a degree - two hundred times less than this
+        assertTrue("the pitch still barely moves: " + meanPitch + " degrees", meanPitch > 0.1);
+        // and the two are drawn apart. Half the ticks disagree about the direction, which is what two
+        // independent hands' worth of draws do; a pitch that copied the yaw's draw would agree every tick
+        final double agreement = agreeingSigns / (double) drawn;
+        assertTrue("yaw and pitch moved together on " + agreement + " of ticks",
+                agreement > 0.4 && agreement < 0.6);
     }
 
     @Test

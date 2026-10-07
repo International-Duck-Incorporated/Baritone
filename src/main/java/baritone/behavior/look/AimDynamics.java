@@ -311,6 +311,33 @@ public final class AimDynamics {
     }
 
     /**
+     * One axis of the wander the aim adds so it is never perfectly still: a uniform draw in {@code [0, 1)}
+     * turned into an offset in degrees.
+     * <p>
+     * Centred and flat, with one exception, which is the whole character of it: a draw inside a tenth of the
+     * centre is thrown four times as far. Left out, a hand asked for two degrees of wander spends a fifth of
+     * its time inside a couple of tenths of a degree of dead centre, and resting at the centre is what a hand
+     * on a table does, not a hand on a mouse. The rule is not new - it is the shape the setting's own draw
+     * has always had - but it lived inline at one call site, so the yaw was drawn with it and the pitch could
+     * not be.
+     * <p>
+     * Both axes are drawn with this now, which is the only way they can be the same size. The two are
+     * independent draws: a hand that wandered along a line would be a hand that is being moved, and the
+     * diagonal is a shape nobody's wrist produces.
+     *
+     * @param uniform   a fresh draw, uniformly distributed over {@code [0, 1)}
+     * @param amplitude the setting that sizes it: the wander spans this many degrees either side of centre
+     * @return the offset to add to this axis, in degrees
+     */
+    public static double tremor(double uniform, double amplitude) {
+        double offset = uniform - 0.5;
+        if (Math.abs(offset) < 0.1) {
+            offset *= 4.0;
+        }
+        return offset * amplitude;
+    }
+
+    /**
      * One tick of the wandering offsets the aim adds so it is never perfectly still: a low pass toward the
      * freshly drawn noise, so the offset drifts instead of shivering.
      * <p>
