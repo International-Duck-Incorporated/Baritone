@@ -56,10 +56,15 @@ public class PlayerMovementInput extends ClientInput {
         }
 
         boolean sneaking = handler.isInputForcedDown(Input.SNEAK);
-        if (sneaking) {
-            leftImpulse *= 0.3D;
-            forwardImpulse *= 0.3D;
-        }
+
+        // Not scaled down here on purpose. This used to multiply the impulses by 0.3, which is what the key
+        // handler did when this class was written; the game no longer scales crouching into the impulse.
+        // LocalPlayer.modifyInput still scales every crouched move vector, by the player's SNEAKING_SPEED
+        // attribute - 0.3 at its base value, and up to 0.75 with Swift Sneak - and forcing SNEAK is what
+        // makes the player crouch, since crouching is computed from isShiftKeyDown, which reads the
+        // keyPresses.shift() set below. Scaling here as well meant crouching twice: a sneaking walk went at
+        // 0.09 of walk speed, and the attribute that is supposed to decide the factor only ever scaled
+        // that. The impulses stay at full strength and the game applies the attribute once.
         this.moveVector = new Vec2(leftImpulse, forwardImpulse);
 
         boolean sprinting = handler.isInputForcedDown(Input.SPRINT);
