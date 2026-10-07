@@ -26,6 +26,7 @@ import baritone.api.pathing.path.IPathExecutor;
 import baritone.api.utils.*;
 import baritone.api.utils.input.Input;
 import baritone.behavior.PathingBehavior;
+import baritone.behavior.look.GazeAhead;
 import baritone.pathing.calc.AbstractNodeCostSearch;
 import baritone.pathing.movement.CalculationContext;
 import baritone.pathing.movement.Movement;
@@ -238,6 +239,7 @@ public class PathExecutor implements IPathExecutor, Helper {
             clearKeys();
             return true;
         }
+        leanGazeAhead(movement);
         MovementStatus movementStatus = movement.update();
         if (movementStatus == UNREACHABLE || movementStatus == FAILED) {
             logDebug("Movement returns status " + movementStatus);
@@ -270,6 +272,43 @@ public class PathExecutor implements IPathExecutor, Helper {
             }
         }
         return canCancel; // movement is in progress, but if it reports cancellable, PathingBehavior is good to cut onto the next path
+    }
+
+    /**
+     * How close the walk has to be to its own end before the gaze may lean onto what comes next, in
+     * blocks: the last step or two of a movement, which is where a person's head is already around the
+     * corner. See {@link baritone.behavior.look.GazeAhead}.
+     */
+    private static final double GAZE_LEAD_DISTANCE = 2.0;
+
+    /**
+     * Offers the gaze the line the path takes next, so the head leads the body around corners instead
+     * of whipping around at every movement boundary.
+     * <p>
+     * Only for a walk on the ground, and only near the end of one - a fall, a climb and a jump steer on
+     * the angles they are given, and they get those exactly. Anything the movement is about to click is
+     * aimed at exactly too: the lean is on walking targets alone, by the rule in
+     * {@link baritone.behavior.look.GazeAhead#lean}.
+     */
+    private void leanGazeAhead(Movement movement) {
+        final GazeAhead gaze = behavior.baritone.getLookBehavior().gazeAhead();
+        if (movement.getDirection().getY() != 0
+                || pathPosition + 1 >= path.length()
+                || !ctx.player().onGround()) {
+            gaze.offer(null, 0);
+            return;
+        }
+        final BetterBlockPos dest = movement.getDest();
+        final double dx = dest.x + 0.5 - ctx.player().position().x;
+        final double dz = dest.z + 0.5 - ctx.player().position().z;
+        final double dist = Math.sqrt(dx * dx + dz * dz);
+        if (dist >= GAZE_LEAD_DISTANCE) {
+            gaze.offer(null, 0);
+            return;
+        }
+        final IMovement next = path.movements().get(pathPosition + 1);
+        final Rotation toNext = RotationUtils.calcRotationFromVec3d(ctx.playerHead(), VecUtils.getBlockPosCenter(next.getDest()), ctx.playerRotations());
+        gaze.offer(toNext, GazeAhead.LEAN * (1 - dist / GAZE_LEAD_DISTANCE));
     }
 
     private Pair<Double, BlockPos> closestPathPos(IPath path) {

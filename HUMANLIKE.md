@@ -17,6 +17,7 @@ opt-in: a bot that has to be told to look alive is a bot that looks dead by defa
 | ... and goes a little past | `behavior/look/AimDynamics.java` | A hand is still moving when it reaches what it was reaching for: what it aims at starts a few percent of the turn past the target and walks back onto it. Measured on the hand at the default sensitivity, a quarter turn peaks 2.4 degrees past and is exactly on target ten ticks later. Only while walking, and only for a target that says where the bot is going - anything about to be clicked is aimed at exactly. |
 | The hand shakes in two directions, not one | `behavior/look/AimDynamics.java`, `LookBehavior.tick` | The aim adds a wander of `randomLooking113` degrees either side of where it is aiming, a fresh draw each tick smoothed so it drifts rather than shivers. Both angles draw it, which is what upstream's own note ("How many degrees to randomize the yaw") left to the yaw alone: the pitch took only the hundredth of a degree `randomLooking` adds, which the mouse grid swallows whole, so a bot breaking a block moved its head by a degree or two sideways and by nothing at all vertically - measured on a settled aim at the default sensitivity, the pitch wandered two hundredths of a degree, below a single mouse pixel at every sensitivity there is, and now wanders a third of a degree either side with three and a half degrees peak to peak, as the yaw always did. The two angles are drawn separately - a hand that moved along a line would be a hand that is being moved - and the pitch is left alone in water and in a glide, where it is a control and not a decoration. |
 | The hand calls itself arrived | `behavior/look/AimDynamics.java`, `ILookBehavior#hasArrivedAt` | "Is the aim here yet" is asked of the aim, not of a hundredth-of-a-degree comparison against the target: a settled hand sits a fraction of a degree off, because it is easing and the tremor is still shaking it. |
+| The gaze leans onto the line ahead | `behavior/look/GazeAhead.java`, `PathExecutor#leanGazeAhead` | A person walking a route has their head around the corner before their feet are: in the last two blocks of a walk the aim leans up to halfway toward where the path goes next, more the closer it gets. On a straight line the two directions are the same and the lean is nothing. Never off the walking direction by more than 60° - a path that doubles back gets an over-the-shoulder glance, not a head facing backwards while the feet walk forwards - and never onto a target about to be clicked, which every rule in this fork aims at exactly. Falls, climbs and jumps steer on the angles they are given and take no lean at all. |
 | A target with no opinion about the pitch | `behavior/look/PitchWander.java`, `LookBehavior#settledGaze` | The gaze settles a few degrees this way and that every few seconds - triangular around level, a degree a tick, ten degrees out at the extremes - instead of holding one angle for a whole journey, and it settles *on the aim*, which is the angle the server is told and the one the arm is traced along. Only where the pitch is decoration: a swim travels by the pitch it is looking along and a glide solves for it, so in water and in the air the pitch stays where the movement put it, and a target that holds an opinion about the pitch - a block to break, a face to place against - is aimed at exactly. |
 | Something moved the mouse | `behavior/look/IdleGlance.java` | A glance is dropped the moment the view is taken over - asked only of a camera somebody is looking through, because a camera of Baritone's own is moved by the glance itself - and the angles are handed back exactly. |
 
@@ -114,10 +115,10 @@ POST. `CameraWritesTest` counts them, so a fifth file fails the build with this 
 
 - A new repeated interval goes through `Cadence`, and a new rule that can be expressed without a
   running game goes in its own class in `behavior/look` with a test next to it, the way `AimDynamics`,
-  `IdleGlance`, `HeadWander`, `PitchWander`, `IdleFidget` and `ReactionDelay` are - or, for a rule about
-  the keys rather than the camera, in `pathing/movement` beside `MovementOption`, the way `KeyBeat` is,
-  and for a rule about what to do next rather than how to look doing it, beside the process that uses
-  it, the way `FollowProgress` is.
+  `IdleGlance`, `HeadWander`, `PitchWander`, `IdleFidget`, `GazeAhead` and `ReactionDelay` are - or, for
+  a rule about the keys rather than the camera, in `pathing/movement` beside `MovementOption`, the way
+  `KeyBeat` is, and for a rule about what to do next rather than how to look doing it, beside the process
+  that uses it, the way `FollowProgress` is.
 - Everything with a random source takes it through its constructor - `HeadWander`, `PitchWander`,
   `IdleGlance`, `IdleFidget`, `ReactionDelay`, `KeyBeat` - and the constructor with no argument is the
   only one that seeds itself from the clock. Every machine in a test run draws from that run's seed,
@@ -125,8 +126,8 @@ POST. `CameraWritesTest` counts them, so a fifth file fails the build with this 
 - The numbers are allowed to move; the invariants are not. `HumanlikeLookFuzzTest` runs the hand
   through twenty thousand hostile ticks and asserts that the aim never moves more than its tick limit,
   that a settled hand is always arrived, and that the sway never escapes its band. `AimDynamicsTest`,
-  `IdleGlanceTest`, `PitchWanderTest`, `IdleFidgetTest`, `KeyBeatTest` and `CadenceTest` cover the rules
-  themselves.
+  `IdleGlanceTest`, `PitchWanderTest`, `IdleFidgetTest`, `GazeAheadTest`, `KeyBeatTest`, `FollowProgressTest`
+  and `CadenceTest` cover the rules themselves.
 - Behaviour that already exists as a setting - `randomLooking`, `randomLooking113`, `smoothLook`,
   `smoothLookTicks`, `blockBreakSpeed`, `mineGoalUpdateInterval`, `ticksBetweenInventoryMoves`,
   `autoTool` - keeps its meaning. Where a setting names an interval, the interval is now what the

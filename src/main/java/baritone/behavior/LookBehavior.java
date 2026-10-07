@@ -30,6 +30,7 @@ import baritone.api.utils.RotationUtils;
 import baritone.api.utils.input.Input;
 import baritone.behavior.look.AimDynamics;
 import baritone.behavior.look.ForkableRandom;
+import baritone.behavior.look.GazeAhead;
 import baritone.behavior.look.HeadWander;
 import baritone.behavior.look.IdleFidget;
 import baritone.behavior.look.IdleGlance;
@@ -155,6 +156,12 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
      */
     private Rotation lastWanted;
 
+    /**
+     * The lean of the walking gaze onto the line the path takes next. Offered fresh every tick by the
+     * path executor and taken by {@link #updateTarget}; one tick of memory at most.
+     */
+    private final GazeAhead gazeAhead = new GazeAhead();
+
     public LookBehavior(Baritone baritone) {
         super(baritone);
         this.processor = new AimProcessor(baritone.getPlayerContext());
@@ -162,9 +169,20 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
         this.smoothPitchBuffer = new ArrayDeque<>();
     }
 
+    /**
+     * The lean onto the line ahead, for the path to offer into. The only thing that ever writes it is
+     * {@code PathExecutor}, and the only thing that reads it is {@link #updateTarget} - it is a lean on
+     * a walking target and nothing else, so the count of hands on the camera does not change.
+     */
+    public GazeAhead gazeAhead() {
+        return this.gazeAhead;
+    }
+
     @Override
     public void updateTarget(Rotation rotation, boolean blockInteract) {
-        this.target = new Target(rotation, blockInteract, Target.Mode.resolve(ctx, blockInteract));
+        // a target about to be clicked is aimed at exactly - the lean stands aside, and takes its tick
+        // of memory with it either way
+        this.target = new Target(this.gazeAhead.lean(rotation, blockInteract), blockInteract, Target.Mode.resolve(ctx, blockInteract));
     }
 
     @Override
@@ -187,6 +205,8 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
             this.processor.tick();
             // The fidget's clock runs every tick, walking or not; only taking the fidget is gated.
             this.idleFidget.advance();
+            // a lean not taken this tick is gone
+            this.gazeAhead.tick();
         }
     }
 
