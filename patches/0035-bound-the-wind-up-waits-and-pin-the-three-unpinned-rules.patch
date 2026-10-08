@@ -1,0 +1,101 @@
+From 650ad843998f52818d81175e1af4655fe46c2102 Mon Sep 17 00:00:00 2001
+From: 0xFFshell <0xffshell@users.noreply.gitlab.com>
+Date: Thu, 8 Oct 2026 14:52:39 +0000
+Subject: [PATCH] Bound the wind-up waits and pin the three rules the sweep
+ found unpinned
+
+---
+ .../baritone/behavior/look/ApproachLookTest.java  |  5 +++++
+ .../java/baritone/behavior/look/FlinchTest.java   |  3 +++
+ .../baritone/behavior/look/ReactionDelayTest.java | 12 ++++++++++++
+ .../pathing/movement/SprintWindupTest.java        | 15 ++++++++++-----
+ 4 files changed, 30 insertions(+), 5 deletions(-)
+
+diff --git a/src/test/java/baritone/behavior/look/ApproachLookTest.java b/src/test/java/baritone/behavior/look/ApproachLookTest.java
+index eb962746..9b896959 100644
+--- a/src/test/java/baritone/behavior/look/ApproachLookTest.java
++++ b/src/test/java/baritone/behavior/look/ApproachLookTest.java
+@@ -135,6 +135,11 @@ public class ApproachLookTest {
+         // the block the player is standing in, which has no direction to it
+         assertEquals(0.0, ApproachLook.weight(ApproachLook.UNDERFOOT, 0f), 0.0);
+         assertEquals(0.0, ApproachLook.weight(0.0, 0f), 0.0);
++        // and the same rule pinned by distance rather than by its own constant: a block at the feet is
++        // not looked at, and a block just off them is
++        assertEquals("a block under the player's own feet", 0.0, ApproachLook.weight(0.5, 0f), 0.0);
++        assertTrue("a block just off the player's feet was not looked at",
++                ApproachLook.weight(1.5, 0f) > 0.0);
+     }
+ 
+     @Test
+diff --git a/src/test/java/baritone/behavior/look/FlinchTest.java b/src/test/java/baritone/behavior/look/FlinchTest.java
+index 92910e4c..6caf6852 100644
+--- a/src/test/java/baritone/behavior/look/FlinchTest.java
++++ b/src/test/java/baritone/behavior/look/FlinchTest.java
+@@ -108,6 +108,9 @@ public class FlinchTest {
+ 
+     @Test
+     public void aWalkingHeadTurnsAsFarAsANeckGoesAndNoFurther() {
++        // the limit itself, pinned: both bounds below are written against it, so a limit that moved
++        // would move them with it and no test would notice
++        assertEquals("the walking neck's quarter turn", 70f, Flinch.NECK_YAW, 0f);
+         for (long seed = 0; seed < SEEDS; seed++) {
+             final Flinch flinch = flinch(seed);
+             flinch.blow(new Them(BEHIND, 0f));
+diff --git a/src/test/java/baritone/behavior/look/ReactionDelayTest.java b/src/test/java/baritone/behavior/look/ReactionDelayTest.java
+index 8a70e85e..b1cf8826 100644
+--- a/src/test/java/baritone/behavior/look/ReactionDelayTest.java
++++ b/src/test/java/baritone/behavior/look/ReactionDelayTest.java
+@@ -164,4 +164,16 @@ public class ReactionDelayTest {
+             previous = target;
+         }
+     }
++
++    @Test
++    public void theFloorIsTwoTicks() {
++        // the floor itself, pinned: every bound above is written against it, so a floor that moved
++        // would move them with it and no test would notice
++        assertEquals("the floor of the reaction beat", 2, ReactionDelay.HOLD_MIN);
++        for (int i = 0; i < 200; i++) {
++            final ReactionDelay delay = new ReactionDelay(new Random(i));
++            assertTrue("a fresh target started moving in under two ticks",
++                    holdLength(delay, yaw(90f), 50) >= 2);
++        }
++    }
+ }
+diff --git a/src/test/java/baritone/pathing/movement/SprintWindupTest.java b/src/test/java/baritone/pathing/movement/SprintWindupTest.java
+index 2e23ecc6..584a3bbe 100644
+--- a/src/test/java/baritone/pathing/movement/SprintWindupTest.java
++++ b/src/test/java/baritone/pathing/movement/SprintWindupTest.java
+@@ -51,9 +51,7 @@ public class SprintWindupTest {
+     @Test
+     public void hangoverIsTheSameRun() {
+         final SprintWindup windup = new SprintWindup(new Random(3));
+-        while (!windup.tick(true, true)) {
+-            // spend the windup
+-        }
++        spendTheWindup(windup);
+         windup.keepHeld();
+         assertTrue("the movement after a hangover wound up again", windup.tick(true, true));
+     }
+@@ -61,9 +59,16 @@ public class SprintWindupTest {
+     @Test
+     public void lettingGoStartsTheNextWindup() {
+         final SprintWindup windup = new SprintWindup(new Random(4));
+-        while (!windup.tick(true, true)) {
+-        }
++        spendTheWindup(windup);
+         assertFalse(windup.tick(false, true));
+         assertFalse("the second run started sprinting on the tick it was asked", windup.tick(true, true));
+     }
++
++    /** Spend a wind-up the way a walker does, refusing to wait past its own maximum. */
++    private static void spendTheWindup(SprintWindup windup) {
++        int walked = 0;
++        while (!windup.tick(true, true)) {
++            assertTrue("windup outlived its maximum", ++walked <= Cadence.SPRINT_WINDUP_MAX);
++        }
++    }
+ }
+-- 
+2.47.3
+

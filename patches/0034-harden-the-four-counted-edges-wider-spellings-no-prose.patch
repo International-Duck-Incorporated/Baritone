@@ -1,0 +1,181 @@
+From 95e135792db5aa1f37d51b61eb1c42949330c4fc Mon Sep 17 00:00:00 2001
+From: 0xFFshell <0xffshell@users.noreply.gitlab.com>
+Date: Thu, 8 Oct 2026 14:44:06 +0000
+Subject: [PATCH] Harden the four counted edges: wider spellings, no prose
+
+---
+ .../behavior/look/CameraWritesTest.java       | 17 +++--
+ .../pathing/movement/ClickGatesTest.java      | 66 ++++++++++++++++++-
+ .../java/baritone/utils/ButtonWritesTest.java | 13 +++-
+ .../java/baritone/utils/HandWritesTest.java   |  4 +-
+ 4 files changed, 93 insertions(+), 7 deletions(-)
+
+diff --git a/src/test/java/baritone/behavior/look/CameraWritesTest.java b/src/test/java/baritone/behavior/look/CameraWritesTest.java
+index 48f26a21..dbcd4493 100644
+--- a/src/test/java/baritone/behavior/look/CameraWritesTest.java
++++ b/src/test/java/baritone/behavior/look/CameraWritesTest.java
+@@ -118,10 +118,19 @@ public class CameraWritesTest {
+ 
+     /** The keywords a write to the player's own rotation can be spelled with. */
+     private static boolean writesRotation(String line) {
+-        return line.contains("setYRot(")
+-                || line.contains("setXRot(")
+-                || line.contains("yRot =")
+-                || line.contains("xRot =");
++        final String trimmed = line.trim();
++        if (trimmed.startsWith("//") || trimmed.startsWith("*") || trimmed.startsWith("/*")) {
++            return false;
++        }
++        return trimmed.contains("setYRot(")
++                || trimmed.contains("setXRot(")
++                || trimmed.contains("yRot =")
++                || trimmed.contains("xRot =")
++                || trimmed.contains("setRot(")
++                || trimmed.contains("forceSetRotation(")
++                || trimmed.contains("setYHeadRot(")
++                || trimmed.contains("setYBodyRot(")
++                || trimmed.contains("snapTo(");
+     }
+ 
+     private static List<Path> javaFiles(Path dir) {
+diff --git a/src/test/java/baritone/pathing/movement/ClickGatesTest.java b/src/test/java/baritone/pathing/movement/ClickGatesTest.java
+index a38c1816..bd2c1030 100644
+--- a/src/test/java/baritone/pathing/movement/ClickGatesTest.java
++++ b/src/test/java/baritone/pathing/movement/ClickGatesTest.java
+@@ -205,7 +205,7 @@ public class ClickGatesTest {
+             final Path source = root.resolve("src/main/java/baritone").resolve(file);
+             final String text;
+             try {
+-                text = Files.readString(source);
++                text = stripComments(Files.readString(source));
+             } catch (IOException e) {
+                 throw new UncheckedIOException("could not read " + source, e);
+             }
+@@ -221,6 +221,66 @@ public class ClickGatesTest {
+                 expected, found);
+     }
+ 
++    /**
++     * A click is named by a constant, and the count above only judges the lines its regex finds: a
++     * mention of the key that is neither one of those lines nor a read slips both the count and the
++     * gate question. The reads are the one shape allowed to mention it without being a click, and a
++     * line that mentions it any other way fails here with its file and its line.
++     */
++    @Test
++    public void everyMentionOfAClickIsACountedOneOrARead() {
++        final Path root = repoRoot();
++        assumeTrue("the sources are not next to this test run", root != null);
++        final List<String> violations = new ArrayList<>();
++        final Path baritone = root.resolve("src/main/java/baritone");
++        for (String relative : ROOTS) {
++            final Path dir = baritone.resolve(relative);
++            if (!Files.isDirectory(dir)) {
++                continue;
++            }
++            try (Stream<Path> stream = Files.walk(dir)) {
++                for (Path file : stream.filter(p -> p.toString().endsWith(".java")).sorted().toList()) {
++                    final List<String> lines = Files.readAllLines(file);
++                    for (int i = 0; i < lines.size(); i++) {
++                        final String line = lines.get(i);
++                        if (!line.contains("Input.CLICK_LEFT") && !line.contains("Input.CLICK_RIGHT")) {
++                            continue;
++                        }
++                        if (CLICK.matcher(line).find() || line.contains("isInputForcedDown(")) {
++                            continue;
++                        }
++                        violations.add(baritone.relativize(file) + ":" + (i + 1) + ": " + line.trim());
++                    }
++                }
++            } catch (IOException e) {
++                throw new UncheckedIOException("could not read the sources under " + dir, e);
++            }
++        }
++        assertEquals("a click button is named without being a counted click or a read of the key: the"
++                + " regex that judges the clicks cannot see this line, so neither can the gate in front of it",
++                List.of(), violations);
++    }
++
++    /**
++     * The same text with its comments removed, so that a count of the questions a file asks counts the
++     * calls rather than the prose about them.
++     */
++    private static String stripComments(String text) {
++        final StringBuilder out = new StringBuilder(text.length());
++        for (int i = 0; i < text.length(); i++) {
++            if (text.startsWith("//", i)) {
++                final int end = text.indexOf('\n', i);
++                i = end < 0 ? text.length() : end;
++            } else if (text.startsWith("/*", i)) {
++                final int end = text.indexOf("*/", i + 2);
++                i = end < 0 ? text.length() : end + 1;
++            } else {
++                out.append(text.charAt(i));
++            }
++        }
++        return out.toString();
++    }
++
+     /**
+      * How many times a file asks one shape of the question. The two-argument form is told from the
+      * one-argument one by parens rather than by a regular expression: the first argument nests
+@@ -286,6 +346,10 @@ public class ClickGatesTest {
+                 for (Path file : stream.filter(p -> p.toString().endsWith(".java")).sorted().toList()) {
+                     final List<String> lines = Files.readAllLines(file);
+                     for (int i = 0; i < lines.size(); i++) {
++                        final String trimmed = lines.get(i).trim();
++                        if (trimmed.startsWith("//") || trimmed.startsWith("*") || trimmed.startsWith("/*")) {
++                            continue;
++                        }
+                         if (!CLICK.matcher(lines.get(i)).find()) {
+                             continue;
+                         }
+diff --git a/src/test/java/baritone/utils/ButtonWritesTest.java b/src/test/java/baritone/utils/ButtonWritesTest.java
+index d09d0cdf..b1c74066 100644
+--- a/src/test/java/baritone/utils/ButtonWritesTest.java
++++ b/src/test/java/baritone/utils/ButtonWritesTest.java
+@@ -133,6 +133,13 @@ public class ButtonWritesTest {
+             "windowClick(",
+             "ServerboundPunchPacket",
+             ".swing(",
++            "startDestroyBlock(",
++            "continueDestroyBlock(",
++            "stopDestroyBlock(",
++            "destroyBlock(",
++            "useItemOn(",
++            "useItem(",
++            "attack(",
+     };
+ 
+     /** The one file on the list that is allowed to swing without pressing anything. */
+@@ -209,8 +216,12 @@ public class ButtonWritesTest {
+     }
+ 
+     private static boolean pressesAButton(String line) {
++        final String trimmed = line.trim();
++        if (trimmed.startsWith("//") || trimmed.startsWith("*") || trimmed.startsWith("/*")) {
++            return false;
++        }
+         for (String button : BUTTONS) {
+-            if (line.contains(button)) {
++            if (trimmed.contains(button)) {
+                 return true;
+             }
+         }
+diff --git a/src/test/java/baritone/utils/HandWritesTest.java b/src/test/java/baritone/utils/HandWritesTest.java
+index 69829c1b..1195b10a 100644
+--- a/src/test/java/baritone/utils/HandWritesTest.java
++++ b/src/test/java/baritone/utils/HandWritesTest.java
+@@ -127,7 +127,9 @@ public class HandWritesTest {
+         }
+         return trimmed.contains("setSelectedSlot(")
+                 || trimmed.contains("ServerboundSetCarriedItemPacket")
+-                || trimmed.contains("selectedSlot =");
++                || trimmed.contains("selectedSlot =")
++                || trimmed.contains("setSelectedItem(")
++                || trimmed.contains("removeFromSelected(");
+     }
+ 
+     private static List<Path> javaFiles(Path dir) {
+-- 
+2.47.3
+
