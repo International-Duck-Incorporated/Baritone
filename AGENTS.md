@@ -531,8 +531,8 @@ builder's break order, the trace's face question, the farm's plantings or the sn
 Files: `src/main/java/baritone/behavior/LookBehavior.java` (the walking path's base and both glances'
 gates), `src/main/java/baritone/behavior/look/Flinch.java` (the base's own documentation), a test in
 `HumanlikeLookFuzzTest`, `HUMANLIKE.md`.
-Status: In progress as of this line; the work is done and pushed in the commits that follow, having been
-written in one pass rather than claimed first - the log says so rather than pretending otherwise, and
+Status: Complete; pushed in `44fd9380` (patch `0024`), docs `4b7457af` (patch `0025`), patches `6a3c90d2`.
+Written in one pass rather than claimed first - the log says so rather than pretending otherwise, and
 nothing here was anybody else's to collide with.
 Started: 2026-10-08.
 Dependencies: the flinch (`9491e663`), the blow in the hostile run (`707c63b9`), and `WalkGlance`'s own
@@ -545,3 +545,53 @@ unnoticed is that the harness never modelled the walk's glance: with the glance 
 be measured against the head it is added to. The glances now also stand down while a blow is owed a look -
 a person staring at whoever just hit them is not also looking at the cow - which is what leaves the head
 on the attacker when the stare ends rather than swinging back out to finish an interrupted glance.
+
+### Kestrel — the stare's base (verified remote `9f73e5df`, 2026-10-08 12:36 UTC)
+
+- **The defect.** `updateHeadWander` sums `base + walkGlance.yaw() + sway + flinch.yaw()` and hands the
+  flinch `base` as the angle it is measured from - the head *without* the walk's glance. A blow landing
+  while the road was being looked at therefore settled the head on the attacker *plus* the glance: up to
+  seventy degrees of cow, for as long as that glance had left to run, which is exactly the thing the flinch
+  was written to fix. The base is now the head the offset is added to, the glance included, and
+  `Flinch#advance`'s `base` says so; the sway is deliberately still not in it, because the sway is meant to
+  keep riding on the stare. On the idle path the base is unchanged: with nothing aimed at, the walk's
+  glance is not on the head, and the caller only tells it that it is not welcome.
+- **The glances stand down for a blow.** `Flinch#answering` - true from the blow until the stare has been
+  taken or the attacker has gone - now gates both glances: the walking one on its own gate, the idle one on
+  the caller's, and the sway and the flinch keep theirs untouched. A person staring at whoever just hit them
+  is not also looking at the cow, and it is what leaves the head on the attacker when a stare ends instead
+  of swinging back out to finish a glance that was interrupted by being punched.
+- **The walk's glance is in the hostile run.** `HumanlikeLookFuzzTest` now drives all six machines -
+  `WalkGlance` was the last head-mover it never modelled - and puts them on one head in the caller's order
+  and against the caller's bases, so the run holds the sums and not just each machine: the glance's offset
+  stays within what a glance may turn to, a glance that stops being welcome comes home, a glance that was
+  running when the gate shut is counted as interrupted, and the six offsets together cannot move the head
+  further in a tick than the hand's flick plus a glance plus a flinch. The applied-yaw range assertion is
+  now the sum's own bound rather than a half turn, because the caller sums raw angles - the server
+  normalises on use, and each offset is bounded where it is produced.
+- **Two things the modelling itself found.** (1) At four blows in a hundred the run's bot is permanently
+  mid-stare: a stare outlasts the gap between blows, so an answering flinch became the standing state and
+  the glances - which need 100 to 300 welcome ticks for their first look - never ran at all. Three in a
+  thousand, a punch every sixteen seconds, and both machines get the run they need. (2) The welcome was
+  modelled as a coin flip rather than as the executor offers it: `PathExecutor#welcomeGlance` welcomes every
+  tick the walk under way is plain (on the ground, three plain movements ahead), and it is about the
+  movements rather than about what is being aimed at. The run now offers it the same way, and the run's dice
+  are still hostile: the gate shuts often enough that a glance rarely completes its arc, which is why the
+  calm case stays `WalkGlanceTest`'s.
+- **The one rule a drawn-aim run cannot judge**, and therefore a focused test:
+  `aStareLandsOnWhoeverHitUsWithAGlanceOut` - the aim held still at nothing, the glance out at forty
+  degrees, the attacker at ninety, blows every six ticks so the stare is owed throughout - asserts the head
+  the caller's sum produces is the attacker and not the attacker plus the glance, with three degrees of
+  slack for the glance's amplitude jitter and the stare's own arrival. It is the walking-path defect above,
+  written down so that it cannot come back; judged only where the neck is not what stops the stare, since
+  a clamped stare is `FlinchTest`'s walking bracket.
+- **Validation.** `./gradlew :test` on the rebased tree: **BUILD SUCCESSFUL, 307 tests, 0 failures, 0
+  skipped** (their 3 landed under mine while I worked). Patches `0024`/`0025` checked in sequence with
+  `git apply` in a scratch worktree at `fb2f1fe1`, the tip they were rebased onto; `0022` and `0023` went to
+  the builder's break order and the trace's face question while this was being written, hence the numbers.
+- **Limitation, and the in-game check.** `LookBehavior` needs a running game, so the wiring rests on the
+  reading and on the modes above rather than on the game. What is worth watching: punch a bot from behind at
+  an angle while it walks a long straight with something to look at beside it - the head should come round
+  within a beat, stay on whoever hit it, and come home to the aim rather than back out to the cow when the
+  stare ends. The airborne half of the stride gate is still pinned by reading (the harness has no ground),
+  and the feet stopping for a look worth it is still the executor's half.
