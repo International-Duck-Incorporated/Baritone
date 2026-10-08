@@ -1,4 +1,4 @@
-From fd6388c2f3fccc9e5bbc21e1b203365bd328a08d Mon Sep 17 00:00:00 2001
+From 37407222ba0c3155d8f68c854814514348cab112 Mon Sep 17 00:00:00 2001
 From: 0xFFshell <0xFFshell@users.noreply.gitlab.com>
 Date: Thu, 8 Oct 2026 13:11:06 +0000
 Subject: [PATCH] humanize: hold the crouch across a crossing, and charge it
@@ -64,10 +64,10 @@ drop without bridging and it should not crouch at all.
  create mode 100644 src/test/java/baritone/pathing/movement/CarefulFootingTest.java
 
 diff --git a/HUMANLIKE.md b/HUMANLIKE.md
-index 16546ff9..c11b34d6 100644
+index 577cf818..6e2a4f6f 100644
 --- a/HUMANLIKE.md
 +++ b/HUMANLIKE.md
-@@ -79,6 +79,7 @@ interval rather than a fixed one.
+@@ -80,6 +80,7 @@ interval rather than a fixed one.
  | A run walks before it sprints | `pathing/movement/SprintWindup.java`, `PathExecutor#shouldSprintNextTick` | Control used to go down on the same tick a traverse asked for a sprint. A new run now walks two to four ticks first (`Cadence.sprintWindup`). Parkour, climbs, drops, water and air skip it - the speed on those ticks is load bearing. A hangover still holding the key is the same run and does not wind up again. |
  | A direction and its opposite are a beat apart | `pathing/movement/KeyBeat.java`, `InputOverrideHandler#beatTheKeys` | The four keys are decided fresh every tick, so a turn-around arrived as W becoming S in one tick - through the game's own input packet, to anybody watching. A reversal now costs one to two ticks of no keys while the hand repositions, and only a reversal: lifting a finger, landing a finger, and the W+S someone brakes with all answer the tick they are asked. Only at a run on the ground - sneaking along a bridge, backing away from a drop, water, air, and the elytra loop all get their keys immediately, because there the keys are a control loop and not fingers (`InputOverrideHandler#atAPace`). |
  | The feet wait for the head | `pathing/movement/HeadFirst.java`, `PathExecutor#letTheHeadLead` | The body is steered by the angle a movement asks for on the tick it asks, while the head eases there over the ticks after - so at a sharp turn the body used to set off while the head still faced the old way, a half turn walked backwards for as long as the head took to come round. The walking keys and the jump are now kept off until the head is inside 60° of the way the feet are going from a standstill (a quarter turn costs three ticks, a half turn eight), and at a walk only a turn sharper than 100° - a turn-around - stops the feet, for six ticks on a half turn. Never in the air or in water, never past ten ticks, and never twice for one turn; the sneak and the mouse buttons go around it. |
@@ -75,7 +75,7 @@ index 16546ff9..c11b34d6 100644
  
  ## Following
  
-@@ -183,7 +184,7 @@ The item in the hand has the same rule, and it is counted the same way. It is wr
+@@ -184,7 +185,7 @@ The item in the hand has the same rule, and it is counted the same way. It is wr
    running game goes in its own class in `behavior/look` with a test next to it, the way `AimDynamics`,
    `IdleGlance`, `WalkGlance`, `Newcomer`, `HeadWander`, `PitchWander`, `IdleFidget`, `GazeAhead` and `ReactionDelay` are - or, for
    a rule about the keys rather than the camera, in `pathing/movement` beside `MovementOption`, the way
@@ -84,7 +84,7 @@ index 16546ff9..c11b34d6 100644
    the way `HotbarSwitch` is, and for a rule about what to do next rather than how to look doing it, beside the process
    that uses it, the way `FollowProgress` is.
  - Everything with a random source takes it through its constructor - `HeadWander`, `PitchWander`,
-@@ -194,10 +195,11 @@ The item in the hand has the same rule, and it is counted the same way. It is wr
+@@ -195,10 +196,11 @@ The item in the hand has the same rule, and it is counted the same way. It is wr
    through twenty thousand hostile ticks and asserts that the aim never moves more than its tick limit,
    that a settled hand is always arrived, and that the sway never escapes its band. `AimDynamicsTest`,
    `IdleGlanceTest`, `WalkGlanceTest`, `NewcomerTest`, `PitchWanderTest`, `IdleFidgetTest`, `GazeAheadTest`, `KeyBeatTest`, `HeadFirstTest`,

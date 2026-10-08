@@ -1,4 +1,4 @@
-From 30886e7ebfb4247d1c3707364877f4c22eb12c69 Mon Sep 17 00:00:00 2001
+From 6fc1be6cee0abe207d1d36aa950b0732f7efebd2 Mon Sep 17 00:00:00 2001
 From: 0xFFshell <0xffshell@users.noreply.gitlab.com>
 Date: Thu, 8 Oct 2026 12:09:15 +0000
 Subject: [PATCH] Pin the hand-ready wait in the button guard
