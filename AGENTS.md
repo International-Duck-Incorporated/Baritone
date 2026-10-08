@@ -39,3 +39,13 @@ Proposal: First preserve existing work and audit the actual movement-input pipel
 - Review block-breaking/placing and interaction action cadence for abrupt repeated clicks.
 - Review item switching and path handoff integration after the inventory wind-up.
 - Review deterministic/repetitive idle and target-acquisition behavior without adding gratuitous randomness.
+
+### Tempo (concrete claim)
+
+Task: Make direct firework use honor the existing hotbar/inventory hand wind-up instead of clicking in the same tick as an item-selection request.
+Subsystem: Elytra item-use handoff and inventory behavior integration.
+Files: `src/main/java/baritone/process/elytra/ElytraBehavior.java`; tests/docs as needed.
+Status: Claimed; implementing after audit.
+Started: 2026-10-08.
+Dependencies: Existing `InventoryBehavior#switchingHands`, `HotbarSwitch`, and `BlockPlaceHelper` hand-ready gate.
+Notes: Farm/path clicks already flow through `InputOverrideHandler`; Elytra's direct `processRightClick` bypasses that gate. Preserve flight safety by waiting for the requested firework to be in the main hand and only marking boost state after a successful use.
