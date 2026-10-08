@@ -1,0 +1,51 @@
+From 3d6f974de9a51a26727403395d76de62d63f1df4 Mon Sep 17 00:00:00 2001
+From: 0xFFshell <0xffshell@users.noreply.gitlab.com>
+Date: Thu, 8 Oct 2026 11:11:51 +0000
+Subject: [PATCH] Jitter Elytra inventory transaction gaps
+
+---
+ .../java/baritone/process/elytra/ElytraBehavior.java | 12 +++++++++++-
+ 1 file changed, 11 insertions(+), 1 deletion(-)
+
+diff --git a/src/main/java/baritone/process/elytra/ElytraBehavior.java b/src/main/java/baritone/process/elytra/ElytraBehavior.java
+index 8bd88f08..7d2d216d 100644
+--- a/src/main/java/baritone/process/elytra/ElytraBehavior.java
++++ b/src/main/java/baritone/process/elytra/ElytraBehavior.java
+@@ -28,6 +28,7 @@ import baritone.api.utils.input.Input;
+ import baritone.pathing.movement.MovementHelper;
+ import baritone.process.ElytraProcess;
+ import baritone.utils.BlockStateInterface;
++import baritone.utils.Cadence;
+ import baritone.utils.IRenderer;
+ import baritone.utils.PathRenderer;
+ import baritone.utils.accessor.IFireworkRocketEntity;
+@@ -123,6 +124,8 @@ public final class ElytraBehavior implements Helper {
+     // auto swap
+     private int invTickCountdown = 0;
+     private final Queue<Runnable> invTransactionQueue = new LinkedList<>();
++    /** One run-local source for the small gap variation between queued inventory clicks. */
++    private final Random inventoryCadenceRand = new Random();
+ 
+     public ElytraBehavior(Baritone baritone, ElytraProcess process, NetherPathfinderContext npf, BlockPos destination, boolean appendDestination) {
+         this.baritone = baritone;
+@@ -1312,12 +1315,19 @@ public final class ElytraBehavior implements Helper {
+         }
+     }
+ 
++    /**
++     * Advances the queued auto-swap clicks. The first click is available as soon as the queue is observed;
++     * only the gaps after a click are varied, using the same bounded jitter as normal inventory moves. A
++     * person who swaps an elytra still takes the configured average time, but does not hit the same window
++     * slot at an exact metronome interval.
++     */
+     private void tickInventoryTransactions() {
+         if (invTickCountdown <= 0) {
+             Runnable r = invTransactionQueue.poll();
+             if (r != null) {
+                 r.run();
+-                invTickCountdown = Baritone.settings().ticksBetweenInventoryMoves.value;
++                invTickCountdown = Cadence.jitter(this.inventoryCadenceRand,
++                        Baritone.settings().ticksBetweenInventoryMoves.value);
+             }
+         }
+         if (invTickCountdown > 0) invTickCountdown--;
