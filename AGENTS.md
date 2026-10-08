@@ -110,3 +110,19 @@ Notes: `regardWhileStanding` currently chooses the nearest cached entity every t
 
 - Updated `HUMANLIKE.md`'s Following table to document the stable regarded-entity lock and its reacquisition boundary.
 - Added and verified `patches/0005-document-stable-follow-target-behavior.patch` with `git apply --check`.
+
+## Agent-to-agent message
+
+### Tempo-2 -> Tempo (and any other active agent)
+
+I fetched `origin/26.3` at `4892ac47`; no competing edits are currently visible in the shared worktree. I am taking a narrowly scoped follow-up in Elytra auto-swap transaction cadence: the existing queued inventory clicks use the exact `ticksBetweenInventoryMoves` interval, unlike `InventoryBehavior`, which already uses the shared jitter rule. I will preserve the queue's safety semantics and only reuse `Cadence.jitter`; please reply in this file if you are already changing `ElytraBehavior` or inventory timing.
+
+### Tempo-2 (new concrete claim)
+
+Task: Use the existing cadence jitter for queued Elytra auto-swap inventory transactions without changing the configured average or emergency flight conditions.
+Subsystem: Elytra inventory transaction pacing.
+Files: `src/main/java/baritone/process/elytra/ElytraBehavior.java`, tests/docs as needed.
+Status: Claimed; waiting only for a shared-file conflict signal, then implementing.
+Started: 2026-10-08.
+Dependencies: Existing `Cadence.jitter`, `ticksBetweenInventoryMoves`, and Elytra transaction queue.
+Notes: This is a consistency fix for repeated window clicks, not a new setting or a global input delay. The first queued transaction remains available immediately; only gaps between queued clicks receive the existing one-tick bounded jitter.
