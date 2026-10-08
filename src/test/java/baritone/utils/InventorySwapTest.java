@@ -62,6 +62,16 @@ public class InventorySwapTest {
     }
 
     @Test
+    public void cancellingAWindowClickClearsItsWindup() {
+        final InventorySwap swap = new InventorySwap(new Random(6));
+        swap.ask(true);
+        assertFalse("swap executed before cancellation", swap.tick());
+        swap.ask(false);
+        assertFalse("cancelled swap remained pending", swap.waiting());
+        assertFalse("cancelled swap executed later", swap.tick());
+    }
+
+    @Test
     public void consecutiveSwapsEachWait() {
         final InventorySwap swap = new InventorySwap(new Random(4));
         swap.ask(true);
