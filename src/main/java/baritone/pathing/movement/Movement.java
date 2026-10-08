@@ -144,12 +144,39 @@ public abstract class Movement implements IMovement, MovementHelper {
         });
         currentState.getInputStates().clear();
 
+        // The crouch a person keeps while their footing is not certain, asked for here - every tick, by
+        // whichever movement is running - and held by the input layer, which is the only thing that
+        // survives the movement boundary the crouch has to outlive. See CarefulFooting: the tick the block
+        // goes in and the walk onto it are one crossing, and in between them the movement that asked is
+        // already gone. A movement that is not crossing anything answers neither question and stands the
+        // bot up, so the crouch cannot follow a crossing into the movement after it.
+        ((Baritone) baritone).getInputOverrideHandler().carefulFooting(isPlacingUnderItself(), isAnotherGapAhead());
+
         // If the current status indicates a completed movement
         if (currentState.getStatus().isComplete()) {
             baritone.getInputOverrideHandler().clearAllKeys();
         }
 
         return currentState.getStatus();
+    }
+
+    /**
+     * Whether this movement has to place the block it is stepping onto: the footing under the next step is
+     * not there yet, so the crouch a person crosses with is asked for. See {@link CarefulFooting}.
+     * <p>
+     * False for everything that is not a crossing, which is what ends the crouch: a movement answers for
+     * itself, so the walk after a crossing stands the bot up on its first tick.
+     */
+    protected boolean isPlacingUnderItself() {
+        return false;
+    }
+
+    /**
+     * Whether the block under the step after this one has no floor either: the middle of a crossing, where
+     * the block just placed is walked with the next gap already in front of the feet.
+     */
+    protected boolean isAnotherGapAhead() {
+        return false;
     }
 
     protected boolean prepared(MovementState state) {

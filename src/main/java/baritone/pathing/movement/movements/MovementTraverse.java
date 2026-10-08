@@ -155,7 +155,13 @@ public class MovementTraverse extends Movement {
                         continue;
                     }
                     if (MovementHelper.canPlaceAgainst(context.bsi, againstX, againstY, againstZ)) { // found a side place option
-                        return WC + placeCost + hardness1 + hardness2;
+                        // The block goes in under the bot and the bot walks it the way it walks any
+                        // crossing: crouched, because the footing on either side of the block it just put
+                        // down is not certain yet. The behaviour holds that crouch for the whole crossing
+                        // (CarefulFooting), so this is what the block costs to walk. The backplace path
+                        // below has charged it since it was written; the side-place path was pricing a
+                        // crouched walk as an upright one, which is a cost that does not describe the path.
+                        return WC * (SNEAK_ONE_BLOCK_COST / WALK_ONE_BLOCK_COST) + placeCost + hardness1 + hardness2;
                     }
                 }
                 // now that we've checked all possible directions to side place, we actually need to backplace
@@ -174,6 +180,36 @@ public class MovementTraverse extends Movement {
             }
             return COST_INF;
         }
+    }
+
+    /**
+     * Whether this movement has to place the block it is stepping onto, which is the ask for the crouch a
+     * person crosses with. {@code assumeSafeWalk} is the user saying they do not want the crouch at all -
+     * the same setting that skips this movement's own sneak below - and gets none of it.
+     */
+    @Override
+    protected boolean isPlacingUnderItself() {
+        if (Baritone.settings().assumeSafeWalk.value) {
+            return false;
+        }
+        return !MovementHelper.canWalkOn(ctx, positionToPlace)
+                && !MovementHelper.isClimbable(BlockStateInterface.get(ctx, src.below()).getBlock())
+                && !MovementHelper.canUseFrostWalker(ctx, positionToPlace);
+    }
+
+    /**
+     * Whether the block under the step after this one has no floor either.
+     * <p>
+     * The middle of a crossing is a step whose own block is down and whose next one is not, so this is what
+     * keeps the crouch down for the walk between two placements. It is only ever consulted while the crouch
+     * is already down - a single hole beside an ordinary walk is not a crossing and gets no crouch from it.
+     */
+    @Override
+    protected boolean isAnotherGapAhead() {
+        if (Baritone.settings().assumeSafeWalk.value) {
+            return false;
+        }
+        return !MovementHelper.canWalkOn(ctx, dest.offset(getDirection()).below());
     }
 
     @Override

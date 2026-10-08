@@ -64,7 +64,10 @@ public class PlayerMovementInput extends ClientInput {
             leftImpulse--;
         }
 
-        boolean sneaking = handler.isInputForcedDown(Input.SNEAK);
+        // The crouch as the game sees it: the movement's ask, and - held across the movement seam, where
+        // every key is otherwise re-decided from scratch - the crouch a person keeps while the footing is
+        // not certain. See CarefulFooting.
+        boolean sneaking = handler.isInputForcedDown(Input.SNEAK) || handler.isCrouchingForTheFooting();
 
         // Not scaled down here on purpose. This used to multiply the impulses by 0.3, which is what the key
         // handler did when this class was written; the game no longer scales crouching into the impulse.

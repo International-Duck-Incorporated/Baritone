@@ -23,6 +23,7 @@ import baritone.api.event.events.TickEvent;
 import baritone.api.utils.IInputOverrideHandler;
 import baritone.api.utils.input.Input;
 import baritone.behavior.Behavior;
+import baritone.pathing.movement.CarefulFooting;
 import baritone.pathing.movement.KeyBeat;
 import net.minecraft.client.player.KeyboardInput;
 import net.minecraft.world.phys.Vec3;
@@ -54,6 +55,15 @@ public final class InputOverrideHandler extends Behavior implements IInputOverri
      * next, which is exactly the boundary every other piece of state dies at.
      */
     private final KeyBeat keyBeat = new KeyBeat();
+
+    /**
+     * The crouch a person keeps while their footing is not certain, held here for the same reason the key
+     * beat is held here: the crossing it covers outlives the movement that asked for it. A movement that
+     * has to place the block it is stepping onto is the ask, and the walk onto the block it just placed is
+     * the same crossing - which is exactly the tick the movement seam is in the middle of. See
+     * {@link CarefulFooting}.
+     */
+    private final CarefulFooting footing = new CarefulFooting();
 
     /**
      * Squared horizontal speed that counts as a run: a walk tops out at 0.216 blocks per tick and every
@@ -112,9 +122,13 @@ public final class InputOverrideHandler extends Behavior implements IInputOverri
         blockBreakHelper.tick(isInputForcedDown(Input.CLICK_LEFT), handReady);
         blockPlaceHelper.tick(isInputForcedDown(Input.CLICK_RIGHT), handReady);
 
+        if (!baritone.getPathingBehavior().isPathing()) {
+            footing.reset(); // a crossing that ended while nobody was asking is not one being walked
+        }
         if (inControl()) {
             if (ctx.player().input.getClass() != PlayerMovementInput.class) {
                 keyBeat.reset(); // somebody else had the keys; the hands come to them fresh
+                footing.reset();
                 ctx.player().input = new PlayerMovementInput(this);
             }
         } else {
@@ -136,6 +150,30 @@ public final class InputOverrideHandler extends Behavior implements IInputOverri
     }
 
     /**
+     * The crouch a person keeps while their footing is not certain: asked for once a tick by the movement
+     * that is crossing, held across the movement boundary that would otherwise end it (see
+     * {@link CarefulFooting}).
+     *
+     * @param asked             the movement has to place the block it is stepping onto, so the block
+     *                          under the next step is not there yet
+     * @param anotherGapIsAhead the block under the step after this one is missing too, which is what the
+     *                          middle of a crossing looks like
+     * @return whether the crouch is down this tick
+     */
+    public final boolean carefulFooting(boolean asked, boolean anotherGapIsAhead) {
+        return footing.tick(asked, anotherGapIsAhead);
+    }
+
+    /**
+     * Whether that crouch is down: {@link PlayerMovementInput} presses it like the sneak key it is, and
+     * {@link #atAPace()} has to know, because a crossing is the one place a beat of no keys is not a beat
+     * a person would take.
+     */
+    public final boolean isCrouchingForTheFooting() {
+        return footing.crouched();
+    }
+
+    /**
      * Whether the player is running along the ground somewhere a beat between two directions is a beat a
      * person would take.
      * <p>
@@ -153,6 +191,7 @@ public final class InputOverrideHandler extends Behavior implements IInputOverri
         }
         if (!ctx.player().onGround()
                 || ctx.player().isShiftKeyDown()
+                || footing.crouched() // the crouch a crossing is walked with: the keys are a control loop here
                 || isInputForcedDown(Input.SNEAK)
                 || ctx.player().isInWater()
                 || ctx.player().isInLava()
