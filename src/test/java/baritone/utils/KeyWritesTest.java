@@ -96,6 +96,9 @@ public class KeyWritesTest {
             // the jump, the sneak and the sprint through the handler rather than read from the keyboard
             {"src/main/java/baritone/utils/PlayerMovementInput.java", "handler.isInputForcedDown(Input.JUMP)"},
             {"src/main/java/baritone/utils/PlayerMovementInput.java", "handler.isInputForcedDown(Input.SPRINT)"},
+            // the movement's own sneak ask, without which every crouch a movement requests - the magma
+            // walk, the ladder, the movement's bridge - is silently gone while the count still passes
+            {"src/main/java/baritone/utils/PlayerMovementInput.java", "handler.isInputForcedDown(Input.SNEAK)"},
             // the crouch a person keeps while the footing is not certain, which is why the sneak the game
             // sees is this OR that and not either one of them
             {"src/main/java/baritone/utils/PlayerMovementInput.java", "handler.isCrouchingForTheFooting()"},
