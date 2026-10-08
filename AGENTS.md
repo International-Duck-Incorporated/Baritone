@@ -17,6 +17,7 @@ Give timestaps of everything, and dont use the name 0xFFshell, as that one is re
 | Tempo | Audit and improve grounded movement cadence after existing camera/input work | `InputOverrideHandler`, `PlayerMovementInput`, path execution | Planning; no source changes yet |
 | Kestrel | The flinch, and the blow in the hostile run (2026-10-08 12:11 UTC) | `behavior/look` camera | Complete; `00ebe176` |
 | Plover | Builder break search done (`9ca8323c`, patch 0022); sneak-cadence claim WITHDRAWN 12:47 UTC - the numbers do not support it | `process/BuilderProcess`, `process/PlaceSearch` | Done; resting |
+| Wigeon | Session audit: farm/builder click gates, backfill, get-to-block, metronome sweep (2026-10-08 12:52 UTC) | `process/*` and `utils` review | Audits recorded below; no source changes; resting |
 
 ## Multi-Agent Planning
 
@@ -701,3 +702,74 @@ the finding.**
 
 Status: the builder's break order (`9ca8323c`, patch `0022`) is pushed and verified; nothing of mine is
 mid-flight. Resting.
+
+### Wigeon — new name, session audit, no source changes (2026-10-08 12:52 UTC)
+
+The human notice at the top is read and complied with: I write as **Wigeon**, this entry carries a UTC
+timestamp (this box is UTC; the human's clock reads +2), and the git identity stays `0xFFshell
+<0xffshell@users.noreply.gitlab.com>` because that is the repo's configured committer and the operator
+instruction is to commit as the configured identity - the same reading Kestrel, Duckbill and Plover
+recorded.
+
+I joined after the branch had been handed over (Kestrel 12:38, Duckbill closing his session, Plover's
+sneak claim withdrawn at 12:48), read AGENTS.md and HUMANLIKE.md in full, and audited before claiming
+anything. The session ends with no source changes of mine: every candidate task I found was either already
+done on the branch or already claimed and withdrawn for a recorded reason. The findings are here so the
+next agent does not spend the same hours:
+
+- **The farm's click gates are done; do not redo them.** Duckbill's face question (`27adae53`, patch
+  `0023`) landed while I was reading: `RayTraceUtils#hitsFace`, `IPlayerContext#isLookingAt(block, face)`
+  and `hitsFaceTowards`, at six sites including both farmer plantings, the builder's candidate and click,
+  and the movement layer's placement search - plus the `hasArrivedAt` arrival fallback on every farmer
+  click. The FarmProcess task I had scoped (side-face plant clicks, missing arrival fallback) is exactly
+  what `0023` fixed. `ClickGatesTest` pins who asks a face, per file and per shape of the call.
+- **`utils/GuiClick.java` audited: it presses nothing.** It is a `Screen` whose `mouseClicked` records a
+  corner and whose release adds a selection or sets a goal; none of `ButtonWritesTest`'s button patterns
+  appears in it, so the allow-list is right to leave it out. Duckbill's 12:35 entry answers his own earlier
+  note the same way; this is a second reader's confirmation.
+- **`process/BackfillProcess.java` audited: house-compliant, nothing to change.** Its one click is gated on
+  `PlaceResult.READY_TO_PLACE`, which `MovementHelper#attemptToPlaceABlock` returns only when the
+  *current* crosshair is on the block and face the placement is for, and the attempt asks for a throwaway
+  (`selectThrowawayForLocation`) on the way, so the hand wind-up and the `handReady` gate cover it. The
+  farthest-first `toFillIn` order is upstream's and is not a visible tell; left alone.
+- **`process/GetToBlockProcess.java` audited: gated, one fixed constant left.** The arrival right-click is
+  gated on `knownLocations.contains(ctx.getSelectedBlock())` - the block under the crosshair the process
+  picked out - and paced by `BlockPlaceHelper`'s jittered `rightClickSpeed`. The one metronome left is the
+  give-up: `arrivalTickCount++ > 20`, exactly twenty ticks every time before "Right click timed out".
+  Left alone deliberately: a give-up is not a rhythm a spectator can measure, and the constant is a safety
+  timeout rather than a cadence - but it is the only fixed interval I found in the processes that is not
+  already drawn.
+- **Metronome sweep over `src/main`: clean.** The remaining tick counters are movement internals
+  (`MovementAscend#ticksWithoutPlacement`, `MovementDescend`/`MovementDownward#numTicks` - load bearing),
+  already-jittered clocks (`InventoryBehavior#ticksSinceLastInventoryMove`), latches
+  (`InventoryPauserProcess#ticksOfStationary`), or `Newcomer`'s `tick % FORGOTTEN_AFTER`, which Kestrel's
+  12:11 answer already acquits as a garbage-collection pass and not one of the look's rhythms. No new
+  `Cadence` work is owed.
+- **Environment, confirmed in this sandbox.** Temurin 25.0.4.1 at `/var/tmp/jdk25`, and the recipe works as
+  written: `JAVA_HOME=/var/tmp/jdk25/jdk-25.0.4.1+1 GRADLE_USER_HOME=/var/tmp/gradle-home ./gradlew :test
+  --no-daemon --console=plain --max-workers=1 --project-cache-dir /var/tmp/gradle-project-cache
+  --init-script /var/tmp/lean.init.gradle -Dorg.gradle.jvmargs="-Xmx900m -XX:MaxMetaspaceSize=256m
+  -XX:+UseSerialGC -XX:ReservedCodeCacheSize=96m"`, with the init script capping every `Test` task at 320m,
+  SerialGC, one fork. Baseline on the tip I audited (`7df684c7`, before the handover commits): **BUILD
+  SUCCESSFUL, 307 tests, 0 failures, 0 errors, 37 classes** (42s incremental once the dependency caches were
+  warm; the 6m13s first run had also proved the dependencies resolve fine here, so the older "TLS blocked"
+  notes are environment-specific, as Plover's 12:18 entry already said).
+- **One warning for whoever builds next: never `git pull --rebase` while a Gradle build is compiling.** I
+  did, and the compiler read a torn tree - the new tip's callers against the old tip's API files - which
+  failed `:compileJava` with exactly the `hitsFace` / `isLookingAt(BlockPos, Direction)` "cannot find
+  symbol" errors that look like a half-applied patch. The tree was fine; a re-run on the stable tree was
+  green in 42s. If those errors appear, check `git status` and `git log -1` before debugging the code.
+
+**Handoff.** Nothing of mine is uncommitted or unpushed, because there is nothing of mine in the tree.
+Open work I did not take, for whoever comes next: `MovementOption.best(...)` (Kestrel's item 2 - the one
+unread site in the steering layer, a reading job); the in-game checks from Kestrel's item 1 and Duckbill's
+records; the approach look at the block a job is about (Duckbill: "worth doing, not by halves" - it needs a
+`Goal`-side hook that names a block, a stand-down margin, and a flicker decision); `MovementTraverse`'s
+"something in the way" break click (Duckbill: do not fix without a running game); the sneak flicker, whose
+finding is real and whose fix Plover withdrew at 12:48 with the arithmetic recorded - the cost model
+(`MovementTraverse.calculateCost`, side-place path uncharged) and the cadence have to land together, and
+Plover flagged that half to Tempo; the grounded movement cadence is Tempo's, still planning. My own read
+of the two `MOVE_BACK` reversals in `MovementTraverse` agrees with Duckbill's: `InputOverrideHandler#atAPace`
+is right as it is, and at a careful pace those keys are a control loop, not fingers.
+
+Resting; no open claim.
