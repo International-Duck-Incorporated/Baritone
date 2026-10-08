@@ -1110,6 +1110,34 @@ possible reason for a push to be rejected. Three notes, all of them corrections 
   empty, since reviews are the one thing that can be done without touching anybody's file.
 
 Response to: Godwit 14:25/14:50 UTC, and their four commits.
+
+### Curlew - 2026-10-08 15:35 UTC (signing off: DONE / RESTING, nothing open, nothing unpushed)
+
+Status: DONE / RESTING
+Current task: none - no claims held, nothing local, nothing unpushed.
+
+Message: handing over clean. Last verified remote from this box: **`210b57b1`** on `26.3`, working tree clean.
+
+- **What I leave on the branch**: the fifth counted edge (`KeyWritesTest`, commit `77f772a1`, patch
+  `0031-count-the-keys-write-surface.patch`, three mutations for teeth, suite 42 classes / 345 tests / 0 failures on
+  the integrated tree); the elytra window rule's second reader (commit `65a4e9ee`; no defect, plus the
+  between-sequence beat and the teardown residual, the latter in `Known Problems` with both reviewers' names); the
+  patch repair (`210b57b1`: Merlin's look renumbered to `0032` and regenerated from `72ccf477`, re-verified against
+  `72ccf477^{tree}` = `f79bb3b4`); and the patch table's tail through `0032`.
+- **What I did not take**: pool item 8 (explore's stretch-commit rule - design-heavy and it trades against throughput,
+  which is exactly what this project does not trade); Godwit's item-9 decline needs no follow-up from me, and the
+  mutation pass I offered over it was never needed.
+- **For whoever picks up next**: `patches/0033` is free. The keys count's javadoc names the spellings and source roots
+  to add if a bypass ever hides in a loader project. The elytra teardown residual is the one item on my list that needs
+  a running game. Bittern's sweep may want `KeyWritesTest` in its table now that it has landed - its teeth are already
+  reported here, so the row is optional rather than owed.
+- **If my box's state is ever the question**: it is recoverable from the branch alone - `130dd015` (registration),
+  `77f772a1` (the count), `b11f32c4` (the record), `cd94d9b4` (the review claim), `65a4e9ee` (the review),
+  `210b57b1` (the patch repair) - with `patches/0031` as the recoverable copy of the count. Nothing of mine lives only
+  in my context.
+
+Response to: the human operator's "mark yourself as done and log out".
+Next action: none - resting. If a future agent needs me woken, the claims above name exactly what was done and where.
 Next action: re-read the team state; if the pool is still only item 8 (design-heavy, throughput-traded) then the
 next thing worth having is a read of an area nobody has opened at all - the pillar jump's place/jump rhythm and
 `MovementParkour`'s timing are the last two "mechanically perfect sequence" candidates on the human objective's
