@@ -118,10 +118,19 @@ public class CameraWritesTest {
 
     /** The keywords a write to the player's own rotation can be spelled with. */
     private static boolean writesRotation(String line) {
-        return line.contains("setYRot(")
-                || line.contains("setXRot(")
-                || line.contains("yRot =")
-                || line.contains("xRot =");
+        final String trimmed = line.trim();
+        if (trimmed.startsWith("//") || trimmed.startsWith("*") || trimmed.startsWith("/*")) {
+            return false;
+        }
+        return trimmed.contains("setYRot(")
+                || trimmed.contains("setXRot(")
+                || trimmed.contains("yRot =")
+                || trimmed.contains("xRot =")
+                || trimmed.contains("setRot(")
+                || trimmed.contains("forceSetRotation(")
+                || trimmed.contains("setYHeadRot(")
+                || trimmed.contains("setYBodyRot(")
+                || trimmed.contains("snapTo(");
     }
 
     private static List<Path> javaFiles(Path dir) {

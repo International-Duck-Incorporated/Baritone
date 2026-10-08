@@ -205,7 +205,7 @@ public class ClickGatesTest {
             final Path source = root.resolve("src/main/java/baritone").resolve(file);
             final String text;
             try {
-                text = Files.readString(source);
+                text = stripComments(Files.readString(source));
             } catch (IOException e) {
                 throw new UncheckedIOException("could not read " + source, e);
             }
@@ -219,6 +219,66 @@ public class ClickGatesTest {
         assertEquals("the face questions have moved: asking a trace for the block of a click that acts on "
                 + "one face of it is not asking the whole question, and the sites that ask it are pinned here",
                 expected, found);
+    }
+
+    /**
+     * A click is named by a constant, and the count above only judges the lines its regex finds: a
+     * mention of the key that is neither one of those lines nor a read slips both the count and the
+     * gate question. The reads are the one shape allowed to mention it without being a click, and a
+     * line that mentions it any other way fails here with its file and its line.
+     */
+    @Test
+    public void everyMentionOfAClickIsACountedOneOrARead() {
+        final Path root = repoRoot();
+        assumeTrue("the sources are not next to this test run", root != null);
+        final List<String> violations = new ArrayList<>();
+        final Path baritone = root.resolve("src/main/java/baritone");
+        for (String relative : ROOTS) {
+            final Path dir = baritone.resolve(relative);
+            if (!Files.isDirectory(dir)) {
+                continue;
+            }
+            try (Stream<Path> stream = Files.walk(dir)) {
+                for (Path file : stream.filter(p -> p.toString().endsWith(".java")).sorted().toList()) {
+                    final List<String> lines = Files.readAllLines(file);
+                    for (int i = 0; i < lines.size(); i++) {
+                        final String line = lines.get(i);
+                        if (!line.contains("Input.CLICK_LEFT") && !line.contains("Input.CLICK_RIGHT")) {
+                            continue;
+                        }
+                        if (CLICK.matcher(line).find() || line.contains("isInputForcedDown(")) {
+                            continue;
+                        }
+                        violations.add(baritone.relativize(file) + ":" + (i + 1) + ": " + line.trim());
+                    }
+                }
+            } catch (IOException e) {
+                throw new UncheckedIOException("could not read the sources under " + dir, e);
+            }
+        }
+        assertEquals("a click button is named without being a counted click or a read of the key: the"
+                + " regex that judges the clicks cannot see this line, so neither can the gate in front of it",
+                List.of(), violations);
+    }
+
+    /**
+     * The same text with its comments removed, so that a count of the questions a file asks counts the
+     * calls rather than the prose about them.
+     */
+    private static String stripComments(String text) {
+        final StringBuilder out = new StringBuilder(text.length());
+        for (int i = 0; i < text.length(); i++) {
+            if (text.startsWith("//", i)) {
+                final int end = text.indexOf('\n', i);
+                i = end < 0 ? text.length() : end;
+            } else if (text.startsWith("/*", i)) {
+                final int end = text.indexOf("*/", i + 2);
+                i = end < 0 ? text.length() : end + 1;
+            } else {
+                out.append(text.charAt(i));
+            }
+        }
+        return out.toString();
     }
 
     /**
@@ -286,6 +346,10 @@ public class ClickGatesTest {
                 for (Path file : stream.filter(p -> p.toString().endsWith(".java")).sorted().toList()) {
                     final List<String> lines = Files.readAllLines(file);
                     for (int i = 0; i < lines.size(); i++) {
+                        final String trimmed = lines.get(i).trim();
+                        if (trimmed.startsWith("//") || trimmed.startsWith("*") || trimmed.startsWith("/*")) {
+                            continue;
+                        }
                         if (!CLICK.matcher(lines.get(i)).find()) {
                             continue;
                         }

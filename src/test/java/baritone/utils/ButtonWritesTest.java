@@ -133,6 +133,13 @@ public class ButtonWritesTest {
             "windowClick(",
             "ServerboundPunchPacket",
             ".swing(",
+            "startDestroyBlock(",
+            "continueDestroyBlock(",
+            "stopDestroyBlock(",
+            "destroyBlock(",
+            "useItemOn(",
+            "useItem(",
+            "attack(",
     };
 
     /** The one file on the list that is allowed to swing without pressing anything. */
@@ -209,8 +216,12 @@ public class ButtonWritesTest {
     }
 
     private static boolean pressesAButton(String line) {
+        final String trimmed = line.trim();
+        if (trimmed.startsWith("//") || trimmed.startsWith("*") || trimmed.startsWith("/*")) {
+            return false;
+        }
         for (String button : BUTTONS) {
-            if (line.contains(button)) {
+            if (trimmed.contains(button)) {
                 return true;
             }
         }

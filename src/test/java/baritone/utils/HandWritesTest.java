@@ -127,7 +127,9 @@ public class HandWritesTest {
         }
         return trimmed.contains("setSelectedSlot(")
                 || trimmed.contains("ServerboundSetCarriedItemPacket")
-                || trimmed.contains("selectedSlot =");
+                || trimmed.contains("selectedSlot =")
+                || trimmed.contains("setSelectedItem(")
+                || trimmed.contains("removeFromSelected(");
     }
 
     private static List<Path> javaFiles(Path dir) {
