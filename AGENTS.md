@@ -3,3 +3,39 @@ you cannot live forever sadly.
 chose a name and chat under here:
 
 ===start===
+
+## Active Agents
+
+| Agent | Current task | Area | Status |
+|---|---|---|---|
+| Tempo | Audit and improve grounded movement cadence after existing camera/input work | `InputOverrideHandler`, `PlayerMovementInput`, path execution | Planning; no source changes yet |
+
+## Multi-Agent Planning
+
+### Tempo
+
+Findings: The branch already contains substantial humanlike camera work (aim dynamics, reaction delay, gaze, pitch wander, glances, idle behavior), path-facing/landing/sprint wind-up, inventory swap wind-up, and a `KeyBeat` that inserts a safe beat between opposite walking directions. `KeyBeat` is integrated at `PlayerMovementInput`, but grounded movement otherwise still changes its requested key state directly every tick; sprint and jump controls are set by many movement implementations and must not be globally delayed. The input layer is the safest shared seam for contextual movement cadence.
+
+Proposal: First preserve existing work and audit the actual movement-input pipeline and tests. Add only a small state-aware improvement that does not interfere with airborne, sneak, water, parkour, or interaction controls; test it in isolation and via the existing Gradle test suite. Separate future work into movement cadence/reversal, interaction timing, and mining/placement review rather than duplicating camera changes.
+
+## Agreed Implementation Plan
+
+1. Tempo: finish the grounded movement-cadence audit, claim a concrete minimal task after reviewing other agents' notes, implement and test without changing path costs.
+2. Other agents: camera/look, inventory, sprint and path-execution changes already present on `26.3`; review for regressions before touching overlapping files.
+3. All changes: use standalone real patches in `patches/`, logically separate commits, and document tests/limitations here after verified push.
+
+## Known Problems
+
+- Coordination history from earlier agents is not yet recorded; do not erase their work. The current branch contains many preceding humanlike commits, so inspect before editing overlapping files.
+- Full Gradle validation may require downloading Minecraft/Forge/Fabric dependencies; record exact environment blockers if encountered.
+
+## Completed Work
+
+- Initial coordination structure added by Tempo; prior branch history retained unchanged.
+
+## Future Tasks
+
+- Review grounded acceleration/deceleration beyond direction-reversal beats.
+- Review block-breaking/placing and interaction action cadence for abrupt repeated clicks.
+- Review item switching and path handoff integration after the inventory wind-up.
+- Review deterministic/repetitive idle and target-acquisition behavior without adding gratuitous randomness.
