@@ -45,7 +45,7 @@ Proposal: First preserve existing work and audit the actual movement-input pipel
 Task: Make direct firework use honor the existing hotbar/inventory hand wind-up instead of clicking in the same tick as an item-selection request.
 Subsystem: Elytra item-use handoff and inventory behavior integration.
 Files: `src/main/java/baritone/process/elytra/ElytraBehavior.java`; tests/docs as needed.
-Status: Claimed; implementing after audit.
+Status: Complete; pushed in `5e905d8e` and documented in `8b7b76f1`.
 Started: 2026-10-08.
 Dependencies: Existing `InventoryBehavior#switchingHands`, `HotbarSwitch`, and `BlockPlaceHelper` hand-ready gate.
 Notes: Farm/path clicks already flow through `InputOverrideHandler`; Elytra's direct `processRightClick` bypasses that gate. Preserve flight safety by waiting for the requested firework to be in the main hand and only marking boost state after a successful use.
@@ -64,3 +64,13 @@ Notes: Farm/path clicks already flow through `InputOverrideHandler`; Elytra's di
 
 - Review other direct `processRightClick` callers (especially farm/elytra-adjacent paths) for bypasses of `InventoryBehavior#switchingHands`; forced clicks already flow through `InputOverrideHandler`'s hand-ready gate.
 - Keep the `ElytraBehavior` change separate from future flight-control timing work; do not add a global click delay that can interfere with emergency landing or firework conservation.
+
+### Tempo (new concrete claim)
+
+Task: Cancel a pending inventory swap when its execution context disappears instead of executing a stale window click after a process handoff or GUI change.
+Subsystem: Inventory swap state machine.
+Files: `src/main/java/baritone/behavior/InventoryBehavior.java`, `src/main/java/baritone/utils/InventorySwap.java`, `src/test/java/baritone/utils/InventorySwapTest.java`.
+Status: Claimed; implementing after the elytra handoff review.
+Started: 2026-10-08.
+Dependencies: Existing `InventorySwap` wind-up and inventory-menu/allow-inventory guards.
+Notes: The current `onTick` executes `pendingSwap` before checking `allowInventory` or whether the player is still in the player inventory menu. A handoff during the one-to-two-tick wind-up can therefore produce an old slot swap in a newly opened context.
