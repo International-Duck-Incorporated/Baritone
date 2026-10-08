@@ -155,7 +155,7 @@ Keep messages technical and useful.
 | Godwit | `MovementFall`'s aim documented as a deliberate exception; second reader for the elytra wiring; then the untouched-area audit | `HUMANLIKE.md`; `utils/InventoryTransaction` + `process/elytra` (review); `ElytraProcess`/`ExploreProcess`/`MineProcess` (research) | CLAIMED 2026-10-08 13:20 UTC | joined; environment up; baseline green on this box (307 tests, 0 failures, 37 classes on `7868b74b`) | write the doc patch, review the wiring, report the audit findings |
 | Osprey | The crouch a person keeps across a crossing, and the price of it | `pathing/movement`, `utils/InputOverrideHandler`, `utils/PlayerMovementInput`, `movements/MovementTraverse` | DONE 2026-10-08 13:11 UTC | `fd6388c2`, patch `0027`; full suite green on this box - 39 classes, 318 tests, 0 failures, 0 skipped | Review the cost half (Lapwing), then the in-game check |
 | Lapwing | The elytra auto-swap's queued window clicks wait for their own window (`InventoryTransaction`) | `process/elytra`, `utils` (hand rules), `ButtonWritesTest`, `HUMANLIKE.md` | DONE 2026-10-08 13:18 UTC | `31a1864c` (change) + `281d87db` (docs) + `cd758e07` (patches), renumbered `0028`/`0029` after the push race; full suite green on the integrated tree - 41 classes, 338 tests, 0 failures, 0 skipped | The review Osprey asked for (the cost half of `CarefulFooting`), then the next unclaimed item |
-| Merlin | The eyes go to the block a job is about as the walk arrives at it (the approach look) | `behavior/look`, `pathing/path` | DONE 13:14 UTC | Implemented, tested (320/0/0), patched (`0026`) and pushed as `a7209a2e`; the review of the next landed change is next | Review Osprey's `CarefulFooting` when it lands, then take the next unclaimed item |
+| Merlin | The approach look is done; now the fall's straight-down aim documented and the review of `0022`-`0025` | `behavior/look`, `pathing/path`, `HUMANLIKE.md` | DONE 13:16 UTC | Approach look pushed (`a7209a2e`, patch `0026`); `MovementFall` row added; `0022`-`0025` reviewed with no defect found | Review Osprey's `CarefulFooting` when it lands, then the next unclaimed item |
 
 The previous session's agents have rows again, written back from the conversation the human's 12:54:59 UTC
 reset removed (verbatim in `AGENTS-archive.md`, and `git show 72e68ae6:AGENTS.md` is the last version that
@@ -705,6 +705,45 @@ Response to: Osprey's `4141ccc9` (the review request), Merlin's 13:14 entry (the
 Next action: read `37407222` in full and report.
 
 
+### Merlin - 2026-10-08 13:16 UTC (the fall's straight-down aim is documented; the review of `0022`-`0025` is done)
+
+Two small items, both unclaimed for a while, claimed and done in this one push.
+
+**The fall's straight-down aim is a deliberate exception now** (`HUMANLIKE.md`, Kestrel asked for it by
+name). While `MovementFall`'s bucket branch is live the aim is the yaw the fall already had with the pitch
+driven straight down, and the click goes the tick the trace is on the block - the landing guarantee, not a
+look, and a smoothed pitch there is a fall that is not caught. The row says where the exception ends: the
+branch takes `blockInteract` with it, so the sway, the carry and both glances stand aside, and a fall with
+no bucket aims at its landing spot the ordinary way.
+
+**The review of `0022`-`0025`: each patch checked against its claims and against the code on the branch.
+No defect found; nothing needs a fix.** What was actually checked:
+
+- `0022` (Plover, the builder's break order): `PlaceSearch.COLUMNS` is one shared, stable, nearest-first
+  list; both halves of the builder's tick walk it (`toBreakNearPlayer`, `searchForPlacables`); the
+  y-ranges are the ones HUMANLIKE states (break: `-1` with `breakFromAbove`, else `0`, to `+5`; place:
+  `-5` to `+1`); `PlaceSearchTest` pins the box size, the first column, monotonic distance, the tie order
+  and - the assertion that was missing when the placement half moved - that the break half walks the same
+  columns. One pre-existing oddity, *not* introduced by the patch and not touched by it: the
+  "don't mine what we're supported by" skip is keyed on `pathStart` and not on the block under the feet
+  (`f7a577e1`, the commit that added `breakFromAbove`, is where it came from), so a builder that has
+  walked away from its path start can still take the block out from under itself. It only bites with
+  `breakFromAbove` on, it is upstream-shaped, and it is a pathfinding change: recorded here, not fixed in
+  passing.
+- `0023` (Duckbill, the trace asked for the face): `RayTraceUtils#hitsFace` and `#hitsFaceTowards` are the
+  two named questions, and `hitsFaceTowards`'s contract - the traced face is the one pointing at the
+  placement - is exactly what the planting and placement call sites need; the call sites the message names
+  do call it.
+- `0024`/`0025` (Kestrel, the stare): the flinch is measured against the head it is added to - the write
+  is `base + walkGlance + headWander * fraction + flinch`, and `stareFrom` is `base + walkGlance`, the sway
+  deliberately not in it - and both glances stand down while a blow is owed (`idleGlance.next(...,
+  allowed && !flinch.answering(), ...)` and `walkGlance.advance(... && !flinch.answering(), ...)`), which
+  is what makes the stare land on the attacker instead of on the attacker plus whatever the road was
+  showing. `HumanlikeLookFuzzTest` carries the sum from tick to tick. Verified against the current code.
+
+What none of this is: a sighting. Every one of the four is a look or an order, and only a running game can
+say whether it reads right - the first item of `Next Tasks` is still the most valuable thing on the list.
+
 ### Godwit - 2026-10-08 13:20 UTC
 
 Status: JOINING -> CLAIMED
@@ -1045,6 +1084,16 @@ Example:
     `GoalComposite` that breaks a block every two or three ticks - is the case to watch when a client
     turns up.
 
+- **The fall's straight-down aim documented, and the review of `patches/0022`-`0025`**
+  Commit: this one (documentation and review only; no source change)
+  Patch: none - `HUMANLIKE.md` only
+  Tests: the whole suite still 320 in 38 classes, 0 failures, 0 errors, 0 skipped (docs-only change, run
+    anyway)
+  Review: `0022` verified (order only, both halves on the shared list, tests pin it; one pre-existing
+    `pathStart`-keyed skip recorded in the Chat and deliberately not touched), `0023` verified against its
+    call sites, `0024`/`0025` verified against the composition order it documents. No defect found.
+  Limits: none of it in a running game, and the `pathStart` skip noted above is left as it is.
+
 ## Lapwing
 
 - **Team state re-registered after the human's 12:54 UTC reset** - this file, kept in the human's
@@ -1342,15 +1391,15 @@ Examples:
    than any new rule: the specific checks are written into each task's completion entry, and the four
    counted edges (`CameraWritesTest`, `HandWritesTest`, `ButtonWritesTest`, `ClickGatesTest`) plus
    `HumanlikeLookFuzzTest` are the parts that most need eyes.
-2. **Document `MovementFall`'s straight-down aim as a deliberate exception** (HUMANLIKE.md's
-   deliberate-exceptions list). Cheap, safe, and it stops somebody "fixing" the aim that the water
-   bucket's timing depends on. Kestrel asked for it by name.
-3. ~~The sneak flicker, both halves.~~ **Done** by Osprey - `fd6388c2`, patch `0027`, 318 tests green. What
-   it leaves open: the in-game check, Lapwing's read of the cost half, and the one-block end-of-crossing
-   price inaccuracy recorded under `Known Problems`. The in-game half of it is the check in that record:
-   cross a gap crouched from edge to far side, and no crouch at all at the edge of a two-deep drop.
-4. ~~The approach look.~~ **Done** by Merlin (`a7209a2e`, patch `0026`). What is left of it is the eye:
-   whether a running game reads the lean right, and the mining walk (a `GoalComposite` that breaks a
+2. **Document `MovementFall`'s straight-down aim as a deliberate exception** - DONE by Merlin
+   (13:16 UTC; `HUMANLIKE.md`, deliberate-exceptions list). Kestrel asked for it by name.
+3. ~~The sneak flicker, both halves.~~ **Done** by Osprey - `37407222`, patch `0027`, 318 tests green (the
+   hash in the entry originally read `fd6388c2`, the pre-rebase commit; corrected here to the one on the
+   branch). What it leaves open: the in-game check, Lapwing's read of the cost half, and the one-block
+   end-of-crossing price inaccuracy recorded under `Known Problems`. The in-game half of it is the check
+   in that record: cross a gap crouched from edge to far side, and no crouch at all at the edge of a
+   two-deep drop.
+4. ~~The approach look.~~ **Done** by Merlin (`a7209a2e`, patch `0026`). What is left of it is the eye:   whether a running game reads the lean right, and the mining walk (a `GoalComposite` that breaks a
    block every two or three ticks) watched first.
 5. **`MovementTraverse`'s "something in the way" break click** - the last click with no arrival question
    in front of it. Deliberate escape hatch; needs a running game.
@@ -1383,17 +1432,18 @@ say so here.
 4. **The approach look** - DONE by Merlin (`a7209a2e`, patch `0026`): the source of truth is the goal
    itself (only the goals that name a block answer), the stand-down margin is the weight ramp, and the
    mining flicker is bounded by it. The in-game eye is still open.
-5. **`MovementFall`'s straight-down aim** - a paragraph in HUMANLIKE.md's deliberate-exceptions list.
-   Cheap, and it stops the next agent from "fixing" it.
+5. **`MovementFall`'s straight-down aim** - DONE by Merlin (13:16 UTC, HUMANLIKE.md).
 6. **Audit anything still untouched**: mining target switching, eating/using items, and the processes'
    own rhythms were spot-checked by Wigeon and are clean, but nobody has read `ElytraProcess`'s
    non-auto-swap paths or `ExploreProcess`/`GoalXZ`-driven wandering.
 
 **Claimed since the lists above were written:** Osprey has the bridge crouch + its price (13:02 UTC);
 Lapwing has the elytra transaction guard (13:06 UTC); Merlin had the approach look (13:10 UTC, item 4 of
-both lists) and finished it (13:14 UTC, `a7209a2e`, patch `0026`). Still unclaimed: in-game validation, `MovementFall`'s documented exception, the
-`MovementTraverse` "something in the way" click, the review of `patches/0022`-`0025`, and the elytra click
-count that follows Lapwing's change.
+both lists) and finished it (13:14 UTC, `a7209a2e`, patch `0026`). Still unclaimed: in-game validation, the
+`MovementTraverse` "something in the way" click, and the elytra click count that follows Lapwing's change.
+Done since this paragraph was written: the approach look (Merlin, 13:14 UTC), `MovementFall`'s documented
+exception and the review of `patches/0022`-`0025` (Merlin, 13:16 UTC - no defect found; one pre-existing
+`pathStart`-keyed break skip recorded in the Chat).
 
 
 **Godwit, 13:20 UTC:** taking the `MovementFall` documentation item (2/5) and the elytra-wiring review from

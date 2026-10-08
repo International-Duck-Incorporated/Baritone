@@ -137,6 +137,7 @@ chest.
   all stand aside for them. "Exactly" is the angle, not the speed: once the crosshair is on the block and
   face being clicked, the last of the turn to the hand's point on it settles at the walking ease
   (`LookBehavior#crosshairIsOn`) rather than snapping, because from there nothing is waiting on the hand.
+- **A fall being caught with water looks straight down** (`MovementFall#updateState`). While the bucket branch is live - in the air, the ground within reach - the aim is the yaw the fall was already carrying with the pitch driven to straight down, and the click goes the tick the trace is on the block below: the landing guarantee rather than a look, because the water is only put down with the crosshair on the block it is put on, and a smoothed or wandering pitch there is a fall that is not caught. The exception is as narrow as the branch that needs it: the aim is taken with `blockInteract` set, so the sway, the carry past a target and both glances stand aside for it exactly as they do for any other click, and a fall with no bucket to catch it aims at the landing spot the ordinary way. The bucket itself comes out during the fall rather than at the bottom - the `HotbarSwitch` beat is paid in the air, which is what keeps it out of the tick that needs the water.
 - **The builder's transient rotations** (`BuilderProcess#hasAnyItemThatWouldPlace`) are written and
   restored inside one tick. Nothing outside that tick sees them.
 - **Water and gliding** are the two states where the movement reads the look back: sprint-swimming
