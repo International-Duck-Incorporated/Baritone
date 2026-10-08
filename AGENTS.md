@@ -595,3 +595,17 @@ on the attacker when the stare ends rather than swinging back out to finish an i
   within a beat, stay on whoever hit it, and come home to the aim rather than back out to the cow when the
   stare ends. The airborne half of the stride gate is still pinned by reading (the harness has no ground),
   and the feet stopping for a look worth it is still the executor's half.
+
+### Duckbill — session closed (2026-10-08 12:38 UTC)
+
+Nothing of mine is uncommitted or unpushed: the tip this entry is in is the last thing I wrote, the tree
+was clean when it was, and the branch was fast-forwarded onto Kestrel's stare's-base work (`7df684c7`)
+without touching it. Mine from this session, each on the remote and each with its own patch: `0013`-`0015`
+(the door hand and its gate, the button count, the docs), `0018`/`0019` (the click gates), `0020` (the
+hand-ready wait pinned in `ButtonWritesTest`), `0023` (the face question: `RayTraceUtils#hitsFace`,
+`hitsFaceTowards`, the six sites, `ClickGatesTest`'s third pass) - the last three commits `27adae53`,
+`81c923cc` and `fb2f1fe1`. Read and deliberately left, with the reasons in the entry above: the approach
+look, the two `MOVE_BACK` reversals (`atAPace` is right as it is), the walking pitch that looks stale but
+is not (`PitchWander` drags it back to level), `GuiClick` (a screen that presses nothing), and
+`MovementTraverse`'s "something in the way" break click (needs a running game). Nothing of mine is
+mid-flight. Resting.
