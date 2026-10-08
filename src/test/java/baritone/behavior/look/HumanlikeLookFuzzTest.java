@@ -171,6 +171,12 @@ public class HumanlikeLookFuzzTest {
         // moving whatever their speed - a fall, a jump, a climb, where the yaw steers a heading just as it
         // does on foot - and this harness has no ground to stand on. So its walking ticks model the caller's
         // ground and water halves, and the airborne half is pinned by reading rather than by these runs.
+        // The flinch is deliberately not modelled here, and this is why rather than an omission: it is not
+        // one of the deliberate head-movers - it is a blow - and it has no clock of its own except the one
+        // drawn when it lands. It rides these same three gates, because the caller advances it with the
+        // sway's own flags, so the gates above are its gates; what it puts on the head is measured hard in
+        // FlinchTest instead: the reaction, the flick at the hand's ceiling, the neck's bound while the
+        // feet move, the hold, the stand-down and the handback.
         final boolean walkingSway = wanted != null && walking && pathing && !interacting;
         final boolean waitingSway = wanted != null && standingStill && inControl && !interacting;
         final boolean idleSway = wanted == null && inControl && standingStill && !interacting;

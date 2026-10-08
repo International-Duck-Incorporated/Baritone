@@ -30,6 +30,7 @@ import baritone.api.utils.Rotation;
 import baritone.api.utils.RotationUtils;
 import baritone.api.utils.input.Input;
 import baritone.behavior.look.AimDynamics;
+import baritone.behavior.look.Flinch;
 import baritone.behavior.look.ForkableRandom;
 import baritone.behavior.look.GazeAhead;
 import baritone.behavior.look.HeadWander;
@@ -156,6 +157,16 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
      * Who has just walked up, for the glances to turn to. See {@link #noticeArrivals}.
      */
     private final Newcomer newcomer = new Newcomer();
+
+    /**
+     * The turn to whoever just hit us. Not a glance, because a glance has limits a blow does not - it
+     * refuses an interest further off than its own, and it only advances on a walk the executor has
+     * welcomed - and not an arrival, because a blow says where it came from whether or not it was in view.
+     * It rides the same head the sway rides, so it is taken exactly where the sway is taken and stands down
+     * exactly where the sway does, and it is applied with the sway's offsets and handed back with them. See
+     * {@link Flinch}.
+     */
+    private final Flinch flinch = new Flinch();
     private int lastHurtTime; // the player's hurtTime last tick, to tell a fresh blow from the tail of one
 
     /**
@@ -429,7 +440,19 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
             }
         }
         if (culprit != null) {
-            this.newcomer.struck(culprit.getId());
+            // A flinch rather than a glance, because a glance has limits a blow does not: see Flinch. The
+            // bearing is asked for again on every tick of the flinch, so a target who walks about is
+            // tracked rather than remembered, and comes back null once they are gone - logged out, dead,
+            // unloaded - which is a stare with nobody left in it. Whether they can still be seen does not
+            // matter: a person keeps looking at the wall somebody stepped behind.
+            final int struck = culprit.getId();
+            this.flinch.blow(() -> {
+                final Entity them = ctx.world().getEntity(struck);
+                if (!(them instanceof LivingEntity) || !them.isAlive()) {
+                    return null;
+                }
+                return RotationUtils.calcRotationFromVec3d(ctx.playerHead(), them.getEyePosition(), ctx.playerRotations());
+            });
         }
     }
 
@@ -628,6 +651,7 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
         this.idleCamera = null;
         this.idleBase = null;
         this.idleGlance.reset();
+        this.flinch.reset();
         this.reaction.clear();
         this.smoothYawBuffer.clear();
         this.smoothPitchBuffer.clear();
@@ -710,6 +734,17 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
                 final Rotation base = theirs ? camera : this.idleBase;
                 final Rotation wanted = this.idleGlance.next(base, allowed, theirs, this::idleStep,
                         this::somethingNearby);
+                // What the sway and the flinch below ride on: the glance's angle when one is out, the base
+                // otherwise. The sway is read against the base rather than the glance's own angle so that it
+                // cannot be mistaken for the glance's bookkeeping, which stays exactly where it was and so
+                // still arrives and still comes home.
+                final Rotation riding = wanted != null ? wanted : base;
+                // The flinch is wanted on the same gate as everything else the standing body does - which
+                // has nothing being clicked in it - and with the feet still it may turn the whole body
+                // round. Measured against what it is added to, so the stare lands on the attacker rather
+                // than on the attacker plus whatever the glance was doing; stood down, it comes home
+                // rather than vanishing. See Flinch.
+                this.flinch.advance(riding, false, allowed);
                 if (!allowed) {
                     this.idleBase = null;
                     // Not ours this tick, and that includes the sway: a leftover half degree rides on the
@@ -722,13 +757,11 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
                     this.idleExpected = camera;
                     return;
                 }
-                // The sway rides on top of whatever the glance is doing, including nothing: read against
-                // the base rather than the glance's own angle, it cannot be mistaken for the glance's
-                // bookkeeping, which stays exactly where it was and so still arrives and still comes home.
-                final Rotation riding = wanted != null ? wanted : base;
+                // The sway rides on top of whatever the glance is doing, including nothing, and the flinch
+                // rides on top of both.
                 final Rotation applied = new Rotation(
-                        riding.getYaw() + this.headWander.idleYaw(),
-                        Rotation.clampPitch(riding.getPitch() + this.headWander.idlePitch()));
+                        riding.getYaw() + this.headWander.idleYaw() + this.flinch.yaw(),
+                        Rotation.clampPitch(riding.getPitch() + this.headWander.idlePitch() + this.flinch.pitch()));
                 this.idleCamera = camera;
                 ctx.player().setYRot(applied.getYaw());
                 ctx.player().setXRot(applied.getPitch());
@@ -818,12 +851,16 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
             // The walking glance is the one offset that cannot simply not be added: it is tens of degrees,
             // and a head that is forty degrees to the left on one tick and on the block the next has
             // snapped. It comes back at the speed of a look instead, and until it is back it is still on
-            // the camera - which keeps the trace honest, and so keeps the click waiting on the head.
+            // the camera - which keeps the trace honest, and so keeps the click waiting on the head. The
+            // flinch is here for the same reason and on the same terms: this is the branch where something
+            // is being clicked, or the head is not ours to turn at all, and a head that was mid-stare when
+            // the pickaxe came out still visibly comes off whoever hit it rather than vanishing.
+            this.flinch.advance(null, false, false);
             this.walkGlance.advance(false, null);
-            if (this.walkGlance.out()) {
+            if (this.walkGlance.out() || this.flinch.out()) {
                 this.wanderCamera = new Rotation(ctx.player().getYRot(), ctx.player().getXRot());
-                ctx.player().setYRot(this.wanderCamera.getYaw() + this.walkGlance.yaw());
-                ctx.player().setXRot(Rotation.clampPitch(this.wanderCamera.getPitch() + this.walkGlance.pitch()));
+                ctx.player().setYRot(this.wanderCamera.getYaw() + this.walkGlance.yaw() + this.flinch.yaw());
+                ctx.player().setXRot(Rotation.clampPitch(this.wanderCamera.getPitch() + this.walkGlance.pitch() + this.flinch.pitch()));
             }
             return;
         }
@@ -858,8 +895,16 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
             return new Rotation(Rotation.normalizeYaw(nearby.getYaw() - this.wanderCamera.getYaw()),
                     nearby.getPitch() - this.wanderCamera.getPitch());
         });
-        ctx.player().setYRot(base.getYaw() + this.walkGlance.yaw() + this.headWander.yaw() * fraction);
-        ctx.player().setXRot(Rotation.clampPitch(base.getPitch() + this.walkGlance.pitch() + this.headWander.pitch() * fraction));
+        // The flinch rides on this same head, and this is the same head the sway rides: wanted wherever the
+        // sway is wanted, which is what both flags above already mean - every gate they carry has nothing
+        // being clicked in it - and stood down wherever it is not. The feet half of it is the walk: a body
+        // that is walking cannot come round without walking backwards, so the turn is held to a neck's
+        // worth while it is one, and a body that is standing still turns whole. It is measured against the
+        // angle it is added to, so the stare lands on the attacker and not on the attacker plus whatever a
+        // glance happened to be doing. See Flinch.
+        this.flinch.advance(base, walking, true);
+        ctx.player().setYRot(base.getYaw() + this.walkGlance.yaw() + this.headWander.yaw() * fraction + this.flinch.yaw());
+        ctx.player().setXRot(Rotation.clampPitch(base.getPitch() + this.walkGlance.pitch() + this.headWander.pitch() * fraction + this.flinch.pitch()));
     }
 
     /**
