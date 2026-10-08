@@ -98,6 +98,25 @@ public class ButtonWritesTest {
             {"src/main/java/baritone/utils/player/BaritonePlayerController.java", "mc.gameMode."},
     };
 
+    /**
+     * The wiring of the wait itself, which is what the helpers' beats are worth: a helper that is never told
+     * the hand is busy presses the button anyway, and a helper that is told and does not look is the same
+     * thing with more code. The rule is one line in {@code InputOverrideHandler} and one condition in each
+     * helper, and it is pinned here because it has already been bypassed twice by callers that clicked on
+     * the tick they asked for an item (the elytra firework and the bucket fall - see {@code HandWritesTest}).
+     */
+    private static final String[][] HAND_READY_SHAPES = {
+            // the gate, computed once a tick from the inventory's own wind-up
+            {"src/main/java/baritone/utils/InputOverrideHandler.java", "final boolean handReady = !baritone.getInventoryBehavior().switchingHands();"},
+            {"src/main/java/baritone/utils/InputOverrideHandler.java", "blockBreakHelper.tick(isInputForcedDown(Input.CLICK_LEFT), handReady)"},
+            {"src/main/java/baritone/utils/InputOverrideHandler.java", "blockPlaceHelper.tick(isInputForcedDown(Input.CLICK_RIGHT), handReady)"},
+            // and looked at by both helpers before anything is pressed
+            {"src/main/java/baritone/utils/BlockBreakHelper.java", "public void tick(boolean isLeftClick, boolean handReady)"},
+            {"src/main/java/baritone/utils/BlockBreakHelper.java", "isLeftClick && isBlockTrace && handReady"},
+            {"src/main/java/baritone/utils/BlockPlaceHelper.java", "public void tick(boolean rightClickRequested, boolean handReady)"},
+            {"src/main/java/baritone/utils/BlockPlaceHelper.java", "!handReady"},
+    };
+
     /** Calls that press a button, in the spelling they are made in: the game's, vanilla's and the mod's. */
     private static final String[] BUTTONS = {
             "clickBlock(",
@@ -149,6 +168,19 @@ public class ButtonWritesTest {
             assertTrue("the file " + shape[0] + " no longer contains \"" + shape[1] + "\": it is on the list of"
                             + " places allowed to press the buttons because of that line, and without it the"
                             + " allowance is for a click with nothing in front of it",
+                    read(root.resolve(shape[0])).stream().anyMatch(line -> line.contains(shape[1])));
+        }
+    }
+
+    @Test
+    public void theButtonsWaitForTheHandThatWasDecidedOn() {
+        final Path root = repoRoot();
+        assumeTrue("the sources are not next to this test run", root != null);
+        for (String[] shape : HAND_READY_SHAPES) {
+            assertTrue("the file " + shape[0] + " no longer contains \"" + shape[1] + "\": that line is the wait"
+                            + " for the item in the hand - the gate computed from the inventory's wind-up and"
+                            + " the question each helper asks before it presses - and without it a right click"
+                            + " with the wrong item in hand is not a missed place, it is a bucket emptied",
                     read(root.resolve(shape[0])).stream().anyMatch(line -> line.contains(shape[1])));
         }
     }

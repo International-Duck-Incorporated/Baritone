@@ -122,7 +122,9 @@ POST. `CameraWritesTest` counts them, so a fifth file fails the build with this 
 edges of the hand are counted the same way: `HandWritesTest` counts the files that may write the selected
 slot, and `ButtonWritesTest` counts the files that may press a mouse button or swing an arm - the two
 helpers, the inventory swap, the idle fidget and the elytra's firework - asserting beside each one the beat
-it is on the list for, so a click with no reaction in front of it cannot be added without saying so.
+it is on the list for and pinning the wait itself: the gate `InputOverrideHandler` computes from the
+inventory's wind-up and the question each helper asks before it presses. A click with no reaction in front of
+it, or one pressed with the hand between items, cannot be added without saying so.
 
 The third edge of a click is where it may go, and that is counted too. Every click in the movement and
 process layers is asked for with the crosshair or the hand already on the block it is for - the ray on the
