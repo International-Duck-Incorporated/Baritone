@@ -44,14 +44,25 @@ import static org.junit.Assert.assertTrue;
  * caller's bases, so an offset added twice, or measured against a head it is not added to, shows up as a
  * jump or as a stare that settles beside the attacker instead of on them.
  * <p>
+ * It also drives the lean the executor offers between the movement's own rotation and the aim: where the
+ * product goes movement rotation -> GazeAhead#lean (the line ahead, or the block the job is about) ->
+ * the aim machinery, the run now keeps a walk direction that persists across ticks, offers onto it the
+ * way the executor's running ticks do, and asserts the stand-aside (a click's target is aimed at exactly)
+ * and the lean's caps over every hostile draw. Unit tests can only ever test one offer; what this run owns
+ * is that no sequence of offers - ramped like the approach's, jumped like a repath's, flapped like a walk
+ * straddling the ramp's edge - can starve the turn, freeze the hand, or carry it past the lean.
+ * <p>
  * What it does not model: the pitch, where the settle of a gaze nobody has an opinion about is covered by
  * PitchWanderTest while the aim here is asked for the target's own pitch, which is the case that has an
  * opinion - a block to break, a face to place against; the person's own camera, since everything here is
  * driven on one head; the executor's conditions for welcoming a glance, which are its business while the
  * glance's own cooldown sets the rate; the feet stopping for a look worth it (WalkGlance#stopped, which the
- * caller's PathExecutor acts on) - the speed here is drawn, never held by a glance; and the halves of the
- * caller's gates that need the ground under it, which are pinned by reading instead. See the notes where
- * each of those is dealt with below.
+ * caller's PathExecutor acts on) - the speed here is drawn, never held by a glance; the ground under the
+ * walk, so the lean's offer conditions (feet in the air, water, parkour, a vertical or zero step, the walk
+ * already standing in the job's block) are drawn as offer/no-offer rather than modelled - they are pinned
+ * by reading in ApproachLookTest; and which block the goal says the job is about, which is
+ * ApproachLookTest's first three tests. The halves of the caller's gates that need the ground under it are
+ * pinned by reading instead. See the notes where each of those is dealt with below.
  */
 public class HumanlikeLookFuzzTest {
 
@@ -347,6 +358,8 @@ public class HumanlikeLookFuzzTest {
         // carries it cannot quietly stop carrying anything: a blow that was never taken is a run that
         // proves nothing about a stare, and a neck's bound that was never reached is a bound nobody tested.
         int blown = 0;
+        int leaned = 0;
+        int jobs = 0;
         int stared = 0;
         int neckChecked = 0;
         int glanced = 0;
@@ -374,6 +387,13 @@ public class HumanlikeLookFuzzTest {
             final TurnPace turnPace = new TurnPace(new Random(seed + 4));
             final Flinch flinch = new Flinch(new Random(seed + 5));
             final WalkGlance walkGlance = new WalkGlance(new Random(seed + 6));
+            final GazeAhead gazeAhead = new GazeAhead();
+            // the lean's coherent state: a walk goes somewhere and keeps going there, and the offer made
+            // against it persists, ramps and drifts the way the executor's offers on a running tick do
+            Rotation walkDirection = null;
+            Rotation aheadBearing = null;
+            double leanWeight = 0;
+            boolean jobLook = false;
             int glanceActive = 0;
             float sway = 0f;
 
@@ -400,7 +420,85 @@ public class HumanlikeLookFuzzTest {
                 final boolean blockInteract = rand.nextInt(10) > 2;
                 // walking, stopping, and standing around, with the speed crossing the idle threshold
                 final double speedSquared = rand.nextInt(100) < 45 ? 0.0 : 0.05 + rand.nextDouble() * 0.1;
-                final Rotation wanted = rand.nextInt(100) < 70 ? target(rand) : null;
+                // A walk goes somewhere and keeps going there - the direction persists on most ticks,
+                // drawn fresh on the rest (a corner, a repath). Fresh random targets every tick would fuzz
+                // the lean's coherence away, and coherence is the thing about a walking target that only
+                // this run can draw: what the lean does to the aim tick after tick on one approach.
+                Rotation rawWanted = null;
+                if (rand.nextInt(100) < 70) {
+                    rawWanted = walkDirection != null && rand.nextInt(100) < 60 ? walkDirection : target(rand);
+                }
+                walkDirection = rawWanted;
+                // The lean, offered exactly where the executor offers it - pathing, walking, nothing being
+                // clicked - then taken by the one thing the product lets take it: LookBehavior#updateTarget
+                // leaning the movement's own rotation before the aim ever sees it. The offer's ground-side
+                // conditions are drawn as offer/no-offer (see the class javadoc); what the fuzz owns is
+                // what the stream of offers does to the aim downstream of them.
+                final boolean leanEligible = rawWanted != null && pathing
+                        && speedSquared > 0.02 * 0.02 && !interacting;
+                boolean leanOffered = false;
+                if (leanEligible) {
+                    if (aheadBearing == null || rand.nextInt(100) < 6) {
+                        // a fresh look: the line ahead two starts in three, the block the job is about the
+                        // third. The weight starts at nothing, the way the approach's ramp does - except a
+                        // hostile few, which start heavier than any real ramp: if the aim survives those,
+                        // the ramped starts are safe
+                        jobLook = rand.nextInt(100) < 34;
+                        aheadBearing = jobLook ? target(rand)
+                                : new Rotation(rawWanted.getYaw() + rand.nextFloat() * 24f - 12f,
+                                        rawWanted.getPitch() + rand.nextFloat() * 8f - 4f);
+                        leanWeight = rand.nextInt(100) < 8
+                                ? 0.05 + rand.nextDouble() * (GazeAhead.LEAN - 0.05) : 0;
+                        if (jobLook) {
+                            jobs++;
+                        }
+                    }
+                    leanWeight = Math.min(GazeAhead.LEAN, leanWeight + 0.06 + rand.nextDouble() * 0.07);
+                    // a job's block sits still (barring a repath); the line ahead moves with the walk
+                    if (jobLook) {
+                        if (rand.nextInt(100) < 2) {
+                            aheadBearing = target(rand);
+                        }
+                    } else {
+                        aheadBearing = new Rotation(aheadBearing.getYaw() + rand.nextFloat() * 10f - 5f,
+                                Math.max(-80f, Math.min(80f,
+                                        aheadBearing.getPitch() + rand.nextFloat() * 4f - 2f)));
+                        if (rand.nextInt(100) < 2) {
+                            aheadBearing = new Rotation(rawWanted.getYaw() + rand.nextFloat() * 50f - 25f,
+                                    rawWanted.getPitch());
+                        }
+                    }
+                    leanOffered = true;
+                    leaned++;
+                } else {
+                    aheadBearing = null;
+                    leanWeight = 0;
+                }
+                gazeAhead.offer(leanOffered ? aheadBearing : null, leanOffered ? leanWeight : 0);
+                final Rotation wanted = gazeAhead.lean(rawWanted, blockInteract);
+                // What the lean may do to what the aim sees. About to be clicked: exactly nothing, over
+                // ten thousand draws, not one unit case - the stand-aside is the click path's guarantee.
+                // Off the click path: no further off the walk than the cap, and the pitch no more than the
+                // weight's share of the way to the bearing.
+                if (rawWanted != null) {
+                    assertTrue("a leaned target is not finite: " + wanted, wanted != null && finite(wanted));
+                    if (blockInteract) {
+                        assertTrue("the lean rode into a click: " + wanted + " against " + rawWanted,
+                                wanted.getYaw() == rawWanted.getYaw()
+                                        && wanted.getPitch() == rawWanted.getPitch());
+                    }
+                    if (leanOffered && !blockInteract) {
+                        assertTrue("the lean went "
+                                        + Math.abs(Rotation.normalizeYaw(wanted.getYaw() - rawWanted.getYaw()))
+                                        + " degrees off the walk",
+                                Math.abs(Rotation.normalizeYaw(wanted.getYaw() - rawWanted.getYaw()))
+                                        <= GazeAhead.MAX_LEAN_DEGREES + 1e-3f);
+                        assertTrue("the pitch leaned past what the weight allows: " + wanted,
+                                Math.abs(wanted.getPitch() - rawWanted.getPitch())
+                                        <= GazeAhead.LEAN * Math.abs(aheadBearing.getPitch() - rawWanted.getPitch())
+                                                + 1e-3f);
+                    }
+                }
                 // A blow lands, sometimes, at a bearing of its own: the caller hands the flinch the bearing
                 // and is asked for it again on every tick of the stare, and a fixed attacker is what makes
                 // the stare's own tracking FlinchTest's business rather than this run's. Three ticks in a
@@ -620,6 +718,10 @@ public class HumanlikeLookFuzzTest {
         assertTrue("no blow landed in the whole run", blown > 0);
         assertTrue("no blow was ever stared at", stared > 0);
         assertTrue("the walk's glance never once went out", glanced > 0);
+        assertTrue("the lean was never offered in the whole run", leaned > 0);
+        if (ticks == TICKS) {
+            assertTrue("the job look was never offered in the long run", jobs > 0);
+        }
         if (ticks == TICKS) {
             assertTrue("the neck's bound was never reached with a stare on a walking head", neckChecked > 0);
             assertTrue("no glance was ever interrupted", interrupted > 0);
@@ -674,6 +776,142 @@ public class HumanlikeLookFuzzTest {
             }
         }
         assertTrue("the glance was never out by enough for the two to be told apart", judged >= 5);
+    }
+
+    /**
+     * The aim loop the focused lean tests drive, written out next to {@link #tick}'s own rather than
+     * shared with it, so the harness and the scenario can disagree: the spin-up on a genuine direction
+     * change, the carry past a walking target, and one paced step per tick, as precisely
+     * {@code LookBehavior#humanStep} composes them in {@link #tick}. Walking, nothing clicked - the only
+     * state the offer is ever made in.
+     */
+    private static Rotation aimTick(Rotation aim, Rotation wanted, Rotation turnFrom, int aimAge,
+                                    TurnPace pace) {
+        final Rotation to = AimDynamics.overshoot(turnFrom, wanted, aimAge);
+        return AimDynamics.humanStep(aim, to, aimAge, 0.5, AimDynamics.AIM_EASE, pace.pace());
+    }
+
+    @Test
+    public void aCoherentLookSettlesOntoTheLeanedLineAndTurnsWithIt() {
+        // One approach: the walk goes its way, the look is offered from the ramp up to its full share,
+        // and the hand has to land on the leaned line - the lean is one more direction to arrive at, not
+        // a state the hand cannot leave. Then the offer turns the corner without the walk moving (the
+        // repath of a job that changed its block) and the hand has to come round to the new one.
+        final TurnPace pace = new TurnPace(new Random(17));
+        final GazeAhead gaze = new GazeAhead();
+        final Rotation walk = new Rotation(0f, 5f);
+        Rotation aim = null;
+        Rotation turnFrom = null;
+        Rotation last = null;
+        int aimAge = 0;
+        Rotation midTurn = null;
+        for (int t = 0; t < 140; t++) {
+            final Rotation line = t < 70 ? new Rotation(50f, 12f) : new Rotation(-50f, 12f);
+            final double weight = Math.min(GazeAhead.LEAN, 0.08 * (t + 1));
+            gaze.offer(line, weight);
+            final Rotation wanted = gaze.lean(walk, false);
+            final Rotation from = aim != null ? aim : new Rotation(-20f, 0f);
+            if (aim == null || AimDynamics.separation(last, wanted) > ReactionDelay.NEW_DIRECTION_ANGLE) {
+                aimAge = 0;
+                turnFrom = from;
+                pace.begin();
+            }
+            aim = aimTick(from, wanted, turnFrom, aimAge, pace);
+            aimAge++;
+            last = wanted;
+            // the carry is the only thing allowed past the leaned line: the walk, half of a fifty-degree
+            // offer, and the flourish - never more than that from the walk's own direction
+            assertTrue("the hand left the lean by "
+                    + Math.abs(Rotation.normalizeYaw(aim.getYaw() - walk.getYaw())) + " degrees",
+                    Math.abs(Rotation.normalizeYaw(aim.getYaw() - walk.getYaw()))
+                            <= 25f + AimDynamics.OVERSHOOT_MAX + AimDynamics.MAX_YAW_STEP + 1f);
+            if (t == 65) {
+                midTurn = new Rotation(aim.getYaw(), aim.getPitch());
+            }
+        }
+        // seven ticks of ramp at 0.08, the full offer from tick 8: 25 degrees over, pitch 8.5
+        assertEquals("the hand did not settle onto the leaned line", 25f, midTurn.getYaw(), 2f);
+        assertEquals("the pitch did not follow the offer's share", 8.5f, midTurn.getPitch(), 2f);
+        assertEquals("the offer turned and the hand did not follow", -25f, aim.getYaw(), 2f);
+    }
+
+    @Test
+    public void theLookStandsAsideForAClickMidLean() {
+        // Mid-lean, with the eyes twenty-five degrees off the walk, the walk's target becomes a click: the
+        // same lean that moved the aim all that way must contribute nothing, on that tick - the product
+        // hands the rotation back untouched, and the harness asserts it as an identity, not a tolerance.
+        final GazeAhead gaze = new GazeAhead();
+        final Rotation walk = new Rotation(0f, 5f);
+        gaze.offer(new Rotation(50f, 12f), GazeAhead.LEAN);
+        final Rotation leaned = gaze.lean(walk, false);
+        assertTrue("the lean did nothing here, so the stand-aside is not being tested",
+                leaned.getYaw() == 25f);
+        gaze.offer(new Rotation(50f, 12f), GazeAhead.LEAN);
+        final Rotation clicked = gaze.lean(walk, true);
+        assertTrue("the lean rode into a click", clicked == walk);
+        // and the aim behind it re-turns to the walk's own direction rather than holding the lean
+        final TurnPace pace = new TurnPace(new Random(19));
+        Rotation aim = leaned;
+        Rotation last = leaned;
+        Rotation turnFrom = leaned;
+        int aimAge = 0;
+        pace.begin();
+        for (int t = 0; t < 60; t++) {
+            gaze.offer(null, 0); // the click is being acted on every tick now: no look is offered
+            final Rotation wanted = gaze.lean(walk, true);
+            assertTrue("an offer reached a click", wanted == walk);
+            if (AimDynamics.separation(last, wanted) > ReactionDelay.NEW_DIRECTION_ANGLE) {
+                turnFrom = aim;
+                aimAge = 0;
+                pace.begin();
+            }
+            aim = AimDynamics.humanStep(aim, wanted, aimAge, 0.5, AimDynamics.CLICK_EASE, pace.pace());
+            aimAge++;
+            last = wanted;
+        }
+        assertTrue("the aim held the lean through sixty ticks of clicking",
+                AimDynamics.separation(aim, walk) <= AimDynamics.ARRIVED_ANGLE);
+    }
+
+    @Test
+    public void aFlappingOfferKeepsTheHeadBesideTheWalk() {
+        // The worst walk the ramp can draw: an offer at full weight that exists on every second tick only -
+        // a walk straddling the ramp's edge, a job weight flickering through zero. The wanted swings
+        // between the walk's own direction and the lean's cap, sixty degrees a tick, past the new-turn
+        // angle every time: if a starvation exists this is where it lives. What has to hold instead: the
+        // head never leaves the lean's side of the walk, and it never stops moving while the flap goes on.
+        final TurnPace pace = new TurnPace(new Random(23));
+        final GazeAhead gaze = new GazeAhead();
+        final Rotation walk = new Rotation(0f, 0f);
+        final Rotation line = new Rotation(170f, 0f); // 85 degrees at full weight - the cap's job to hold at 60
+        gaze.offer(line, GazeAhead.LEAN);
+        assertTrue("the cap is not being exercised", Math.abs(gaze.lean(walk, false).getYaw()) == 60f);
+        Rotation aim = new Rotation(0f, 0f);
+        Rotation last = walk;
+        Rotation turnFrom = aim;
+        int aimAge = 0;
+        int moved = 0;
+        for (int t = 0; t < 600; t++) {
+            final boolean on = (t & 1) == 0;
+            gaze.offer(on ? line : null, on ? GazeAhead.LEAN : 0);
+            final Rotation wanted = gaze.lean(walk, false);
+            final Rotation from = aim;
+            if (AimDynamics.separation(last, wanted) > ReactionDelay.NEW_DIRECTION_ANGLE) {
+                turnFrom = from;
+                aimAge = 0;
+                pace.begin();
+            }
+            aim = aimTick(aim, wanted, turnFrom, aimAge, pace);
+            aimAge++;
+            last = wanted;
+            assertTrue("the flap carried the head " + Math.abs(aim.getYaw()) + " degrees off the walk",
+                    Math.abs(aim.getYaw()) <= GazeAhead.MAX_LEAN_DEGREES + AimDynamics.OVERSHOOT_MAX + 1f);
+            if (AimDynamics.separation(from, aim) > 0f) {
+                moved++;
+            }
+        }
+        assertTrue("the hand froze under a flapping offer: moved on only " + moved + " ticks of 600",
+                moved > 400);
     }
 
     @Test
