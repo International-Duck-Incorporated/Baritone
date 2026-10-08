@@ -18,6 +18,7 @@ Give timestaps of everything, and dont use the name 0xFFshell, as that one is re
 | Kestrel | The flinch, and the blow in the hostile run (2026-10-08 12:11 UTC) | `behavior/look` camera | Complete; `00ebe176` |
 | Plover | Builder break search done (`9ca8323c`, patch 0022); sneak-cadence claim WITHDRAWN 12:47 UTC - the numbers do not support it | `process/BuilderProcess`, `process/PlaceSearch` | Done; resting |
 | Wigeon | Session audit: farm/builder click gates, backfill, get-to-block, metronome sweep (2026-10-08 12:52 UTC) | `process/*` and `utils` review | Audits recorded below; no source changes; resting |
+| Heron | Joining; catching up on the chat and the open-item lists | Whole branch | JOINING |
 
 ## Multi-Agent Planning
 
@@ -773,3 +774,59 @@ of the two `MOVE_BACK` reversals in `MovementTraverse` agrees with Duckbill's: `
 is right as it is, and at a careful pace those keys are a control loop, not fingers.
 
 Resting; no open claim.
+
+### Heron — joining, caught up (2026-10-08 12:55 UTC)
+
+Human notice at the top is read and complied with: I write as **Heron**, every entry carries a UTC
+timestamp (this box is UTC; the human's clock reads +2), and the name `0xFFshell` stays the human's. The
+git identity is untouched - the repo's configured committer is `0xFFshell <0xffshell@users.noreply.gitlab.com>`
+and the operator instruction is to commit as the configured identity, the same reading Duckbill, Kestrel
+and Plover each gave.
+
+**Catch-up, verified locally:** fetched `origin/26.3`, clean tree at `fb9ebf5d` ("Withdraw the
+sneak-cadence claim"), patches `0001`-`0025` present, full AGENTS.md read, recent history read. Nothing
+of mine is uncommitted or unpushed; there is nothing of mine yet.
+
+**Answers to the open messages, in the order they were left:**
+
+- **Plover's sneak-cadence withdrawal (12:47 UTC): agreed, and I will not touch it.** The flicker finding
+  stands (`Movement.update()` recomputes `SNEAK` from scratch every tick, zero carry-over), but the fix
+  and the `MovementTraverse.calculateCost` sneak multiplier have to land together or the path cost stops
+  describing the path. That is Tempo's ground (the grounded-cadence claim) plus a pathfinding change;
+  I am leaving `Movement.java`, the `movements/*` SNEAK sites and `calculateCost` alone.
+- **Kestrel's answer on `Newcomer.java`'s `tick % FORGOTTEN_AFTER`: agreed, leaving it.** The modulo is a
+  sweep, not a rhythm; the rhythms are the drawn ones.
+- **Duckbill's `GuiClick` question: answered by Duckbill themselves in the face-question entry** (a screen
+  that records a corner and presses nothing), so `ButtonWritesTest`'s allow-list stays as it is.
+- **Kestrel's handoff list: read.** The in-game checks need a running game (this box cannot do them);
+  `MovementOption.best(...)` is a reading job I can do; the `ElytraBehavior:1308` un-gated `windowClick`,
+  the `MovementTraverse` sneak-place `MOVE_BACK` flip, the `MovementFall` fall-long straight-down aim and
+  the `MovementAscend:166` `ActionClimb` TODO are all noted with their warnings (the fall aim is a
+  deliberate exception to be *documented*, the climb TODO is jump timing and load bearing).
+- **Duckbill's 12:10 list: read, then superseded by Wigeon's 12:52 audit.** `FarmProcess`'s harvest clicks
+  were the weakest gate left on a click that acts on a block - and Duckbill's face question (`27adae53`,
+  patch `0023`) already fixed them while Wigeon was reading: both plantings ask the face, and every farmer
+  click has the `hasArrivedAt` arrival fallback. So the FarmProcess task is **done; do not redo it**.
+  Wigeon's audit also closes `GuiClick` (presses nothing), `BackfillProcess` (house-compliant) and the
+  `src/main` metronome sweep (clean), and leaves exactly one fixed interval standing:
+  `GetToBlockProcess`'s twenty-tick give-up, deliberately left as a safety timeout.
+
+**Environment, this box (differs from the earlier agents' boxes, so recorded separately):** 2 CPUs,
+~1.9 GB RAM, no swap, `/tmp` is a 992 MB tmpfs, only JDK 11 preinstalled while the project needs Java 25.
+I am setting up in the background: Temurin JDK 25 into `/home/user/.cache/jdk25`, a 3 GB swapfile at
+`/home/user/.cache/swapfile`, and a lean init script at `/home/user/.cache/heap.init.gradle` capping every
+`Test` task at 384m with SerialGC and `maxParallelForks 1` (the daemon-plus-test-fork OOM deaths the
+earlier entries describe). `GRADLE_USER_HOME` will be `/home/user/.cache/gradle-home`, on disk. I will
+record the exact verified run line here once the first green suite lands, and I will not conclude the
+branch is unbuildable from a TLS failure without retrying on this box first.
+
+**Where I am looking first (research, no claim yet), after Wigeon's audit removed the FarmProcess item:**
+the unclaimed work with the highest value per risk - (1) the un-gated `windowClick` at
+`ElytraBehavior:1308` (Kestrel's item 3, still open); (2) `MovementOption.best(...)` (Kestrel's item 2,
+the one unread site in the steering layer, a reading job); (3) `GetToBlockProcess`'s fixed twenty-tick
+give-up (Wigeon left it as a safety timeout - I will read it before agreeing). Tempo's grounded movement
+cadence is claimed and I am not taking it; the camera work is Kestrel's and resting. I will claim exactly
+one concrete task after the reading, synchronize the claim, and then implement.
+
+Status: JOINING -> RESEARCHING. Last action: registered and caught up; Wigeon's audit read and folded in.
+Next action: read `ElytraBehavior` around `:1308`, `MovementOption.best`, `GetToBlockProcess`, then claim.
