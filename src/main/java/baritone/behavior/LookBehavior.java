@@ -38,6 +38,7 @@ import baritone.behavior.look.IdleGlance;
 import baritone.behavior.look.Newcomer;
 import baritone.behavior.look.PitchWander;
 import baritone.behavior.look.ReactionDelay;
+import baritone.behavior.look.Unattended;
 import baritone.behavior.look.WalkGlance;
 import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
 import net.minecraft.network.protocol.game.ServerboundPunchPacket;
@@ -139,6 +140,15 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
      */
     private static final double STRUCK_RANGE = 10.0;
 
+    /**
+     * How far the view may sit from where the idle look last left it, in degrees, before it counts as
+     * taken back by the person. The idle look knows to the float what it wrote last tick and nothing
+     * else writes the player's rotation on a tick nothing is aimed at, so anything past a hundredth of
+     * a degree is a hand: a single pixel of mouse movement at the lowest sensitivity there is turns
+     * the view about twice this much, and a camera nobody is holding does not drift at all.
+     */
+    private static final float VIEW_TAKEN_BACK = 0.01f;
+
     private final IdleGlance idleGlance = new IdleGlance();
 
     /**
@@ -176,6 +186,19 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
      * the PRE branch of {@link #updateIdleLook}. Null whenever the idle head is not the one driving.
      */
     private Rotation idleBase;
+
+    /**
+     * What the camera should still be reading this tick if nobody has touched it, from the last tick the
+     * idle look wrote: under free look the person's own angles, which POST hands back; under the aim's own
+     * camera, the angles the idle look itself left there. Anywhere else is the person's hand - the view is
+     * how their arrival is noticed once the job is over. See {@link #updateIdleLook}.
+     */
+    private Rotation idleExpected;
+
+    /**
+     * Who the standing body belongs to in the gap between one job and the next. See {@link Unattended}.
+     */
+    private final Unattended unattended = new Unattended();
 
     /**
      * The player's own rotation before the walking wander was applied, or null when it is not applied.
@@ -481,6 +504,9 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
                 this.prevRotation = new Rotation(ctx.player().getYRot(), ctx.player().getXRot());
                 // the aim is writing the camera again, so the idle head's base is a stale angle from now on
                 this.idleBase = null;
+                // and so is the idle look's memory of what the camera should read: whatever the aim leaves
+                // there is where the idle look picks the body up from when the job is done, not a hand.
+                this.idleExpected = null;
                 if (ctx.player().isFallFlying()) {
                     // Elytra is a control loop: the flight path is solved assuming the angles it asked for
                     // last tick are the angles it has this tick. A lagging aim there is a crash, not a
@@ -592,6 +618,11 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
         this.reaction.clear();
         this.smoothYawBuffer.clear();
         this.smoothPitchBuffer.clear();
+        // The world the person was thought to be at the keyboard of has gone: whoever is here now has
+        // not shown up yet, and the first thing the new world's camera reads is not measured against
+        // anything the old one left on it.
+        this.unattended.forget();
+        this.idleExpected = null;
     }
 
     public void pig() {
@@ -620,7 +651,20 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
     private void updateIdleLook(EventState state) {
         switch (state) {
             case PRE: {
-                final boolean allowed = this.canGlanceSomewhere();
+                // Who the body belongs to this tick. A process in control owns it outright. In the gap
+                // between one job and the next - the goal reached, the mine finished, nothing waiting -
+                // it stays ours, and keeps its whole idle repertoire, until the person at the keyboard
+                // actually arrives: the view moved, a key or a button down, a screen open. Their arrival
+                // is measured on the view, so the camera is read first, against what the idle look left
+                // on it last tick; anywhere else is their hand. See {@link Unattended}.
+                final boolean inControl = this.baritoneIsInControl();
+                final Rotation camera = new Rotation(ctx.player().getYRot(), ctx.player().getXRot());
+                final boolean theViewMoved = !inControl && this.idleExpected != null
+                        && AimDynamics.separation(camera, this.idleExpected) > VIEW_TAKEN_BACK;
+                final boolean ours = this.unattended.glanceIsOurs(inControl,
+                        !inControl && this.thePersonIsAtTheKeyboard(), theViewMoved);
+                this.idleExpected = null;
+                final boolean allowed = ours && standingStill() && !this.interacting();
                 // A person standing still does not stop moving. The glance is a coarse thing - one look
                 // every few seconds, held and given back - and between two of them a bot used to hold its
                 // angle to the last bit, exactly, for as long as the wait lasted. Minutes, under a held
@@ -631,12 +675,12 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
                 } else {
                     this.headWander.recentre();
                 }
-                // the player's own rotation, read straight from the player: ctx.playerRotations() returns
-                // exactly this (LocalPlayer.getYRot/getXRot) and is what the movement code reads, so the
-                // glance goes into the same variable the movement code will read. That is fine for a glance
-                // - it only runs while the player is standing still, where nothing downstream reads the
-                // facing - and it is why the walking wander, which does run while walking, does not go here.
-                final Rotation camera = new Rotation(ctx.player().getYRot(), ctx.player().getXRot());
+                // the player's own rotation, read straight from the player above: ctx.playerRotations()
+                // returns exactly this (LocalPlayer.getYRot/getXRot) and is what the movement code reads,
+                // so the glance goes into the same variable the movement code will read. That is fine for
+                // a glance - it only runs while the player is standing still, where nothing downstream
+                // reads the facing - and it is why the walking wander, which does run while walking, does
+                // not go here.
                 // The base the glance and the sway ride on, which is the camera only while the camera is the
                 // player's: their view has the head's own offsets taken back off it at the end of every tick,
                 // so there is nothing of ours left on it to read. When the camera is ours they stay on it, and
@@ -659,6 +703,10 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
                     // rotation Baritone traces its own pickaxe and blocks along, and an idle drift is not
                     // worth pointing the crosshair at the wrong block for. Standing still with nothing
                     // being clicked, nothing reads the angle at all, which is the whole reason this is safe.
+                    // The view is watched all the same - the person's arrival is noticed on the tick it
+                    // happens, whether or not the head is ours that tick - and what the camera reads now
+                    // is what it will be measured against.
+                    this.idleExpected = camera;
                     return;
                 }
                 // The sway rides on top of whatever the glance is doing, including nothing: read against
@@ -671,6 +719,12 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
                 this.idleCamera = camera;
                 ctx.player().setYRot(applied.getYaw());
                 ctx.player().setXRot(applied.getPitch());
+                // What the camera should read next tick if nobody has touched it: under free look the
+                // person's own angles, which POST hands back; under the aim's own camera, the angles just
+                // written, which POST leaves where they are. Armed on the job's own standing ticks too,
+                // so the view the first jobless tick is measured against the view the job left, and an
+                // idle body nobody comes back for is the same body that was waiting for the job.
+                this.idleExpected = theirs ? camera : applied;
                 if (this.idleFidget.take()) {
                     // A swing at nothing. It is sent as the animation packet and nothing else - no click goes
                     // out with it, so it cannot mine, place or break anything however the crosshair happens
@@ -935,15 +989,41 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
      * most are the ones where they have been told to wait.
      * <p>
      * What the question actually is: is anyone else driving the body? A process in control this tick means
-     * Baritone is, whether it is executing, calculating or waiting. If none is, the person is playing, and
-     * there is no business animating their head.
+     * Baritone is, whether it is executing, calculating or waiting. If none is, the body is in the gap
+     * between one job and the next, and that gap has a rule of its own - see {@link Unattended}: the body
+     * stays Baritone's until the person actually shows up, so this method answers only for the ticks that
+     * are still a job's, where a person's own head is not ours to animate.
      * <p>
-     * It is asked in two places and the answer means the same in both: on the ticks with no target at all,
-     * where the idle path applies the glance in place of an aim, and on the ticks that do have one, where
-     * the bot is standing still waiting for it - see {@link #updateHeadWander}.
+     * It is asked of the ticks that have a target: the bot is standing still waiting on the thing being
+     * aimed at - see {@link #updateHeadWander}. The ticks with no target at all ask the wider question
+     * on the spot, because there the body may be ours even with no process in control - the gap between
+     * one job and the next, see {@link Unattended} - so the gate lives inline in {@link #updateIdleLook}.
      */
     private boolean canGlanceSomewhere() {
         return this.baritoneIsInControl() && standingStill() && !this.interacting();
+    }
+
+    /**
+     * Whether the person at the keyboard has shown any sign of being there.
+     * <p>
+     * Asked only once the job is over and the body is waiting for its next one, because that is the
+     * state whose ownership the answer decides: the body is Baritone's until the person arrives, and
+     * this is how they arrive. Any input at all counts - the view moving is measured by the caller
+     * against what the idle look last wrote, and this covers the rest: a key held, a mouse button down,
+     * a screen of any kind open, chat, a chest, the pause menu. Keys are read from the game's own input,
+     * which is the person's again the moment nothing is being driven; while a process holds control the
+     * game's input is Baritone's, which is exactly why this is not asked there.
+     */
+    private boolean thePersonIsAtTheKeyboard() {
+        if (ctx.minecraft().gui.screen() != null) {
+            return true;
+        }
+        if (ctx.minecraft().options.keyAttack.isDown() || ctx.minecraft().options.keyUse.isDown()) {
+            return true;
+        }
+        final net.minecraft.world.entity.player.Input keys = ctx.player().input.keyPresses;
+        return keys.forward() || keys.backward() || keys.left() || keys.right()
+                || keys.jump() || keys.shift() || keys.sprint();
     }
 
     /**

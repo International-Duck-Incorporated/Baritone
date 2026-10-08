@@ -25,8 +25,17 @@ opt-in: a bot that has to be told to look alive is a bot that looks dead by defa
 
 ## Standing around
 
-The idle repertoire only runs while a process is in control: if Baritone has nothing to do, the person
-at the keyboard owns the camera and nothing here touches it.
+The idle repertoire used to run only while a process was in control, and that gate had the wrong
+shape: it switched everything off at the exact moment Baritone ran out of work - the goal reached,
+the mine finished, the follow lost - and left the body standing at the last walking heading,
+perfectly still, for as long as nobody came back. A body that has stopped dead and stays dead is
+the thing people point at. So the gap between one job and the next has a rule of its own:
+
+| what | where | the rule |
+| --- | --- | --- |
+| The body outlives the job | `behavior/look/Unattended.java`, `LookBehavior#updateIdleLook` | When the last process lets go, the standing body stays ours and keeps every habit below - the sway, the glances, the fidget, the noticing - until the person at the keyboard actually arrives. Their arrival is any input at all: the view moving off what the idle look last wrote (a hundredth of a degree, less than one pixel of mouse at any sensitivity - a camera nobody is holding does not drift), a key or a mouse button down, a screen of any kind open. That is a latch and not a look: somebody who moved the view once and then holds still for an hour is a person aiming at something, not an absence, and the body stays theirs until the next job takes it back and the gap starts over. Nobody who shows up finds their camera fighting them - the first tick anything of theirs is noticed, the repertoire is already off - and a dimension change forgets whoever was thought to be there, since the view they were holding has gone with the old world. Water is still water: a jobless body standing in it is swimming, the pitch there is a control, and the repertoire waits on dry ground. |
+
+The rest of the repertoire, which that rule now keeps alive across the gap:
 
 | what | where | the rule |
 | --- | --- | --- |
@@ -140,7 +149,7 @@ POST. `CameraWritesTest` counts them, so a fifth file fails the build with this 
   through twenty thousand hostile ticks and asserts that the aim never moves more than its tick limit,
   that a settled hand is always arrived, and that the sway never escapes its band. `AimDynamicsTest`,
   `IdleGlanceTest`, `WalkGlanceTest`, `NewcomerTest`, `PitchWanderTest`, `IdleFidgetTest`, `GazeAheadTest`, `KeyBeatTest`, `HeadFirstTest`,
-  `StraightRunTest`, `SprintWindupTest`, `FollowProgressTest`, `HotbarSwitchTest` and `CadenceTest` cover the rules themselves.
+  `StraightRunTest`, `SprintWindupTest`, `FollowProgressTest`, `HotbarSwitchTest`, `UnattendedTest` and `CadenceTest` cover the rules themselves.
 - Behaviour that already exists as a setting - `randomLooking`, `randomLooking113`, `smoothLook`,
   `smoothLookTicks`, `blockBreakSpeed`, `mineGoalUpdateInterval`, `ticksBetweenInventoryMoves`,
   `autoTool` - keeps its meaning. Where a setting names an interval, the interval is now what the
