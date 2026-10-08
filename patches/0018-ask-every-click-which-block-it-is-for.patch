@@ -1,0 +1,322 @@
+From cd5633b209bde2dcf0d02e6ca302a5b8b0034c78 Mon Sep 17 00:00:00 2001
+From: 0xFFshell <0xffshell@users.noreply.gitlab.com>
+Date: Thu, 8 Oct 2026 12:04:52 +0000
+Subject: [PATCH] Ask every click which block it is for
+
+The pillar aimed at the block in its feet and put the button down in the same breath, which made it the last click in the mod that did. Every other one - a block to break in the way, a face to place against, a door, a chest, a crop - is asked for with the crosshair already on the block or with the hand arrived at the point it was sent to, and the button is pressed a beat later by the helper, by which time the question has been answered or not. When the crosshair is somewhere else by the time that beat runs out, the click lands there instead: for the pillar, a block broken beside the one it meant, or with a throwaway in hand a block placed against the wall.
+
+The pillar now asks the question Movement#prepared and the door branch of MovementTraverse ask, and keeps the old blind click as the fallback for a block with no face to aim at (the shape is empty, so there is no point to reach), so nothing that used to break stalls now.
+
+ClickGatesTest counts it, the way CameraWritesTest, HandWritesTest and ButtonWritesTest count the camera, the hand and the button. It scans the movement and process layers for every click - twenty four of them, pinned per file - and asserts each is behind one of the questions the mod actually asks: the ray on the block, the hand arrived at its point, a place attempt that has confirmed the face, the block under the crosshair a process picked out, or breaking out of a wall the body is inside. A click with none of them carries the sentence "ungated click:" with its reason, which is what the two old ones do - the blind break Movement#prepared falls back to, and the bucket taken out of the water the player is standing in. The count has teeth: the pillar's click put back the way it was fails it with the file and the line.
+---
+ .../baritone/pathing/movement/Movement.java   |   4 +-
+ .../movement/movements/MovementFall.java      |   3 +
+ .../movement/movements/MovementPillar.java    |  16 +-
+ .../pathing/movement/ClickGatesTest.java      | 231 ++++++++++++++++++
+ 4 files changed, 249 insertions(+), 5 deletions(-)
+ create mode 100644 src/test/java/baritone/pathing/movement/ClickGatesTest.java
+
+diff --git a/src/main/java/baritone/pathing/movement/Movement.java b/src/main/java/baritone/pathing/movement/Movement.java
+index 857139c8..9d8ec63d 100644
+--- a/src/main/java/baritone/pathing/movement/Movement.java
++++ b/src/main/java/baritone/pathing/movement/Movement.java
+@@ -180,7 +180,9 @@ public abstract class Movement implements IMovement, MovementHelper {
+                 state.setTarget(new MovementState.MovementTarget(RotationUtils.calcRotationFromVec3d(ctx.playerHead(),
+                         VecUtils.getBlockPosCenter(blockPos), ctx.playerRotations()), true)
+                 );
+-                // don't check selectedblock on this one, this is a fallback when we can't see any face directly, it's intended to be breaking the "incorrect" block
++                // ungated click: don't check selectedblock on this one, this is a fallback when we can't see
++                // any face directly, and it is intended to be breaking the "incorrect" block. ClickGatesTest
++                // counts the clicks that say this sentence instead of asking the crosshair or the hand.
+                 state.setInput(Input.CLICK_LEFT, true);
+                 return false;
+             }
+diff --git a/src/main/java/baritone/pathing/movement/movements/MovementFall.java b/src/main/java/baritone/pathing/movement/movements/MovementFall.java
+index 1df2bdda..ff2a1161 100644
+--- a/src/main/java/baritone/pathing/movement/movements/MovementFall.java
++++ b/src/main/java/baritone/pathing/movement/movements/MovementFall.java
+@@ -151,6 +151,9 @@ public class MovementFall extends Movement {
+                         : ctx.player().getInventory().findSlotMatchingItem(STACK_BUCKET_EMPTY);
+                 if (Inventory.isHotbarSlot(empty)) {
+                     ((Baritone) baritone).getInventoryBehavior().hold(empty);
++                    // ungated click: the water being picked up is the block the player is floating in, so
++                    // there is nothing to look at that the crosshair is not already on. ClickGatesTest
++                    // counts the clicks that say this sentence instead of asking the crosshair or the hand.
+                     if (ctx.player().getDeltaMovement().y >= 0) {
+                         return state.setInput(Input.CLICK_RIGHT, true);
+                     } else {
+diff --git a/src/main/java/baritone/pathing/movement/movements/MovementPillar.java b/src/main/java/baritone/pathing/movement/movements/MovementPillar.java
+index 908d6dbd..1df4fa7c 100644
+--- a/src/main/java/baritone/pathing/movement/movements/MovementPillar.java
++++ b/src/main/java/baritone/pathing/movement/movements/MovementPillar.java
+@@ -38,6 +38,7 @@ import net.minecraft.world.level.block.state.BlockState;
+ import net.minecraft.world.level.block.state.properties.SlabType;
+ import net.minecraft.world.phys.Vec3;
+ 
++import java.util.Optional;
+ import java.util.Set;
+ 
+ public class MovementPillar extends Movement {
+@@ -213,11 +214,18 @@ public class MovementPillar extends Movement {
+                 Block fr = frState.getBlock();
+                 // TODO: Evaluate usage of getMaterial().isReplaceable()
+                 if (!(fr instanceof AirBlock || frState.canBeReplaced())) {
+-                    RotationUtils.reachable(ctx, src, ctx.playerController().getBlockReachDistance())
+-                            .map(rot -> new MovementState.MovementTarget(rot, true))
+-                            .ifPresent(state::setTarget);
++                    // The click is for the block in the way, so the hand has to be on it before the button
++                    // goes down: the aim is moved to it on this tick, and a click sent while the hand is
++                    // still turning lands on whatever the crosshair crosses on the way - the question
++                    // Movement#prepared and the door branch of MovementTraverse already ask. A block with
++                    // nothing on it to aim at (the shape is empty, so there is no point to reach) keeps
++                    // the old click, which is what there was before this gate.
++                    final Optional<Rotation> reachable = RotationUtils.reachable(ctx, src, ctx.playerController().getBlockReachDistance());
++                    reachable.map(rot -> new MovementState.MovementTarget(rot, true)).ifPresent(state::setTarget);
+                     state.setInput(Input.JUMP, false); // breaking is like 5x slower when you're jumping
+-                    state.setInput(Input.CLICK_LEFT, true);
++                    if (reachable.isEmpty() || ctx.isLookingAt(src) || baritone.getLookBehavior().hasArrivedAt(reachable.get())) {
++                        state.setInput(Input.CLICK_LEFT, true);
++                    }
+                     blockIsThere = false;
+                 } else if (ctx.player().isCrouching() && (ctx.isLookingAt(src.below()) || ctx.isLookingAt(src)) && ctx.player().position().y > dest.getY() + 0.1) {
+                     state.setInput(Input.CLICK_RIGHT, true);
+diff --git a/src/test/java/baritone/pathing/movement/ClickGatesTest.java b/src/test/java/baritone/pathing/movement/ClickGatesTest.java
+new file mode 100644
+index 00000000..47f44555
+--- /dev/null
++++ b/src/test/java/baritone/pathing/movement/ClickGatesTest.java
+@@ -0,0 +1,231 @@
++/*
++ * This file is part of Baritone.
++ *
++ * Baritone is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU Lesser General Public License as published by
++ * the Free Software Foundation, either version 3 of the License, or
++ * (at your option) any later version.
++ *
++ * Baritone is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public License
++ * along with Baritone.  If not, see <https://www.gnu.org/licenses/>.
++ */
++
++package baritone.pathing.movement;
++
++import org.junit.Test;
++
++import java.io.IOException;
++import java.io.UncheckedIOException;
++import java.nio.file.Files;
++import java.nio.file.Path;
++import java.util.ArrayList;
++import java.util.List;
++import java.util.TreeMap;
++import java.util.regex.Pattern;
++import java.util.stream.Stream;
++
++import static org.junit.Assert.assertEquals;
++import static org.junit.Assert.assertTrue;
++import static org.junit.Assume.assumeTrue;
++
++/**
++ * Which block a click is for.
++ * <p>
++ * {@code CameraWritesTest} counts the files that may write the player's rotation, {@code HandWritesTest}
++ * counts the files that may write the selected slot and {@code ButtonWritesTest} counts the files that may
++ * press a button at all. None of them asks the last question about a click: not who may send it, but which
++ * block it is for. Every click in the mod acts on a block - a block to break with a reason, a face to place
++ * against, a door to open, a chest to open, a crop to harvest - and the aim is somewhere else on the tick
++ * the click is first asked for, because the aim is being moved to the block at that moment. The click goes
++ * out one or two ticks later, on the settle every button already pays, by which time the crosshair is on the
++ * block it was sent to - unless it is not, and then it lands on whatever the crosshair crosses on the way
++ * there. That is not a hypothetical: the door branch of {@code MovementTraverse} put its button down the
++ * tick the door was noticed and clicked the wall beside the doorway; the pillar put its button down as it
++ * turned towards the block in its feet.
++ * <p>
++ * So the rule this test counts is: a click is asked for with the crosshair already on the block it is for,
++ * or with the hand arrived at the point it was sent to, or it says in the code why neither question was
++ * asked. The gates are the four the mod actually uses - {@code ctx.isLookingAt(block)},
++ * {@code LookBehavior#hasArrivedAt(rotation)}, {@code PlaceResult.READY_TO_PLACE} (which is the ray trace
++ * landing on the right block or its attachment), {@code ctx.getSelectedBlock()} - plus the two clicks that
++ * are not acts on a block at all: breaking out of a wall the body is stuck inside, and opening a block the
++ * process has already picked out by ray.
++ * <p>
++ * The count is taken from the source because that is where it lives: the property being asserted is about
++ * the code as written, and none of it can be run without a game. A statement that has no gate carries the
++ * sentence {@code ungated click:} with its reason, which is what the two places that need it do - the blind
++ * break {@code Movement#prepared} falls back to when no face of the block can be seen, and the bucket taken
++ * out of the water the player is standing in. Comments do not count as gates, and a new click anywhere in
++ * these two layers fails this test until it is either gated or has said why not.
++ */
++public class ClickGatesTest {
++
++    /**
++     * Where clicks are asked for. The movements (and the two helpers the processes press through are out of
++     * scope: they are the buttons themselves, not the decisions about what to press them for) and the
++     * processes that drive them.
++     */
++    private static final String[] ROOTS = {
++            "pathing/movement",
++            "process",
++    };
++
++    /**
++     * A click, however it is asked for: the movement's own state or a process's forced state.
++     */
++    private static final Pattern CLICK = Pattern.compile("(setInput|setInputForceState)\\(\\s*Input\\.CLICK_(LEFT|RIGHT)\\s*,\\s*true\\s*\\)");
++
++    /**
++     * The questions that count as a gate, each one a way of saying the click is for the block the hand is
++     * already on: the crosshair is on that block, or the hand has arrived at the point it was sent to, or
++     * the ray trace has confirmed the face to place against, or the process is clicking the block under the
++     * crosshair it picked out, or the body is inside a wall and mining its way out. A gate has to be asked
++     * in the same statement as the click - the preceding few lines - so a click cannot be gated by a
++     * question asked about something else.
++     */
++    private static final String[] GATES = {
++            "ctx.isLookingAt(",
++            "hasArrivedAt(",
++            "READY_TO_PLACE",
++            "ctx.getSelectedBlock(",
++            "knownLocations.contains(",
++            "isInWall(",
++    };
++
++    /**
++     * A click that has none of the above says why, in the code, where it is. The sentence is deliberately
++     * long enough not to appear by accident and short enough to be written in a line.
++     */
++    private static final String MARKER = "ungated click:";
++
++    /**
++     * How far above a click its gate may be. The question and the click are one statement in every one of
++     * the gated sites today, so this is generous; its point is that the gate cannot be in another statement.
++     */
++    private static final int WINDOW = 6;
++
++    /**
++     * Where the clicks are and how many of them there are, as the assertion as much as the documentation: a
++     * click added, moved or removed anywhere in these layers has to be added here, next to the site it came
++     * to or left. Paths are relative to {@code src/main/java/baritone/}.
++     */
++    private static final String[] CLICK_COUNTS = {
++            "pathing/movement/Movement.java 3",
++            "pathing/movement/movements/MovementAscend.java 1",
++            "pathing/movement/movements/MovementFall.java 2",
++            "pathing/movement/movements/MovementParkour.java 1",
++            "pathing/movement/movements/MovementPillar.java 2",
++            "pathing/movement/movements/MovementTraverse.java 6",
++            "process/BackfillProcess.java 1",
++            "process/BuilderProcess.java 2",
++            "process/FarmProcess.java 4",
++            "process/GetToBlockProcess.java 1",
++            "process/MineProcess.java 1",
++    };
++
++    @Test
++    public void everyClickIsForTheBlockTheHandIsOn() {
++        final Path root = repoRoot();
++        assumeTrue("the sources are not next to this test run", root != null);
++        final List<String> violations = new ArrayList<>();
++        for (Site site : sites(root)) {
++            if (gateIn(site) || markerIn(site)) {
++                continue;
++            }
++            violations.add(site.where() + ": " + site.text().trim());
++        }
++        assertEquals("clicks asked for with neither the crosshair nor the hand on the block they are for, "
++                + "and no sentence saying why not", List.of(), violations);
++    }
++
++    @Test
++    public void theClicksAreWhereTheyWereLastCounted() {
++        final Path root = repoRoot();
++        assumeTrue("the sources are not next to this test run", root != null);
++        final TreeMap<String, Integer> found = new TreeMap<>();
++        for (Site site : sites(root)) {
++            found.merge(site.file(), 1, Integer::sum);
++        }
++        final TreeMap<String, Integer> expected = new TreeMap<>();
++        for (String row : CLICK_COUNTS) {
++            final int space = row.lastIndexOf(' ');
++            expected.put(row.substring(0, space), Integer.parseInt(row.substring(space + 1)));
++        }
++        assertEquals("the clicks have moved: every click in the movement and process layers is a decision "
++                + "about what a button is for, so it has a count beside it and a gate in front of it", expected, found);
++    }
++
++    /**
++     * One click, with enough of what is around it to be judged: the file it is in and the lines above it.
++     */
++    private record Site(String file, int line, String text, List<String> above) {
++
++        String where() {
++            return file + ":" + line;
++        }
++    }
++
++    private static List<Site> sites(Path root) {
++        final List<Site> sites = new ArrayList<>();
++        final Path baritone = root.resolve("src/main/java/baritone");
++        for (String relative : ROOTS) {
++            final Path dir = baritone.resolve(relative);
++            if (!Files.isDirectory(dir)) {
++                continue;
++            }
++            try (Stream<Path> stream = Files.walk(dir)) {
++                for (Path file : stream.filter(p -> p.toString().endsWith(".java")).sorted().toList()) {
++                    final List<String> lines = Files.readAllLines(file);
++                    for (int i = 0; i < lines.size(); i++) {
++                        if (!CLICK.matcher(lines.get(i)).find()) {
++                            continue;
++                        }
++                        final int from = Math.max(0, i - WINDOW);
++                        sites.add(new Site(baritone.relativize(file).toString(), i + 1, lines.get(i),
++                                lines.subList(from, i + 1)));
++                    }
++                }
++            } catch (IOException e) {
++                throw new UncheckedIOException("could not read the sources under " + dir, e);
++            }
++        }
++        assertTrue("no clicks found at all - the scan is looking in the wrong place", !sites.isEmpty());
++        return sites;
++    }
++
++    private static boolean gateIn(Site site) {
++        for (String line : site.above()) {
++            for (String gate : GATES) {
++                if (line.contains(gate)) {
++                    return true;
++                }
++            }
++        }
++        return false;
++    }
++
++    private static boolean markerIn(Site site) {
++        for (String line : site.above()) {
++            if (line.contains(MARKER)) {
++                return true;
++            }
++        }
++        return false;
++    }
++
++    private static Path repoRoot() {
++        Path dir = Path.of("").toAbsolutePath();
++        for (int i = 0; i < 4 && dir != null; i++) {
++            if (Files.isDirectory(dir.resolve("src/main/java/baritone"))) {
++                return dir;
++            }
++            dir = dir.getParent();
++        }
++        return null;
++    }
++}
+-- 
+2.47.3
+
