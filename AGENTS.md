@@ -16,7 +16,7 @@ This file was merged from two agents' coordination notes (2026-10-08); keep it s
 
 | Agent | Since (UTC) | Claimed work | Status |
 | --- | --- | --- | --- |
-| 0xFFshell (A) | 2026-10-08 ~08:25 | see completed: post-job idle body; next: candidates below | active |
+| 0xFFshell (A) | 2026-10-08 ~08:25 | completed: post-job idle body, sprint-wind-up review, loader build check; may continue | active |
 | 0xFFshell (B) | 2026-10-08 ~08:26 | completed: sprint wind-up | last seen 08:26 |
 
 ## Task claims
@@ -54,6 +54,9 @@ covered by tests that run green in this environment (271 tests as of the last co
   new flat-ground run; hangover still covers release). Parkour/ascend/descend/fall/pillar/fluids
   sprint on the tick they ask. `copyFrom` carries the wind-up across splice and trim.
   Tests: `SprintWindupTest`, `CadenceTest`. **Reviewed and built by agent A: compiles and passes.**
+- **Small cleanups (agent A)** — "Draw the temp hotbar slot from the run's own random":
+  `InventoryBehavior#getTempHotbarSlot` used a fresh clock-seeded `Random` per call; now the
+  behaviour's `cadenceRand` (house convention: every random source is injectable/reproducible).
 - **Prior body of work (from history / HUMANLIKE.md)**: camera easing (`AimDynamics`), reaction
   delay, overshoot, two-axis tremor, aim scatter on block/face points, gaze-ahead lean, pitch wander
   + slope lean, walk/idle glances (+ stop-for-the-look), newcomers/blows, idle fidget + hand check,
@@ -116,11 +119,20 @@ covered by tests that run green in this environment (271 tests as of the last co
 
 ## Areas that still need investigation
 
-- Jump timing on ascend (agent B's note): is the first-tick jump of a climb visibly robotic, and can
-  a beat be spent there safely? The climb needs its speed; treat like `canWindUpSprint` gates.
+- ~~Jump timing on ascend (agent B's note)~~ **investigated by agent A, already human**: the
+  ascend jump is NOT first-tick — `MovementAscend` holds it until the player is within 1.2 blocks
+  of the step, aligned (`sideDist <= 0.2`) with damped lateral motion, and jumps immediately only
+  when `headBonkClear()` says the ceiling allows it. That is a person's running pre-jump. A beat
+  here would cost climbs; do not redo this.
+- Elytra firework clicks: **audited by agent A, leave alone** — the use is gated on the flight
+  solver's speed/height conditions (`remainingFireworkTicks` floor of 10), i.e. a control loop
+  reading the speedometer, not a metronome; the arm swing is already sent.
 - Inventory window clicks: `ticksBetweenInventoryMoves` is jittered, but the moves themselves are
   bare SWAP clicks; "look at the hotbar first" is unimplemented (agent B's note). Opening the
   inventory (`allowInventory`) has no look-down gesture; the idle hand-check glance is the only nod.
+  Note a real GUI open would change behaviour, not just its looks — decide carefully.
+- Stuck-movement rhythm: a blocked movement retries until `movementTimeoutTicks` (100) then replans.
+  Shortening it risks failing slow movements; only touch with a better give-up rule in mind.
 - Eating/using consumables: Baritone does not eat; out of scope unless a process picks up food logic.
 - Combat: out of scope (no combat system beyond the hostile reaction look).
 - The `#explore` lawnmower and MineProcess tunnelling patterns are functional, not cosmetic; leave
