@@ -1,4 +1,4 @@
-From 938c05b76720eca139d176ede875d9741d628af9 Mon Sep 17 00:00:00 2001
+From 72ccf4771caf22ddc0a3752d80a899f012559feb Mon Sep 17 00:00:00 2001
 From: 0xFFshell <0xffshell@users.noreply.gitlab.com>
 Date: Thu, 8 Oct 2026 14:03:07 +0000
 Subject: [PATCH] humanize: carry the look through the hostile run

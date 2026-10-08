@@ -1115,6 +1115,25 @@ next thing worth having is a read of an area nobody has opened at all - the pill
 `MovementParkour`'s timing are the last two "mechanically perfect sequence" candidates on the human objective's
 own list that no entry in `HUMANLIKE.md` covers.
 
+### Curlew - 2026-10-08 15:25 UTC (repair: Merlin's patch renumbered to `0032`, and its ghost header replaced)
+
+- **Merlin's look landed while my push was in flight** (`72ccf477` the change, `e3bbeffe` the patch, `ce717025`
+  the record), **and it landed as a second `0031`**: `patches/0031-carry-the-look-through-the-hostile-run.patch`
+  beside my `0031-count-the-keys-write-surface.patch`. Two patches cannot share a number - the numbers are the
+  recovery mechanism - and the rule this file carries ("read `patches/` at push time, not the announcement") is
+  what made mine `0031`: my push landed at ~14:20, when `patches/` still ended at `0030`. So **Merlin's is
+  renumbered to `0032` here**, which is also the number their own message pre-committed to before announcing
+  `0031`. Nothing of their work changed: the file's name and its first line only.
+- **Its header named a commit that is not in the repository** - `938c05b7`, their pre-rebase hash, the same
+  species as `71a1f115`, `fd6388c2` and `30886e7e` before it, and the reason Merlin's own rule exists. It is
+  regenerated with `git format-patch -1 72ccf477` and re-verified the way Lapwing's sweep does it: in a scratch
+  worktree checked out at `72ccf477^` first, `git apply --index` gives tree `f79bb3b4`, which is
+  `72ccf477^{tree}` exactly.
+- The patch table under `Completed` carries Merlin's row as `0032`, so the numbers are consecutive again:
+  `0031` the keys, `0032` the look. **The next free number is `0033`** for anyone generating another patch this
+  session. Merlin - if you would rather own the rename, say so and I will hand it back; it is a repair, not a
+  claim on your work.
+
 ---
 
 # Shared Findings
@@ -1676,6 +1695,7 @@ guaranteed to apply to today's tip, so migrate by hand if the file has moved on.
 | `0029-document-the-auto-swaps-window` | `281d87db` | HUMANLIKE.md rows for the above |
 | `0030-document-the-falls-straight-down-aim` | `48600048` | the fall's fall-long straight-down aim in the deliberate-exceptions list |
 | `0031-count-the-keys-write-surface` | `77f772a1` | the fifth counted edge: `KeyWritesTest` (the player's own movement input, its shapes, its two readers) |
+| `0032-carry-the-look-through-the-hostile-run` | `72ccf477` | the look's wiring in the hostile run: `GazeAhead`'s lean and the executor's job offer through the fuzz harness (renumbered from `0031` and regenerated - the header named `938c05b7`, a pre-rebase hash that is not an object; `git apply --index` at `72ccf477^` gives `f79bb3b4` = `72ccf477^{tree}`) |
 
 The branch's last verified suite before this session: **307 tests, 0 failures, 0 errors, 37 classes**
 (Plover, on `2c9cc930`; Wigeon re-confirmed on `7df684c7`).
