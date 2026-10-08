@@ -1,0 +1,1053 @@
+From 3422a9c6b78f21faf013787d66ba7e51f15ca822 Mon Sep 17 00:00:00 2001
+From: 0xFFshell <0xffshell@users.noreply.gitlab.com>
+Date: Thu, 8 Oct 2026 11:58:19 +0000
+Subject: [PATCH] Turn to whoever hit us
+
+A blow was delivered as a prompt to whichever glance was running, and that is
+the one answer to it a look cannot give. The walking glance refuses an interest
+further off than its own and is only advanced at all on a walk the executor has
+welcomed, so a bot punched from the side or from behind while walking - which is
+where somebody sneaking up on a bot actually is - did not turn its head at all;
+a standing one stepped round at the speed of a look and took the better part of
+a second over it. Both contradict the doctrine the blow path was written with:
+a blow says where it came from, whether or not it was in view.
+
+New Flinch (behavior/look/Flinch.java, Minecraft-free, FlinchTest beside it): a
+drawn reaction of two to six ticks, then the turn at the hand's own ceiling - a
+flick, which is what a startle is - unbounded while the feet are still, because
+a standing body turns whole, and stopped at a neck's quarter turn while the feet
+are moving, because a walking body cannot come round without walking backwards.
+Held ten to thirty ticks, drawn when the blow lands and counted from arrival,
+with the attacker asked for again every tick so somebody walking about is
+tracked rather than remembered; handed back at the speed of a look with the sway
+still riding, because coming home is not a flinch. It stands down wherever the
+sway does, and for anything being clicked exactly as the glances do: the head
+comes home rather than vanishing, and a stare that is still owed is taken up
+again if the head comes free in time. A second blow on the heels of the first is
+the same flinch held again, at whoever it names last, and draws itself no second
+reaction.
+
+LookBehavior routes noticeBlows into it instead of into the glances, and adds
+its offsets wherever the sway's and the glance's offsets are added, on the same
+base, so it is handed back with them; it is reset with the rest of the head's
+state on a world event. Newcomer loses the blow path entirely - a blow is not an
+arrival and not a look - and NewcomerTest the four tests of it.
+
+Validation: ./gradlew :test green - 297 tests, 0 failures (10 of them
+FlinchTest). HumanlikeLookFuzzTest does not model the blow and now says so where
+its gates are: the flinch is advanced with the sway's own three flags, so those
+gates are its gates, and its angles are measured in FlinchTest instead.
+---
+ .../java/baritone/behavior/LookBehavior.java  |  71 +++-
+ .../java/baritone/behavior/look/Flinch.java   | 284 +++++++++++++
+ .../java/baritone/behavior/look/Newcomer.java |  46 +--
+ .../baritone/behavior/look/FlinchTest.java    | 383 ++++++++++++++++++
+ .../behavior/look/HumanlikeLookFuzzTest.java  |   6 +
+ .../baritone/behavior/look/NewcomerTest.java  |  74 ----
+ 6 files changed, 737 insertions(+), 127 deletions(-)
+ create mode 100644 src/main/java/baritone/behavior/look/Flinch.java
+ create mode 100644 src/test/java/baritone/behavior/look/FlinchTest.java
+
+diff --git a/src/main/java/baritone/behavior/LookBehavior.java b/src/main/java/baritone/behavior/LookBehavior.java
+index 3a448ec9..06f1a380 100644
+--- a/src/main/java/baritone/behavior/LookBehavior.java
++++ b/src/main/java/baritone/behavior/LookBehavior.java
+@@ -30,6 +30,7 @@ import baritone.api.utils.Rotation;
+ import baritone.api.utils.RotationUtils;
+ import baritone.api.utils.input.Input;
+ import baritone.behavior.look.AimDynamics;
++import baritone.behavior.look.Flinch;
+ import baritone.behavior.look.ForkableRandom;
+ import baritone.behavior.look.GazeAhead;
+ import baritone.behavior.look.HeadWander;
+@@ -156,6 +157,16 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
+      * Who has just walked up, for the glances to turn to. See {@link #noticeArrivals}.
+      */
+     private final Newcomer newcomer = new Newcomer();
++
++    /**
++     * The turn to whoever just hit us. Not a glance, because a glance has limits a blow does not - it
++     * refuses an interest further off than its own, and it only advances on a walk the executor has
++     * welcomed - and not an arrival, because a blow says where it came from whether or not it was in view.
++     * It rides the same head the sway rides, so it is taken exactly where the sway is taken and stands down
++     * exactly where the sway does, and it is applied with the sway's offsets and handed back with them. See
++     * {@link Flinch}.
++     */
++    private final Flinch flinch = new Flinch();
+     private int lastHurtTime; // the player's hurtTime last tick, to tell a fresh blow from the tail of one
+ 
+     /**
+@@ -429,7 +440,19 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
+             }
+         }
+         if (culprit != null) {
+-            this.newcomer.struck(culprit.getId());
++            // A flinch rather than a glance, because a glance has limits a blow does not: see Flinch. The
++            // bearing is asked for again on every tick of the flinch, so a target who walks about is
++            // tracked rather than remembered, and comes back null once they are gone - logged out, dead,
++            // unloaded - which is a stare with nobody left in it. Whether they can still be seen does not
++            // matter: a person keeps looking at the wall somebody stepped behind.
++            final int struck = culprit.getId();
++            this.flinch.blow(() -> {
++                final Entity them = ctx.world().getEntity(struck);
++                if (!(them instanceof LivingEntity) || !them.isAlive()) {
++                    return null;
++                }
++                return RotationUtils.calcRotationFromVec3d(ctx.playerHead(), them.getEyePosition(), ctx.playerRotations());
++            });
+         }
+     }
+ 
+@@ -628,6 +651,7 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
+         this.idleCamera = null;
+         this.idleBase = null;
+         this.idleGlance.reset();
++        this.flinch.reset();
+         this.reaction.clear();
+         this.smoothYawBuffer.clear();
+         this.smoothPitchBuffer.clear();
+@@ -710,6 +734,17 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
+                 final Rotation base = theirs ? camera : this.idleBase;
+                 final Rotation wanted = this.idleGlance.next(base, allowed, theirs, this::idleStep,
+                         this::somethingNearby);
++                // What the sway and the flinch below ride on: the glance's angle when one is out, the base
++                // otherwise. The sway is read against the base rather than the glance's own angle so that it
++                // cannot be mistaken for the glance's bookkeeping, which stays exactly where it was and so
++                // still arrives and still comes home.
++                final Rotation riding = wanted != null ? wanted : base;
++                // The flinch is wanted on the same gate as everything else the standing body does - which
++                // has nothing being clicked in it - and with the feet still it may turn the whole body
++                // round. Measured against what it is added to, so the stare lands on the attacker rather
++                // than on the attacker plus whatever the glance was doing; stood down, it comes home
++                // rather than vanishing. See Flinch.
++                this.flinch.advance(riding, false, allowed);
+                 if (!allowed) {
+                     this.idleBase = null;
+                     // Not ours this tick, and that includes the sway: a leftover half degree rides on the
+@@ -722,13 +757,11 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
+                     this.idleExpected = camera;
+                     return;
+                 }
+-                // The sway rides on top of whatever the glance is doing, including nothing: read against
+-                // the base rather than the glance's own angle, it cannot be mistaken for the glance's
+-                // bookkeeping, which stays exactly where it was and so still arrives and still comes home.
+-                final Rotation riding = wanted != null ? wanted : base;
++                // The sway rides on top of whatever the glance is doing, including nothing, and the flinch
++                // rides on top of both.
+                 final Rotation applied = new Rotation(
+-                        riding.getYaw() + this.headWander.idleYaw(),
+-                        Rotation.clampPitch(riding.getPitch() + this.headWander.idlePitch()));
++                        riding.getYaw() + this.headWander.idleYaw() + this.flinch.yaw(),
++                        Rotation.clampPitch(riding.getPitch() + this.headWander.idlePitch() + this.flinch.pitch()));
+                 this.idleCamera = camera;
+                 ctx.player().setYRot(applied.getYaw());
+                 ctx.player().setXRot(applied.getPitch());
+@@ -818,12 +851,16 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
+             // The walking glance is the one offset that cannot simply not be added: it is tens of degrees,
+             // and a head that is forty degrees to the left on one tick and on the block the next has
+             // snapped. It comes back at the speed of a look instead, and until it is back it is still on
+-            // the camera - which keeps the trace honest, and so keeps the click waiting on the head.
++            // the camera - which keeps the trace honest, and so keeps the click waiting on the head. The
++            // flinch is here for the same reason and on the same terms: this is the branch where something
++            // is being clicked, or the head is not ours to turn at all, and a head that was mid-stare when
++            // the pickaxe came out still visibly comes off whoever hit it rather than vanishing.
++            this.flinch.advance(null, false, false);
+             this.walkGlance.advance(false, null);
+-            if (this.walkGlance.out()) {
++            if (this.walkGlance.out() || this.flinch.out()) {
+                 this.wanderCamera = new Rotation(ctx.player().getYRot(), ctx.player().getXRot());
+-                ctx.player().setYRot(this.wanderCamera.getYaw() + this.walkGlance.yaw());
+-                ctx.player().setXRot(Rotation.clampPitch(this.wanderCamera.getPitch() + this.walkGlance.pitch()));
++                ctx.player().setYRot(this.wanderCamera.getYaw() + this.walkGlance.yaw() + this.flinch.yaw());
++                ctx.player().setXRot(Rotation.clampPitch(this.wanderCamera.getPitch() + this.walkGlance.pitch() + this.flinch.pitch()));
+             }
+             return;
+         }
+@@ -858,8 +895,16 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
+             return new Rotation(Rotation.normalizeYaw(nearby.getYaw() - this.wanderCamera.getYaw()),
+                     nearby.getPitch() - this.wanderCamera.getPitch());
+         });
+-        ctx.player().setYRot(base.getYaw() + this.walkGlance.yaw() + this.headWander.yaw() * fraction);
+-        ctx.player().setXRot(Rotation.clampPitch(base.getPitch() + this.walkGlance.pitch() + this.headWander.pitch() * fraction));
++        // The flinch rides on this same head, and this is the same head the sway rides: wanted wherever the
++        // sway is wanted, which is what both flags above already mean - every gate they carry has nothing
++        // being clicked in it - and stood down wherever it is not. The feet half of it is the walk: a body
++        // that is walking cannot come round without walking backwards, so the turn is held to a neck's
++        // worth while it is one, and a body that is standing still turns whole. It is measured against the
++        // angle it is added to, so the stare lands on the attacker and not on the attacker plus whatever a
++        // glance happened to be doing. See Flinch.
++        this.flinch.advance(base, walking, true);
++        ctx.player().setYRot(base.getYaw() + this.walkGlance.yaw() + this.headWander.yaw() * fraction + this.flinch.yaw());
++        ctx.player().setXRot(Rotation.clampPitch(base.getPitch() + this.walkGlance.pitch() + this.headWander.pitch() * fraction + this.flinch.pitch()));
+     }
+ 
+     /**
+diff --git a/src/main/java/baritone/behavior/look/Flinch.java b/src/main/java/baritone/behavior/look/Flinch.java
+new file mode 100644
+index 00000000..d7aaaa2e
+--- /dev/null
++++ b/src/main/java/baritone/behavior/look/Flinch.java
+@@ -0,0 +1,284 @@
++/*
++ * This file is part of Baritone.
++ *
++ * Baritone is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU Lesser General Public License as published by
++ * the Free Software Foundation, either version 3 of the License, or
++ * (at your option) any later version.
++ *
++ * Baritone is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public License
++ * along with Baritone.  If not, see <https://www.gnu.org/licenses/>.
++ */
++
++package baritone.behavior.look;
++
++import baritone.api.utils.Rotation;
++
++import java.util.Random;
++import java.util.function.Supplier;
++
++/**
++ * The turn to whoever just hit us: the one look a person takes without choosing to.
++ * <p>
++ * Everything else this head does is something its owner meant to do - the aim at what is being worked
++ * on, the sway of a walk, a glance along a road - and the two glances cover both the looks people take
++ * while standing about and the ones they take while walking. A blow is neither. It is not a look at
++ * the side of the road, it does not wait for the walk to be a plain one, and it is not what somebody
++ * deciding to look does: it is <i>being looked at</i> arriving over a shoulder. The fork had one
++ * behaviour for both - a blow was delivered as a prompt to whichever glance was running - and the
++ * limits of a glance are exactly the limits a blow does not have: the walking glance refuses an
++ * interest further off than {@link WalkGlance#MAX_INTEREST_YAW} and is only advanced at all on a walk
++ * the executor has welcomed, and the standing one steps at the speed of a look. So a bot punched from
++ * the side or from behind while walking did not turn its head at all, and a standing one took the
++ * better part of a second. This is the look that is not a glance.
++ * <p>
++ * <b>How far it goes.</b> A person whose feet are still can turn their whole body, and that is what
++ * they do, so with the feet still this is unbounded: the head goes to whoever hit it, however far
++ * round that is. A person whose feet are moving cannot - their body is their walk, and a head that
++ * swivels the whole way round on a walking body is a body walking backwards, the one picture this
++ * fork's walking work exists not to draw - so while the feet are moving the turn stops at
++ * {@link #NECK_YAW}: the same quarter turn {@link WalkGlance} holds itself to, and for the same
++ * reason, a neck's limit without the body going with it.
++ * <p>
++ * <b>How it moves.</b> Nothing for a drawn reaction of {@link #ONSET_MIN} to {@link #ONSET_MAX} ticks
++ * first, because a head that moves in the same tick the blow lands has no reaction time in it at all,
++ * and then out at {@link #STEP}, the hand's own ceiling - a flick, because that is what a flinch is,
++ * and deliberately not the walking glance's step: a startle is the one time a person's head moves as
++ * fast as it can. Held for {@link #HOLD_MIN} to {@link #HOLD_MAX} ticks, drawn when the blow lands
++ * and counted from the moment the head arrives, with the attacker tracked while it holds, because a
++ * person keeps their eyes on whoever hit them and keeps them there while that person moves about.
++ * Then back at {@link #HOME_STEP}, the speed of a look: coming home is not a flinch, and a head
++ * snapped back onto its aim is the other half of the same tell. A second blow while the head is
++ * already on somebody is the same flinch held again, at whoever it names last, and it draws itself no
++ * second reaction: a person punched twice in a second does not flinch twice. The sway of the body
++ * under the head keeps running throughout, so the head is never quite still.
++ * <p>
++ * <b>What it never does.</b> It is not added while anything is being clicked - the trace Baritone
++ * aims its own pickaxe and blocks along follows the rotation it last told the server, so a head
++ * turned to a fight during a break aims the pickaxe at the fight - and every click in this mod waits
++ * for the head instead. {@link #advance}'s {@code wanted} is that gate: not wanted, the flinch stands
++ * down and comes home rather than vanishing, and if the head becomes free again while the stare is
++ * still owed it resumes, so a bot that was hit mid-block looks round at whoever did it once the block
++ * is done, which is what a person does. Free of Minecraft, so the rules can be tested;
++ * {@code FlinchTest} covers them.
++ */
++public final class Flinch {
++
++    /**
++     * How far the head may turn while the feet are moving, in degrees: a neck's limit, the same
++     * quarter turn {@link WalkGlance} allows itself and for the same reason. With the feet still
++     * there is no limit at all - see the class note.
++     */
++    public static final float NECK_YAW = 70f;
++
++    /**
++     * How long after the blow the head starts coming round, in ticks, drawn when the blow lands: two to
++     * six, which is a flinch and not a decision. Quicker than noticing somebody arrive - a blow is not in
++     * the corner of the eye - and it is here rather than left out because a head that starts moving in the
++     * same tick the blow lands has no reaction time in it at all, which is exactly as machine as never
++     * looking round, only in the other direction. A second blow while a flinch is already owed does not
++     * draw itself a second reaction: a person punched twice in a second does not flinch twice.
++     */
++    public static final int ONSET_MIN = 2;
++    public static final int ONSET_MAX = 6;
++
++    /**
++     * How long the head stays on whoever hit it, in ticks, drawn when the blow lands: half a second to
++     * a second and a half. A stare, not a flick of the eyes, and counted from the moment the head
++     * arrives rather than from the blow.
++     */
++    public static final int HOLD_MIN = 10;
++    public static final int HOLD_MAX = 30;
++
++    /**
++     * How fast the flinch turns and tilts, in degrees a tick: the hand's own ceiling, the fastest this
++     * mod's head is ever allowed to move, which is what a startle is.
++     */
++    public static final float STEP = AimDynamics.MAX_YAW_STEP;
++    public static final float PITCH_STEP = AimDynamics.MAX_PITCH_STEP;
++
++    /**
++     * How fast the head comes home, in degrees a tick: the speed of a look rather than of a flinch.
++     */
++    public static final float HOME_STEP = AimDynamics.IDLE_YAW_STEP;
++    public static final float HOME_PITCH_STEP = AimDynamics.IDLE_PITCH_STEP;
++
++    /**
++     * How close to the attacker the head counts as being on them, in degrees. A degree: the tremor is
++     * still shaking the hand, so it never sits exactly, and this is a stare rather than an aim.
++     */
++    public static final float ARRIVED = 1.0f;
++
++    /**
++     * The longest one blow's flinch is ever on the head, in ticks: a safety net, not a target. The
++     * hold ends it long before this unless the attacker keeps moving out from under the stare.
++     */
++    public static final int MAX_AGE = 200;
++
++    private final Random rand;
++
++    private Supplier<Rotation> them; // whoever hit us, asked again every tick
++    private boolean answering;
++    private float yaw;   // the offset this is holding on the head, in degrees
++    private float pitch;
++    private int onset;   // ticks still to go before the head starts coming round
++    private int hold;
++    private int held;
++    private int age;
++
++    public Flinch() {
++        this(new Random());
++    }
++
++    /**
++     * @param rand the source of the held lengths, injectable so a run can be repeated; see
++     *             {@code FlinchTest}
++     */
++    public Flinch(Random rand) {
++        this.rand = rand;
++    }
++
++    /**
++     * We have just been hit, and this is where whoever did it is: the bearing to them, asked again
++     * every tick so that a target who walks about is tracked rather than remembered. A second blow
++     * before the head has come home is the same flinch held again - the stare restarts, at whoever
++     * this one names, without the head jumping anywhere to do it - and it does not start itself a
++     * second reaction, because the flinch it is arriving on is still being flinched.
++     */
++    public void blow(Supplier<Rotation> them) {
++        if (!this.answering) {
++            this.onset = ONSET_MIN + this.rand.nextInt(ONSET_MAX - ONSET_MIN + 1);
++        }
++        this.them = them;
++        this.answering = true;
++        this.hold = HOLD_MIN + this.rand.nextInt(HOLD_MAX - HOLD_MIN + 1);
++        this.held = 0;
++        this.age = 0;
++    }
++
++    /**
++     * One tick of the flinch.
++     *
++     * @param base   the rotation the head would be holding without this offset - the aim, the angle a
++     *               glance would ride on, or the camera: whatever this is being added to. Only read
++     *               while {@code wanted}, so a caller with nothing to measure may pass {@code null}
++     * @param moving whether the feet are moving. True, the turn stops at {@link #NECK_YAW}; false,
++     *               the whole body may come round
++     * @param wanted whether the head is free for this at all. False while anything is being clicked
++     *               or while the head is somebody else's: the flinch stands down and comes home, and
++     *               a stare that is still owed is taken up again if the head comes free in time
++     */
++    public void advance(Rotation base, boolean moving, boolean wanted) {
++        if (!this.answering || !wanted) {
++            this.comeHome();
++            return;
++        }
++        if (++this.age > MAX_AGE) {
++            // the safety net: a stare that can never be taken has to end somewhere
++            this.answering = false;
++            this.them = null;
++            this.comeHome();
++            return;
++        }
++        if (this.onset > 0) {
++            // the reaction: nothing moves yet. A head still on its way home from the last blow goes on
++            // coming home until this one's turn starts.
++            this.onset--;
++            this.comeHome();
++            return;
++        }
++        final Rotation at = this.them == null ? null : this.them.get();
++        if (at == null || this.held >= this.hold) {
++            // whoever hit us is gone, or the stare has been held long enough: home at the speed of a look
++            this.answering = false;
++            this.them = null;
++            this.comeHome();
++            return;
++        }
++        float wantedYaw = Rotation.normalizeYaw(at.getYaw() - base.getYaw());
++        if (moving) {
++            // as far as a neck goes, and no further: the body is the walk
++            wantedYaw = Math.max(-NECK_YAW, Math.min(NECK_YAW, wantedYaw));
++        }
++        final float wantedPitch = at.getPitch() - base.getPitch();
++        this.yaw = step(this.yaw, wantedYaw, STEP);
++        this.pitch = step(this.pitch, wantedPitch, PITCH_STEP);
++        if (Math.abs(wantedYaw - this.yaw) <= ARRIVED && Math.abs(wantedPitch - this.pitch) <= ARRIVED) {
++            this.held++;
++        }
++    }
++
++    /**
++     * Whether the flinch is holding an angle on the head at all, including while it is on its way
++     * home. False means nothing of this is on the head and none of it has to be applied.
++     */
++    public boolean out() {
++        return this.yaw != 0f || this.pitch != 0f;
++    }
++
++    /**
++     * Whether a blow is still owed a look: true from the blow until the stare has been taken or
++     * whoever did it has gone. Only for the tests.
++     */
++    public boolean answering() {
++        return this.answering;
++    }
++
++    /**
++     * @return the yaw to add to the base, in degrees
++     */
++    public float yaw() {
++        return this.yaw;
++    }
++
++    /**
++     * @return the pitch to add to the base, in degrees
++     */
++    public float pitch() {
++        return this.pitch;
++    }
++
++    /**
++     * The world this was owed in has gone, so nobody has hit us in this one. The rest of the head's
++     * state is dropped on the same event and for the same reason; see {@code LookBehavior#onWorldEvent}.
++     */
++    public void reset() {
++        this.them = null;
++        this.answering = false;
++        this.yaw = 0f;
++        this.pitch = 0f;
++        this.onset = 0;
++        this.hold = 0;
++        this.held = 0;
++        this.age = 0;
++    }
++
++    private void comeHome() {
++        if (!this.out()) {
++            return;
++        }
++        this.yaw = step(this.yaw, 0f, HOME_STEP);
++        this.pitch = step(this.pitch, 0f, HOME_PITCH_STEP);
++    }
++
++    /**
++     * A step of at most {@code most} toward {@code target}, and exactly it when it is nearer than
++     * that: the same shape every hand movement in this fork has, and it lands rather than buzzing
++     * around the target a step at a time.
++     */
++    private static float step(float current, float target, float most) {
++        final float delta = target - current;
++        if (delta > most) {
++            return current + most;
++        }
++        if (delta < -most) {
++            return current - most;
++        }
++        return target;
++    }
++}
+diff --git a/src/main/java/baritone/behavior/look/Newcomer.java b/src/main/java/baritone/behavior/look/Newcomer.java
+index 3188a4fa..4cdb0e55 100644
+--- a/src/main/java/baritone/behavior/look/Newcomer.java
++++ b/src/main/java/baritone/behavior/look/Newcomer.java
+@@ -40,8 +40,12 @@ import java.util.Random;
+  * the glance keeps all of its own rules - it is not taken while anything is being clicked, it does not
+  * outlive its hold, it comes home - so this cannot point the crosshair anywhere the glance could not.
+  * <p>
+- * The one thing that is not an arrival and still goes through here is a blow - see {@link #struck} -
+- * because the head's answer to it is the same kind of look, only quicker and whichever way it came from.
++ * A blow does not come through here at all, and used to: it was timed here and then handed to whichever
++ * glance was running, which meant the head's answer to being hit inherited a look's limits - the walking
++ * glance would not turn to somebody further off than its own interest, and only on a walk it had been
++ * welcomed on. A blow is not an arrival and not a look; it has a flinch of its own now, which turns
++ * however far it has to and however the feet happen to be placed, and this class is only about people
++ * who walk up. See {@code Flinch}.
+  * <p>
+  * Free of Minecraft; {@code NewcomerTest} drives it.
+  */
+@@ -67,14 +71,6 @@ public final class Newcomer {
+      */
+     static final int LOOKS_APART = 80;
+ 
+-    /**
+-     * Ticks between being hit and the head turning to whoever did it: two to six, which is a flinch and
+-     * not a decision. Quicker than noticing somebody arrive, because a blow is not in the corner of the
+-     * eye, and allowed to come on the heels of another look, because it is not one.
+-     */
+-    static final int STRUCK_REACT_MIN = 2;
+-    static final int STRUCK_REACT_MAX = 6;
+-
+     private static final int NOBODY = -1;
+ 
+     private final Random rand;
+@@ -84,8 +80,6 @@ public final class Newcomer {
+     private int who = NOBODY;  // the arrival the pending look is for
+     private int reactIn;
+     private int sinceLook = LOOKS_APART;
+-    private int struckBy = NOBODY; // whoever just hit us, until the head has turned to them
+-    private int flinchIn;
+ 
+     public Newcomer() {
+         this(new Random());
+@@ -109,15 +103,6 @@ public final class Newcomer {
+     public int notice(List<Integer> inView) {
+         this.tick++;
+         this.sinceLook++;
+-        if (this.struckBy != NOBODY) {
+-            // whoever hit us comes before anyone who merely arrived, and before the clock
+-            if (--this.flinchIn <= 0) {
+-                final int look = this.struckBy;
+-                this.struckBy = NOBODY;
+-                this.sinceLook = 0;
+-                return look;
+-            }
+-        }
+         if (!this.primed) {
+             for (int id : inView) {
+                 this.lastSeen.put(id, this.tick);
+@@ -157,25 +142,6 @@ public final class Newcomer {
+         return look;
+     }
+ 
+-    /**
+-     * We have just been hit, and {@code id} is the likeliest to have done it: the nearest player, or
+-     * failing one the nearest hostile. The head turns to them a flinch later - see
+-     * {@link #STRUCK_REACT_MIN} - whether or not they were in view, because a blow says where it came
+-     * from, and instead of anything else that was waiting. A second blow before the head has turned is the
+-     * same flinch, at whoever it names last. A person being punched looks round at who is punching them; that
+-     * is the test every suspected bot gets, and a head that goes on staring at the horizon fails it.
+-     */
+-    public void struck(int id) {
+-        if (id == NOBODY) {
+-            return;
+-        }
+-        if (this.struckBy == NOBODY) {
+-            this.flinchIn = STRUCK_REACT_MIN + this.rand.nextInt(STRUCK_REACT_MAX - STRUCK_REACT_MIN + 1);
+-        }
+-        this.struckBy = id;
+-        this.who = NOBODY; // an arrival the head was about to turn to can wait; it will not now be looked at
+-    }
+-
+     /**
+      * Drops everyone who has been gone long enough to be an arrival when they come back, so that the map
+      * does not grow with everybody ever passed on a long enough day.
+diff --git a/src/test/java/baritone/behavior/look/FlinchTest.java b/src/test/java/baritone/behavior/look/FlinchTest.java
+new file mode 100644
+index 00000000..92910e4c
+--- /dev/null
++++ b/src/test/java/baritone/behavior/look/FlinchTest.java
+@@ -0,0 +1,383 @@
++/*
++ * This file is part of Baritone.
++ *
++ * Baritone is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU Lesser General Public License as published by
++ * the Free Software Foundation, either version 3 of the License, or
++ * (at your option) any later version.
++ *
++ * Baritone is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public License
++ * along with Baritone.  If not, see <https://www.gnu.org/licenses/>.
++ */
++
++package baritone.behavior.look;
++
++import baritone.api.utils.Rotation;
++import org.junit.Test;
++
++import java.util.Random;
++import java.util.function.Supplier;
++
++import static org.junit.Assert.assertEquals;
++import static org.junit.Assert.assertFalse;
++import static org.junit.Assert.assertTrue;
++
++/**
++ * A blow turns the head to whoever struck, and the things that make that a person rather than a machine
++ * are all pinned here: it goes however far round they are (a neck's worth when the feet are moving, the
++ * whole way when they are not), it goes at the hand's own ceiling rather than a look's, it stays there
++ * for a stare, and it comes back at the speed of a look and exactly to nothing. The one thing it never
++ * does is touch the head while something is being clicked, and the debt it owes is taken up again
++ * afterwards - a bot hit mid-block looks round at whoever did it once the block is done.
++ */
++public class FlinchTest {
++
++    private static final int SEEDS = 40;
++
++    /** Far enough round that a look would refuse it and the answer has to be the flinch's own. */
++    private static final float BEHIND = 179f;
++
++    private static final Rotation STILL = new Rotation(0f, 0f);
++
++    /** A whole body's turn back onto a walk takes at most this long at the hand's ceiling. */
++    private static final int CARRY_BACK = 25;
++
++    private static Flinch flinch(final long seed) {
++        return new Flinch(new Random(seed));
++    }
++
++    /** Somewhere the attacker is, moveable mid-flinch the way a real one is. */
++    private static final class Them implements Supplier<Rotation> {
++        private Rotation where;
++
++        private Them(float yaw, float pitch) {
++            this.where = new Rotation(yaw, pitch);
++        }
++
++        @Override
++        public Rotation get() {
++            return this.where;
++        }
++    }
++
++    /**
++     * Whether the flinch has the head on {@code yaw} at the moment, to {@link Flinch#ARRIVED}.
++     */
++    private static boolean on(Flinch flinch, float yaw) {
++        return Math.abs(flinch.yaw() - yaw) <= Flinch.ARRIVED;
++    }
++
++    @Test
++    public void theHeadTurnsToWhoeverHitItHoweverFarRoundTheyAre() {
++        for (long seed = 0; seed < SEEDS; seed++) {
++            final Flinch flinch = flinch(seed);
++            flinch.blow(new Them(BEHIND, 0f));
++            int startedOn = -1;
++            int arrivedOn = -1;
++            float worstStep = 0f;
++            for (int tick = 1; tick <= 30; tick++) {
++                final float before = flinch.yaw();
++                flinch.advance(STILL, false, true);
++                worstStep = Math.max(worstStep, Math.abs(flinch.yaw() - before));
++                if (startedOn < 0 && flinch.yaw() != 0f) {
++                    startedOn = tick;
++                }
++                if (arrivedOn < 0 && on(flinch, BEHIND)) {
++                    arrivedOn = tick;
++                }
++            }
++            assertTrue("seed " + seed + ": a blow from behind was never turned to", arrivedOn > 0);
++            // the reaction first, drawn: two to six ticks with nothing moving, then the flick. A head that
++            // moved in the tick the blow landed would be as much a machine as one that never moved
++            assertTrue("seed " + seed + ": the head started moving after " + startedOn + " ticks, with no reaction in it",
++                    startedOn > Flinch.ONSET_MIN);
++            assertTrue("seed " + seed + ": the head started moving after " + startedOn + " ticks, which is a decision",
++                    startedOn <= Flinch.ONSET_MAX + 1);
++            // and ten ticks of turning is the ceiling's arithmetic for a half turn: slower is a look
++            assertTrue("seed " + seed + ": took " + (arrivedOn - startedOn + 1) + " ticks of turning to come round",
++                    arrivedOn - startedOn + 1 <= 10);
++            assertTrue("seed " + seed + ": stepped " + worstStep + " degrees in one tick",
++                    worstStep <= Flinch.STEP + 1e-3f);
++        }
++    }
++
++    @Test
++    public void aWalkingHeadTurnsAsFarAsANeckGoesAndNoFurther() {
++        for (long seed = 0; seed < SEEDS; seed++) {
++            final Flinch flinch = flinch(seed);
++            flinch.blow(new Them(BEHIND, 0f));
++            float furthest = 0f;
++            for (int tick = 0; tick < 60; tick++) {
++                flinch.advance(STILL, true, true);
++                furthest = Math.max(furthest, Math.abs(flinch.yaw()));
++                // and it turns toward them rather than away: the offset keeps the bearing's sign
++                assertTrue("seed " + seed + ": turned the wrong way round", flinch.yaw() >= 0f);
++            }
++            assertTrue("seed " + seed + ": a walking head reached " + furthest + " degrees round, past a neck",
++                    furthest <= Flinch.NECK_YAW + Flinch.ARRIVED + 1e-3f);
++            assertTrue("seed " + seed + ": a walking head only reached " + furthest + " degrees of its neck",
++                    furthest >= Flinch.NECK_YAW - Flinch.ARRIVED);
++        }
++    }
++
++    @Test
++    public void theHeadHoldsAStareThenComesBackToExactlyNothing() {
++        for (long seed = 0; seed < SEEDS; seed++) {
++            final Flinch flinch = flinch(seed);
++            flinch.blow(new Them(90f, 25f));
++            int onThem = 0;
++            int homeOn = -1;
++            float worstReturnStep = 0f;
++            boolean stareDone = false;
++            for (int tick = 1; tick <= 600; tick++) {
++                final float beforeYaw = flinch.yaw();
++                flinch.advance(STILL, false, true);
++                if (on(flinch, 90f)) {
++                    onThem++;
++                } else if (onThem > 0) {
++                    // the stare is over and the head is on its way home
++                    stareDone = true;
++                    worstReturnStep = Math.max(worstReturnStep, Math.abs(flinch.yaw() - beforeYaw));
++                }
++                if (!flinch.out() && onThem > 0) {
++                    // home, and it had been there: nothing moved during the reaction, so a head that is not
++                    // out yet is not a head that has come home
++                    homeOn = tick;
++                    break;
++                }
++            }
++            assertTrue("seed " + seed + ": the head never came home", homeOn > 0);
++            assertTrue("seed " + seed + ": came home after " + homeOn + " ticks, before any stare",
++                    stareDone);
++            assertEquals("seed " + seed + ": the head was not put down exactly", 0f, flinch.yaw(), 0f);
++            assertEquals("seed " + seed + ": the head was not put down exactly", 0f, flinch.pitch(), 0f);
++            assertTrue("seed " + seed + ": the stare lasted " + onThem + " ticks",
++                    onThem >= Flinch.HOLD_MIN && onThem <= Flinch.HOLD_MAX + 2);
++            assertTrue("seed " + seed + ": came home at " + worstReturnStep + " degrees a tick, which is a flinch",
++                    worstReturnStep <= Flinch.HOME_STEP + 1e-3f);
++            assertFalse("seed " + seed + ": still owed a look after coming home", flinch.answering());
++        }
++    }
++
++    @Test
++    public void aSecondBlowStartsTheStareAgainWhereTheyAreNow() {
++        for (long seed = 0; seed < SEEDS; seed++) {
++            final Flinch flinch = flinch(seed);
++            final Them them = new Them(90f, 0f);
++            flinch.blow(them);
++            int arrived = -1;
++            for (int tick = 1; tick <= 20 && arrived < 0; tick++) {
++                flinch.advance(STILL, false, true);
++                if (on(flinch, 90f)) {
++                    arrived = tick;
++                }
++            }
++            assertTrue("seed " + seed + ": the first blow was never answered", arrived > 0);
++            // they have moved - or it is somebody else - and the blow lands again
++            them.where = new Rotation(160f, 0f);
++            flinch.blow(them);
++            float worstStep = 0f;
++            int arrivedOn = -1;
++            int onThem = 0;
++            for (int tick = 1; tick <= 80; tick++) {
++                final float before = flinch.yaw();
++                flinch.advance(STILL, false, true);
++                worstStep = Math.max(worstStep, Math.abs(flinch.yaw() - before));
++                if (on(flinch, 160f)) {
++                    onThem++;
++                    if (arrivedOn < 0) {
++                        arrivedOn = tick;
++                    }
++                }
++            }
++            assertTrue("seed " + seed + ": a second blow did not turn to where they are now", arrivedOn > 0);
++            assertTrue("seed " + seed + ": a second blow snapped the head " + worstStep + " degrees",
++                    worstStep <= Flinch.STEP + 1e-3f);
++            // the stare was taken again rather than run out under it, and it had the length of a stare
++            assertTrue("seed " + seed + ": the second blow was stared at for only " + onThem + " ticks",
++                    onThem >= Flinch.HOLD_MIN);
++        }
++    }
++
++    @Test
++    public void aSecondBlowOnTheHeelsOfTheFirstDoesNotStartTheReactionOver() {
++        for (long seed = 0; seed < SEEDS; seed++) {
++            final Flinch once = flinch(seed);
++            final Flinch twice = flinch(seed);
++            once.blow(new Them(90f, 0f));
++            twice.blow(new Them(90f, 0f));
++            int startedOnce = -1;
++            int startedTwice = -1;
++            for (int tick = 1; tick <= 20; tick++) {
++                once.advance(STILL, false, true);
++                twice.advance(STILL, false, true);
++                if (tick == 2) {
++                    // the same hand again, while the first flinch is still being decided on
++                    twice.blow(new Them(90f, 0f));
++                }
++                if (startedOnce < 0 && once.yaw() != 0f) {
++                    startedOnce = tick;
++                }
++                if (startedTwice < 0 && twice.yaw() != 0f) {
++                    startedTwice = tick;
++                }
++            }
++            assertTrue("seed " + seed + ": the head never moved", startedOnce > 0);
++            assertEquals("seed " + seed + ": a second blow restarted the reaction, which is a decision twice",
++                    startedOnce, startedTwice);
++        }
++    }
++
++    @Test
++    public void aNewWorldIsNobodyHavingHitUs() {
++        final Flinch flinch = flinch(9);
++        flinch.blow(new Them(179f, 40f));
++        for (int tick = 0; tick < 12; tick++) {
++            flinch.advance(STILL, false, true);
++        }
++        assertTrue("the stare never started", flinch.out());
++        flinch.reset();
++        assertFalse("a flinch survived the world it happened in", flinch.out());
++        assertFalse("a blow was still owed across worlds", flinch.answering());
++        assertEquals("the head was left holding an angle", 0f, flinch.yaw(), 0f);
++        assertEquals("the head was left holding an angle", 0f, flinch.pitch(), 0f);
++    }
++
++    @Test
++    public void somebodyGoneIsNotStaredAt() {
++        final Flinch flinch = flinch(7);
++        flinch.blow(() -> null);
++        for (int tick = 0; tick < Flinch.ONSET_MAX + 2; tick++) {
++            flinch.advance(STILL, false, true);
++        }
++        assertFalse("nothing to look at, and a head was turned anyway", flinch.answering());
++        assertFalse("nothing to look at", flinch.out());
++
++        // and one who goes away while the head is on them
++        final Them them = new Them(120f, 0f);
++        final Flinch second = flinch(11);
++        second.blow(them);
++        for (int tick = 0; tick < 10; tick++) {
++            second.advance(STILL, false, true);
++        }
++        assertTrue("the stare never started", second.out());
++        them.where = null;
++        second.advance(STILL, false, true);
++        assertFalse("the head was still owed a look at somebody who had gone", second.answering());
++        assertTrue("the head vanished rather than coming home", second.out());
++        for (int tick = 0; tick < 40; tick++) {
++            second.advance(STILL, false, true);
++        }
++        assertFalse("the head never got home", second.out());
++    }
++
++    @Test
++    public void aClickStandsTheHeadDownAndTheStareIsTakenUpAgain() {
++        final Flinch flinch = flinch(3);
++        flinch.blow(new Them(90f, 0f));
++        int arrived = -1;
++        for (int tick = 1; tick <= 20 && arrived < 0; tick++) {
++            flinch.advance(STILL, false, true);
++            if (on(flinch, 90f)) {
++                arrived = tick;
++            }
++        }
++        assertTrue("the stare never started", arrived > 0);
++        // the pickaxe comes out: the head is needed, and it is handed back rather than switched off
++        flinch.advance(STILL, false, false);
++        assertTrue("the head snapped off the attacker", flinch.out());
++        assertTrue("the head did not move off the attacker at all", Math.abs(flinch.yaw()) < 90f);
++        // a moment of digging later it is free again, and the look it still owes is taken
++        int backOnThem = -1;
++        for (int tick = 1; tick <= 40; tick++) {
++            flinch.advance(STILL, false, true);
++            if (backOnThem < 0 && on(flinch, 90f)) {
++                backOnThem = tick;
++                break;
++            }
++        }
++        assertTrue("the head never came back round to whoever hit it", backOnThem > 0);
++    }
++
++    @Test
++    public void theHeadNeverMovesFasterThanTheHandCanFlick() {
++        for (long seed = 0; seed < SEEDS; seed++) {
++            final Random rand = new Random(seed);
++            final Flinch flinch = new Flinch(rand);
++            final Them them = new Them(0f, 0f);
++            float baseYaw = 0f;
++            int movingFor = 0;
++            boolean walking = false;
++            int walkLeft = 0;
++            for (int tick = 0; tick < 3000; tick++) {
++                // a base that is itself turning, sometimes as fast as the aim ever does
++                baseYaw = Rotation.normalizeYaw(baseYaw + (rand.nextFloat() * 2f - 1f) * Flinch.STEP);
++                them.where = rand.nextFloat() < 0.1f
++                        ? null
++                        : new Rotation(Rotation.normalizeYaw(them.where == null
++                        ? baseYaw
++                        : them.where.getYaw() + (rand.nextFloat() * 2f - 1f) * 90f),
++                        Math.max(-90f, Math.min(90f, rand.nextFloat() * 120f - 60f)));
++                if (rand.nextFloat() < 0.05f) {
++                    flinch.blow(them);
++                }
++                // the walk comes in stretches, as a walk does, so the carry-back is actually reached
++                if (walkLeft <= 0) {
++                    walking = rand.nextBoolean();
++                    walkLeft = walking ? 30 + rand.nextInt(111) : 5 + rand.nextInt(56);
++                }
++                walkLeft--;
++                final boolean moving = walking;
++                final boolean wanted = rand.nextFloat() > 0.1f;
++                movingFor = moving ? movingFor + 1 : 0;
++                final float beforeYaw = flinch.yaw();
++                final float beforePitch = flinch.pitch();
++                flinch.advance(new Rotation(baseYaw, 0f), moving, wanted);
++                final float stepYaw = Math.abs(flinch.yaw() - beforeYaw);
++                final float stepPitch = Math.abs(flinch.pitch() - beforePitch);
++                assertTrue("seed " + seed + " tick " + tick + ": yaw moved " + stepYaw + " degrees in a tick",
++                        stepYaw <= Flinch.STEP + 1e-3f);
++                assertTrue("seed " + seed + " tick " + tick + ": pitch moved " + stepPitch + " degrees in a tick",
++                        stepPitch <= Flinch.PITCH_STEP + 1e-3f);
++                if (movingFor >= CARRY_BACK) {
++                    // the whole body's turn has been carried back onto the walk by now
++                    assertTrue("seed " + seed + " tick " + tick + ": walking with the head " + flinch.yaw()
++                                    + " degrees off the walk, past a neck",
++                            Math.abs(flinch.yaw()) <= Flinch.NECK_YAW + Flinch.ARRIVED + 1e-3f);
++                }
++                assertTrue("seed " + seed + " tick " + tick + ": the pitch wandered past the sky",
++                        Math.abs(flinch.pitch()) <= 90f);
++            }
++        }
++    }
++
++    @Test
++    public void theStareIsBoundedEvenIfEveryBlowCannotBeAnswered() {
++        // the safety net proper: one blow, and a target that is always just out of reach
++        final Flinch flinch = flinch(13);
++        // somebody who is never where the head is: they cross from one side to the other every tick, and a
++        // head that steps eighteen degrees toward sixty is then asked for minus sixty, so it never settles
++        final int[] n = {0};
++        flinch.blow(() -> new Rotation(n[0]++ % 2 == 0 ? 60f : -60f, 0f));
++        int ended = -1;
++        for (int tick = 1; tick <= Flinch.MAX_AGE + 60; tick++) {
++            flinch.advance(STILL, false, true);
++            if (!flinch.answering()) {
++                ended = tick;
++                break;
++            }
++        }
++        assertTrue("a flinch that never arrives and is never renewed went on for ever", ended > 0);
++        assertTrue("it gave up before the safety net", ended >= Flinch.MAX_AGE);
++        for (int tick = 0; tick < 200; tick++) {
++            flinch.advance(STILL, false, true);
++        }
++        assertEquals("the head was left holding an angle", 0f, flinch.yaw(), 0f);
++        assertEquals("the head was left holding an angle", 0f, flinch.pitch(), 0f);
++    }
++}
+diff --git a/src/test/java/baritone/behavior/look/HumanlikeLookFuzzTest.java b/src/test/java/baritone/behavior/look/HumanlikeLookFuzzTest.java
+index b8e10163..92d1ed16 100644
+--- a/src/test/java/baritone/behavior/look/HumanlikeLookFuzzTest.java
++++ b/src/test/java/baritone/behavior/look/HumanlikeLookFuzzTest.java
+@@ -171,6 +171,12 @@ public class HumanlikeLookFuzzTest {
+         // moving whatever their speed - a fall, a jump, a climb, where the yaw steers a heading just as it
+         // does on foot - and this harness has no ground to stand on. So its walking ticks model the caller's
+         // ground and water halves, and the airborne half is pinned by reading rather than by these runs.
++        // The flinch is deliberately not modelled here, and this is why rather than an omission: it is not
++        // one of the deliberate head-movers - it is a blow - and it has no clock of its own except the one
++        // drawn when it lands. It rides these same three gates, because the caller advances it with the
++        // sway's own flags, so the gates above are its gates; what it puts on the head is measured hard in
++        // FlinchTest instead: the reaction, the flick at the hand's ceiling, the neck's bound while the
++        // feet move, the hold, the stand-down and the handback.
+         final boolean walkingSway = wanted != null && walking && pathing && !interacting;
+         final boolean waitingSway = wanted != null && standingStill && inControl && !interacting;
+         final boolean idleSway = wanted == null && inControl && standingStill && !interacting;
+diff --git a/src/test/java/baritone/behavior/look/NewcomerTest.java b/src/test/java/baritone/behavior/look/NewcomerTest.java
+index ef95f10c..2bc3eb10 100644
+--- a/src/test/java/baritone/behavior/look/NewcomerTest.java
++++ b/src/test/java/baritone/behavior/look/NewcomerTest.java
+@@ -166,80 +166,6 @@ public class NewcomerTest {
+         }
+     }
+ 
+-    @Test
+-    public void aBlowIsLookedRoundAtAFlinchLaterWhateverTheClockSays() {
+-        for (int seed = 0; seed < SEEDS; seed++) {
+-            final Newcomer newcomer = new Newcomer(new Random(seed));
+-            final List<Integer> them = Collections.singletonList(3);
+-            // they are company, long since looked at or never an arrival at all
+-            for (int tick = 0; tick < 50; tick++) {
+-                assertEquals(-1, newcomer.notice(them));
+-            }
+-            newcomer.struck(3);
+-            int lookedOn = -1;
+-            for (int tick = 1; tick <= 40; tick++) {
+-                if (newcomer.notice(them) == 3) {
+-                    assertEquals("seed " + seed + ": looked round twice at one blow", -1, lookedOn);
+-                    lookedOn = tick;
+-                }
+-            }
+-            assertTrue("seed " + seed + ": never looked round at who hit us", lookedOn != -1);
+-            assertTrue("seed " + seed + ": looked round " + lookedOn + " ticks after the blow", lookedOn >= Newcomer.STRUCK_REACT_MIN && lookedOn <= Newcomer.STRUCK_REACT_MAX);
+-        }
+-    }
+-
+-    @Test
+-    public void aBlowFromSomebodyBehindIsLookedRoundAtToo() {
+-        final Newcomer newcomer = new Newcomer(new Random(2));
+-        for (int tick = 0; tick < 10; tick++) {
+-            newcomer.notice(NOBODY);
+-        }
+-        newcomer.struck(44); // never in view
+-        int looked = -1;
+-        for (int tick = 0; tick < 20 && looked == -1; tick++) {
+-            looked = newcomer.notice(NOBODY);
+-        }
+-        assertEquals(44, looked);
+-    }
+-
+-    @Test
+-    public void aSecondBlowBeforeTheHeadHasTurnedIsTheSameFlinchAtTheLatest() {
+-        for (int seed = 0; seed < SEEDS; seed++) {
+-            final Newcomer newcomer = new Newcomer(new Random(seed));
+-            newcomer.notice(NOBODY);
+-            newcomer.struck(1);
+-            newcomer.notice(NOBODY);
+-            newcomer.struck(2);
+-            int looks = 0;
+-            int at = -1;
+-            for (int tick = 0; tick < 40; tick++) {
+-                final int look = newcomer.notice(NOBODY);
+-                if (look != -1) {
+-                    looks++;
+-                    at = look;
+-                }
+-            }
+-            assertEquals("seed " + seed, 1, looks);
+-            assertEquals("seed " + seed, 2, at);
+-        }
+-    }
+-
+-    @Test
+-    public void aBlowComesBeforeAnArrivalThatIsWaiting() {
+-        for (int seed = 0; seed < SEEDS; seed++) {
+-            final Newcomer newcomer = new Newcomer(new Random(seed));
+-            newcomer.notice(NOBODY);
+-            final List<Integer> arriving = Collections.singletonList(5);
+-            newcomer.notice(arriving); // 5 has arrived, and the head is on its way to them
+-            newcomer.struck(6);
+-            int first = -1;
+-            for (int tick = 0; tick < 40 && first == -1; tick++) {
+-                first = newcomer.notice(arriving);
+-            }
+-            assertEquals("seed " + seed + ": the head went to the arrival before whoever hit it", 6, first);
+-        }
+-    }
+-
+     @Test
+     public void theSameSeedIsTheSameReaction() {
+         final Newcomer a = new Newcomer(new Random(5));
+-- 
+2.47.3
+
