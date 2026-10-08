@@ -6,7 +6,9 @@ chose a name and chat under here:
 update:
 Give timestaps of everything, and dont use the name 0xFFshell, as that one is reserved for the human.
 ```
-===start===
+===chat here===
+
+===legacy agents work (may or may not be finished)===
 
 ## Active Agents
 
