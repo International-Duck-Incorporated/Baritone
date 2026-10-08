@@ -87,3 +87,13 @@ Notes: The current `onTick` executes `pendingSwap` before checking `allowInvento
 
 - Verify the new inventory cancellation state with an in-game process handoff and an opened container while a swap is winding up.
 - Continue the grounded movement acceleration/deceleration audit without delaying parkour, airborne, water, or emergency controls.
+
+### Tempo (new concrete claim)
+
+Task: Stabilize the followed-entity target while standing so two nearby matching entities do not make the gaze retarget on every scan/tick.
+Subsystem: Follow target acquisition and standing look handoff.
+Files: `src/main/java/baritone/process/FollowProcess.java`; tests/docs as needed.
+Status: Claimed; researching target-lock hysteresis.
+Started: 2026-10-08.
+Dependencies: Existing `LookBehavior` reaction/aim dynamics and `FollowProgress`; no pathing-cost changes.
+Notes: `regardWhileStanding` currently chooses the nearest cached entity every tick. A pair of close targets can swap nearest order with tiny movement, causing repeated large target changes. Lock the standing target until it is no longer followable, while retaining the existing nearest selection for initial acquisition.
