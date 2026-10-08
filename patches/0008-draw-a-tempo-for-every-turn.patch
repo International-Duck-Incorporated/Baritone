@@ -1,0 +1,630 @@
+From b059dd00092e9b3d6891f2482cc08dfd3841ce1f Mon Sep 17 00:00:00 2001
+From: 0xFFshell <0xffshell@users.noreply.gitlab.com>
+Date: Thu, 8 Oct 2026 11:14:01 +0000
+Subject: [PATCH] Draw a tempo for every turn
+
+The aim eased, spun up and settled, and did all three as a function of the
+angle: the same corner walked twice was the same ticks of the same steps,
+forever. Every turn now draws a tempo of its own when it starts - 0.85 to
+1.15 of the ordinary speed, once per turn rather than once a tick - which
+scales how much of what is left the hand takes per tick and how quickly it
+spins up. The flick ceiling is left exactly where it was: a tempo decides
+how the turn is made, not how fast a hand can move, so nothing it draws can
+snap the hand or slow a click's hurry into a drift.
+
+TurnPace holds the draw; AimDynamics.humanStep takes the tempo; LookBehavior
+draws one where it resets the age of a turn, in both places it does that.
+
+Doing this uncovered a latent stall in AimDynamics.steppedAngle: the snap to
+whole mouse pixels could round a small fraction of what was left down to no
+pixel at all while more than a pixel of turn remained, and the aim then sat a
+fraction of a degree short of its target as long as it kept being asked for
+it. The ordinary half could not reach that state and anything under a half
+could. The rule is now that a hand asked to move always takes the pixel, and
+AimDynamicsTest pins it for fractions from 0.05 up.
+
+Validation: ./gradlew :test - 288 tests, 0 failures. New TurnPaceTest (5),
+six new cases in AimDynamicsTest, one in the fuzz run's arrival sweep which
+now runs every turn at the slow end, the ordinary pace and the quick end.
+---
+ HUMANLIKE.md                                  |   3 +-
+ .../java/baritone/behavior/LookBehavior.java  |  15 +-
+ .../baritone/behavior/look/AimDynamics.java   |  37 ++++-
+ .../java/baritone/behavior/look/TurnPace.java |  99 +++++++++++++
+ .../behavior/look/AimDynamicsTest.java        | 133 ++++++++++++++++++
+ .../behavior/look/HumanlikeLookFuzzTest.java  |  26 +++-
+ .../baritone/behavior/look/TurnPaceTest.java  |  97 +++++++++++++
+ 7 files changed, 399 insertions(+), 11 deletions(-)
+ create mode 100644 src/main/java/baritone/behavior/look/TurnPace.java
+ create mode 100644 src/test/java/baritone/behavior/look/TurnPaceTest.java
+
+diff --git a/HUMANLIKE.md b/HUMANLIKE.md
+index b57d775f..9cc94e22 100644
+--- a/HUMANLIKE.md
++++ b/HUMANLIKE.md
+@@ -13,6 +13,7 @@ opt-in: a bot that has to be told to look alive is a bot that looks dead by defa
+ | what | where | the rule |
+ | --- | --- | --- |
+ | The aim eases instead of snapping | `behavior/look/AimDynamics.java` | Whole mouse pixels, converted with the player's own sensitivity, capped at 18°/tick of yaw and 9° of pitch. Turns spin up over their first two ticks and ease out as they arrive. |
++| The same turn is not the same turn twice | `behavior/look/TurnPace.java`, `LookBehavior#humanStep` | The trajectory was the last thing in the camera that was a function of nothing but the angle: the same corner, walked twice, was the same ticks of the same steps, for as long as anyone watched. Every turn now draws a tempo of its own when it starts - 0.85 to 1.15 of the ordinary speed, once per turn rather than once a tick, or the hand would have no tempo at all - and that tempo scales how much of what is left it takes per tick and how quickly it spins up. Measured on a right angle at the default sensitivity, the flat walk now takes 11 ticks at the quick end of the band, 13 at the middle and 15 at the slow end, where it took 13 every time before. The flick ceiling is left exactly where it was whatever the pace, and only the spin-up is scaled while it is still ramping: a tempo decides how this turn is made, not how fast a hand can move, so nothing it draws can make the hand snap or turn the hurry a click waits on into a drift (the slowest tempo costs a clicking right angle two ticks, and the ceiling it is bound by is unmoved). A pace of zero or less is the ordinary turn rather than a stopped hand. Found in the doing: the whole-mouse-pixel snap in `AimDynamics#steppedAngle` could round a small fraction of what was left down to no pixel at all while more than a pixel of turn remained, and the aim then sat a fraction of a degree short of its target for as long as it was asked for it - a block face never reached, a click never made. The ordinary half could not do it and anything under a half could; the rule is now that a hand asked to move always takes the pixel. |
+ | The hand takes a beat to notice | `behavior/look/ReactionDelay.java` | Two to four ticks before the aim starts moving to a target it was not already pointing at. Only while standing still: the walking code reads the facing, so a lagging aim mid-walk steers. |
+ | ... and goes a little past | `behavior/look/AimDynamics.java` | A hand is still moving when it reaches what it was reaching for: what it aims at starts a few percent of the turn past the target and walks back onto it. Measured on the hand at the default sensitivity, a quarter turn peaks 2.4 degrees past and is exactly on target ten ticks later. Only while walking, and only for a target that says where the bot is going - anything about to be clicked is aimed at exactly. |
+ | The hand shakes in two directions, not one | `behavior/look/AimDynamics.java`, `LookBehavior.tick` | The aim adds a wander of `randomLooking113` degrees either side of where it is aiming, a fresh draw each tick smoothed so it drifts rather than shivers. Both angles draw it, which is what upstream's own note ("How many degrees to randomize the yaw") left to the yaw alone: the pitch took only the hundredth of a degree `randomLooking` adds, which the mouse grid swallows whole, so a bot breaking a block moved its head by a degree or two sideways and by nothing at all vertically - measured on a settled aim at the default sensitivity, the pitch wandered two hundredths of a degree, below a single mouse pixel at every sensitivity there is, and now wanders a third of a degree either side with three and a half degrees peak to peak, as the yaw always did. The two angles are drawn separately - a hand that moved along a line would be a hand that is being moved - and the pitch is left alone in water and in a glide, where it is a control and not a decoration. |
+@@ -150,7 +151,7 @@ POST. `CameraWritesTest` counts them, so a fifth file fails the build with this
+   through twenty thousand hostile ticks and asserts that the aim never moves more than its tick limit,
+   that a settled hand is always arrived, and that the sway never escapes its band. `AimDynamicsTest`,
+   `IdleGlanceTest`, `WalkGlanceTest`, `NewcomerTest`, `PitchWanderTest`, `IdleFidgetTest`, `GazeAheadTest`, `KeyBeatTest`, `HeadFirstTest`,
+-  `StraightRunTest`, `SprintWindupTest`, `FollowProgressTest`, `HotbarSwitchTest`, `UnattendedTest` and `CadenceTest` cover the rules themselves.
++  `StraightRunTest`, `SprintWindupTest`, `FollowProgressTest`, `HotbarSwitchTest`, `UnattendedTest`, `TurnPaceTest` and `CadenceTest` cover the rules themselves.
+ - Behaviour that already exists as a setting - `randomLooking`, `randomLooking113`, `smoothLook`,
+   `smoothLookTicks`, `blockBreakSpeed`, `mineGoalUpdateInterval`, `ticksBetweenInventoryMoves`,
+   `autoTool` - keeps its meaning. Where a setting names an interval, the interval is now what the
+diff --git a/src/main/java/baritone/behavior/LookBehavior.java b/src/main/java/baritone/behavior/LookBehavior.java
+index e16ac335..cd50dbc2 100644
+--- a/src/main/java/baritone/behavior/LookBehavior.java
++++ b/src/main/java/baritone/behavior/LookBehavior.java
+@@ -38,6 +38,7 @@ import baritone.behavior.look.IdleGlance;
+ import baritone.behavior.look.Newcomer;
+ import baritone.behavior.look.PitchWander;
+ import baritone.behavior.look.ReactionDelay;
++import baritone.behavior.look.TurnPace;
+ import baritone.behavior.look.Unattended;
+ import baritone.behavior.look.WalkGlance;
+ import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
+@@ -168,6 +169,13 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
+      */
+     private final ReactionDelay reaction = new ReactionDelay();
+ 
++    /**
++     * How quickly the turn under way is being made. Drawn by this behaviour where a turn starts - the same
++     * two places the age of the turn is reset - and read on every tick in between, so that the same turn is
++     * not the same turn twice. See {@link TurnPace}; the ceiling in {@link AimDynamics} is untouched by it.
++     */
++    private final TurnPace turnPace = new TurnPace();
++
+     /**
+      * The arm's own idle habit: a swing at the air every ten seconds to a minute. It lives here because the
+      * question it has to answer before doing anything - is the player standing still with nothing to do -
+@@ -527,6 +535,9 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
+                         // the target is re-set every tick while pathing and the hand never looked fresh.
+                         this.aimAge = 0;
+                         this.turnFrom = from;
++                        // ... and it is drawn a tempo of its own, so that the same corner is not turned the
++                        // same way every time it is walked. See TurnPace.
++                        this.turnPace.begin();
+                     }
+                     if (standingStill() && this.reaction.holding(wanted)) {
+                         // Notice, then move. Deliberately only while the player is not going anywhere:
+@@ -536,6 +547,8 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
+                         this.aimRotation = from;
+                         this.aimAge = 0;
+                         this.turnFrom = from;
++                        // the turn that starts after the beat is a turn of its own, with a tempo of its own
++                        this.turnPace.begin();
+                     } else {
+                         this.aimRotation = this.humanStep(from, wanted);
+                         this.aimAge++;
+@@ -1096,7 +1109,7 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
+     private Rotation humanStep(Rotation from, Rotation to) {
+         final float ease = this.interacting() && !this.crosshairIsOn(to) ? AimDynamics.CLICK_EASE : AimDynamics.AIM_EASE;
+         final Rotation wanted = this.carriedPast(this.settledGaze(from, to));
+-        return AimDynamics.humanStep(from, wanted, this.aimAge, sensitivity(ctx), ease);
++        return AimDynamics.humanStep(from, wanted, this.aimAge, sensitivity(ctx), ease, this.turnPace.pace());
+     }
+ 
+     /**
+diff --git a/src/main/java/baritone/behavior/look/AimDynamics.java b/src/main/java/baritone/behavior/look/AimDynamics.java
+index fe2b7fff..589485a3 100644
+--- a/src/main/java/baritone/behavior/look/AimDynamics.java
++++ b/src/main/java/baritone/behavior/look/AimDynamics.java
+@@ -188,8 +188,32 @@ public final class AimDynamics {
+      * The same, at a given rate. See {@link #AIM_EASE} and {@link #CLICK_EASE} for the two that are used.
+      */
+     public static Rotation humanStep(Rotation from, Rotation to, int aimAge, double sensitivity, float ease) {
+-        final float ramp = ramp(aimAge);
+-        return step(from, to, MAX_YAW_STEP * ramp, MAX_PITCH_STEP * ramp, sensitivity, ease);
++        return humanStep(from, to, aimAge, sensitivity, ease, 1.0f);
++    }
++
++    /**
++     * The same, at a tempo of this turn's own. See {@link TurnPace}.
++     * <p>
++     * {@code pace} scales how much of what is left the hand takes this tick and how quickly it spins up, so
++     * the same turn made twice is not the same two trajectories.
++     * <p>
++     * It deliberately does not scale the flick ceiling, which is left exactly where it was for every pace in
++     * the band and every pace outside it. The ceiling is the one number in here that is about a hand rather
++     * than about a moment - how fast a person can move a mouse at all - and it is also the number every
++     * arrival gate, every timing bound and the whole of {@code turnsTakeAHumanAmountOfTime} were measured
++     * against. A tempo decides how this turn is made; it does not get to decide how fast a hand can move. So
++     * the ramp is scaled only while it is still ramping (the first two ticks, where the hand is spinning up
++     * and a quicker tempo genuinely spins up quicker), and past that the ceiling is the ceiling whatever the
++     * pace. The varying part of a turn is how much of what is left it covers per tick.
++     * <p>
++     * A pace of zero or less is not a tempo, it is a stopped hand, and is taken as the ordinary one: a caller
++     * that has not started a turn should get the turn it always got, not one that never arrives.
++     */
++    public static Rotation humanStep(Rotation from, Rotation to, int aimAge, double sensitivity, float ease, float pace) {
++        final float tempo = pace > 0f ? pace : 1.0f;
++        final float spinning = ramp(aimAge);
++        final float ramp = spinning < 1.0f ? Math.min(1.0f, spinning * tempo) : 1.0f;
++        return step(from, to, MAX_YAW_STEP * ramp, MAX_PITCH_STEP * ramp, sensitivity, ease * tempo);
+     }
+ 
+     /**
+@@ -265,7 +289,14 @@ public final class AimDynamics {
+         }
+         final float step = Math.max(-maxStep, Math.min(maxStep, delta * ease));
+         final float snapped = Math.round(step / minStep) * minStep;
+-        return Rotation.normalizeYaw(current + Math.max(-maxStep, Math.min(maxStep, snapped)));
++        // And what is left of a turn is always taken, whatever fraction of it was asked for. Rounding to
++        // whole mouse pixels can land on none at all while there is still most of a pixel of turn left: at
++        // the ordinary half that cannot happen - half of what is left is never less than half a pixel while
++        // the whole of it is more than one - but a fraction below a half (a slow tempo, see TurnPace) can
++        // leave the aim sitting a fraction of a degree short of its target for as long as it is asked for
++        // it, which arrives at a block face never, and at a click gate never. A hand asked to move moves.
++        final float taken = snapped == 0f && step != 0f ? Math.copySign(minStep, step) : snapped;
++        return Rotation.normalizeYaw(current + Math.max(-maxStep, Math.min(maxStep, taken)));
+     }
+ 
+     /**
+diff --git a/src/main/java/baritone/behavior/look/TurnPace.java b/src/main/java/baritone/behavior/look/TurnPace.java
+new file mode 100644
+index 00000000..9d67695f
+--- /dev/null
++++ b/src/main/java/baritone/behavior/look/TurnPace.java
+@@ -0,0 +1,99 @@
++/*
++ * This file is part of Baritone.
++ *
++ * Baritone is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU Lesser General Public License as published by
++ * the Free Software Foundation, either version 3 of the License, or
++ * (at your option) any later version.
++ *
++ * Baritone is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public License
++ * along with Baritone.  If not, see <https://www.gnu.org/licenses/>.
++ */
++
++package baritone.behavior.look;
++
++import java.util.Random;
++
++/**
++ * How quickly this particular turn is being made: the hand does not take a turn at the same speed twice.
++ * <p>
++ * Nearly everything else about a turn already varies - where the target is, how far off it is, whether a
++ * click is waiting at the end of it - but the trajectory itself did not. {@code AimDynamics} is a function
++ * of the angle, the tick and the player's sensitivity, so the same ninety degrees at the default sensitivity
++ * was the same eight ticks of the same eight steps: the same numbers on every corner of the same route, for
++ * as long as somebody watched. Nothing about a person works that way. How quickly a hand crosses the desk
++ * depends on how much of a hurry its owner is in, how well they know what they are reaching for, and a dozen
++ * things that never appear in the angle, and the result is that a person's turn to the same place is never
++ * quite the same turn twice.
++ * <p>
++ * So a turn draws its own tempo when it begins: {@link #MIN} to {@link #MAX} of the ordinary speed, handed to
++ * {@code AimDynamics.humanStep}. It is not a speed limit and it is not allowed to become one - a pace beyond
++ * the flick ceiling is held at the ceiling by the stepper, so this changes how long a turn takes and never
++ * how fast a hand can move. {@link #begin()} is called once per turn rather than once per tick: a hand that
++ * drew afresh every tick would not have a tempo at all, it would be the per-tick shiver the tremor's own
++ * smoothing was added to remove. {@link #pace()} is read on every tick of the turn in between.
++ * <p>
++ * Free of Minecraft and of any mutable state beyond the tempo itself, so {@code TurnPaceTest} can hold it to
++ * its range. The {@link Random} comes in through the constructor, the way every other drawn rule in this
++ * package takes its randomness.
++ */
++public final class TurnPace {
++
++    /**
++     * The slowest a hand's tempo runs, as a fraction of the ordinary turn speed.
++     * <p>
++     * Fifteen percent either way is a turn that is unhurried rather than a different turn: measured against
++     * the flick ceiling on the biggest turns this is one tick of difference, and on the small corrections
++     * that make up most of a walk it is a hair. What it is not is a number small enough to see in the
++     * trajectory - a pace of half would be a bot that has stopped turning - or large enough to change what
++     * anybody thinks they are watching.
++     */
++    public static final float MIN = 0.85f;
++
++    /**
++     * The quickest, before the ceiling has its say. Applied to the spin-up as well as to the step, so a
++     * quicker turn is one that gets going quicker rather than one that moves further per tick.
++     */
++    public static final float MAX = 1.15f;
++
++    private final Random rand;
++
++    /**
++     * The tempo of the turn under way. Exactly one - the ordinary speed, the way the aim moved before there
++     * was a tempo at all - until a turn has begun, so a caller that never starts one behaves as it always did.
++     */
++    private float pace = 1.0f;
++
++    public TurnPace() {
++        this(new Random());
++    }
++
++    public TurnPace(Random rand) {
++        this.rand = rand;
++    }
++
++    /**
++     * A turn is starting: draw the tempo it will be made at.
++     * <p>
++     * Called where the hand's bookkeeping starts a turn - the angle it was at when the turn began, and the
++     * age of the turn - so that the draw lands on the same tick those do and not on some tick of its own.
++     *
++     * @return the tempo drawn, for a caller that wants to hand it straight on
++     */
++    public float begin() {
++        this.pace = MIN + this.rand.nextFloat() * (MAX - MIN);
++        return this.pace;
++    }
++
++    /**
++     * How quickly the turn under way is being made, as a fraction of the ordinary speed.
++     */
++    public float pace() {
++        return this.pace;
++    }
++}
+diff --git a/src/test/java/baritone/behavior/look/AimDynamicsTest.java b/src/test/java/baritone/behavior/look/AimDynamicsTest.java
+index 1af6e978..99ad8ad9 100644
+--- a/src/test/java/baritone/behavior/look/AimDynamicsTest.java
++++ b/src/test/java/baritone/behavior/look/AimDynamicsTest.java
+@@ -20,7 +20,9 @@ package baritone.behavior.look;
+ import baritone.api.utils.Rotation;
+ import org.junit.Test;
+ 
++import java.util.HashSet;
+ import java.util.Random;
++import java.util.Set;
+ 
+ import static org.junit.Assert.assertEquals;
+ import static org.junit.Assert.assertFalse;
+@@ -527,6 +529,137 @@ public class AimDynamicsTest {
+         assertEquals(to.getPitch(), AimDynamics.overshoot(null, to, 0).getPitch(), 0f);
+     }
+ 
++    /**
++     * Runs a turn at one tempo and reports the ticks until it is exactly on target, and the size of its
++     * first step; fails if it never lands.
++     */
++    private static float[] paced(float startYaw, float targetYaw, float pace) {
++        Rotation aim = new Rotation(startYaw, 0f);
++        final Rotation to = new Rotation(targetYaw, 0f);
++        float first = 0f;
++        int ticks = 0;
++        while (ticks < 300 && (Rotation.normalizeYaw(targetYaw - aim.getYaw()) != 0f)) {
++            final Rotation next = AimDynamics.humanStep(aim, to, ticks, SENSITIVITY, AimDynamics.AIM_EASE, pace);
++            assertTrue("a paced hand moved " + Math.abs(Rotation.normalizeYaw(next.getYaw() - aim.getYaw()))
++                            + " degrees of yaw in one tick at tempo " + pace,
++                    Math.abs(Rotation.normalizeYaw(next.getYaw() - aim.getYaw())) <= AimDynamics.MAX_YAW_STEP + 1e-3f);
++            if (ticks == 0) {
++                first = Math.abs(Rotation.normalizeYaw(next.getYaw() - aim.getYaw()));
++            }
++            aim = next;
++            ticks++;
++        }
++        assertTrue("a turn at tempo " + pace + " never landed", ticks < 300);
++        return new float[]{ticks, first};
++    }
++
++    @Test
++    public void theSameTurnIsNotTheSameTurnTwice() {
++        // The trajectory was a function of the angle and nothing else, so every corner of every route was
++        // turned in exactly the same ticks, forever. A person's hand has a tempo of its own from one turn to
++        // the next, and this is that: the same ninety degrees, made over and over, not making the same turn.
++        final TurnPace pace = new TurnPace(new Random(20261008L));
++        final Set<Integer> durations = new HashSet<>();
++        for (int i = 0; i < 60; i++) {
++            durations.add(Math.round(paced(0f, 90f, pace.begin())[0]));
++        }
++        assertTrue("sixty turns to the same place took " + durations.size() + " different times",
++                durations.size() >= 2);
++        assertTrue("every turn to the same place took the same " + durations.iterator().next() + " ticks",
++                durations.size() > 1);
++    }
++
++    @Test
++    public void aTempoChangesTheSpeedAndNeverTheCeiling() {
++        // Every tempo the band allows, plus two it does not - a caller that hands in a nonsense number gets
++        // the ordinary turn rather than a hand that never arrives or one that snaps.
++        for (float pace : new float[]{TurnPace.MIN, 0.6f, 0.95f, 1.0f, TurnPace.MAX, 1.6f, 0f, -3f}) {
++            for (double sensitivity : new double[]{0.0, 0.05, 0.5, 0.87, 1.0}) {
++                final Rotation to = new Rotation(150f, 70f);
++                Rotation aim = new Rotation(0f, 0f);
++                for (int t = 0; t < 80; t++) {
++                    final Rotation next = AimDynamics.humanStep(aim, to, t, sensitivity, AimDynamics.AIM_EASE, pace);
++                    assertTrue("yaw jumped " + Math.abs(Rotation.normalizeYaw(next.getYaw() - aim.getYaw()))
++                                    + " at tempo " + pace + " and sensitivity " + sensitivity,
++                            Math.abs(Rotation.normalizeYaw(next.getYaw() - aim.getYaw())) <= AimDynamics.MAX_YAW_STEP + 1e-3f);
++                    assertTrue("pitch jumped " + Math.abs(next.getPitch() - aim.getPitch())
++                                    + " at tempo " + pace + " and sensitivity " + sensitivity,
++                            Math.abs(next.getPitch() - aim.getPitch()) <= AimDynamics.MAX_PITCH_STEP + 1e-3f);
++                    aim = next;
++                }
++                assertEquals("a turn at tempo " + pace + " did not land on yaw", to.getYaw(), aim.getYaw(), 1e-4f);
++                assertEquals("a turn at tempo " + pace + " did not land on pitch", to.getPitch(), aim.getPitch(), 1e-4f);
++            }
++        }
++    }
++
++    @Test
++    public void aHandAskedToMoveAlwaysMoves() {
++        // The pixel snap rounds to the nearest whole pixel, and with a small fraction of what is left asked
++        // for per tick that rounding can land on none at all while there is still more than a pixel of turn
++        // left - and the aim then sits a fraction of a degree short of the target for as long as it is asked
++        // for it, which is a block face that is never reached and a click that never happens. The ordinary
++        // half cannot do it; anything under a half can, which is how this turned up (see TurnPace).
++        for (float fraction : new float[]{0.05f, 0.1f, 0.25f, 0.3f, 0.45f}) {
++            for (double sensitivity : new double[]{0.0, 0.05, 0.5, 0.87, 1.0}) {
++                final Rotation to = new Rotation(90f, 40f);
++                Rotation aim = new Rotation(0f, 0f);
++                int ticks = 0;
++                while (ticks < 400 && (Rotation.normalizeYaw(to.getYaw() - aim.getYaw()) != 0f || aim.getPitch() != to.getPitch())) {
++                    aim = AimDynamics.humanStep(aim, to, ticks, sensitivity, fraction, 1.0f);
++                    ticks++;
++                }
++                assertEquals("a hand asking for a fraction of " + fraction + " never arrived on yaw at "
++                                + "sensitivity " + sensitivity,
++                        to.getYaw(), aim.getYaw(), 0f);
++                assertEquals("a hand asking for a fraction of " + fraction + " never arrived on pitch at "
++                                + "sensitivity " + sensitivity,
++                        to.getPitch(), aim.getPitch(), 0f);
++            }
++        }
++    }
++
++    @Test
++    public void aTempoOfZeroIsTheOrdinaryTurn() {
++        // Not a stopped hand: the caller that has not started a turn - and the caller that hands in a
++        // number that is not a tempo at all - get the turn every other test in this file measures.
++        assertEquals(paced(0f, 90f, 1.0f)[0], paced(0f, 90f, 0f)[0], 0f);
++        assertEquals(paced(0f, 90f, 1.0f)[0], paced(0f, 90f, -1f)[0], 0f);
++    }
++
++    @Test
++    public void aSlowerTempoGetsGoingSlowerAndTakesLonger() {
++        // The band has to be wide enough that the two ends of it are not the same turn, or the draw is a
++        // constant with extra steps. Measured over the whole turn, not just its first step: one tick of
++        // difference on a right angle is what fifteen percent buys.
++        final float[] slow = paced(0f, 120f, TurnPace.MIN);
++        final float[] quick = paced(0f, 120f, TurnPace.MAX);
++        assertTrue("a slow tempo did not spin up any slower: " + slow[1] + " against " + quick[1],
++                slow[1] < quick[1]);
++        assertTrue("the two ends of the band made the same turn: " + slow[0] + " ticks at the slow end and "
++                + quick[0] + " at the quick one", slow[0] > quick[0]);
++    }
++
++    @Test
++    public void aClickStillHurriesAtTheSlowestTempo() {
++        // The hurry a click turns at is the ceiling - the bot has decided about the block and is waiting on
++        // its own crosshair - and the ceiling does not move with the tempo. What a slow tempo does cost a
++        // click is its tail: the last few pixels of the turn take a little longer, and that is two ticks at
++        // the slow end of the band, against the seven the ordinary tempo takes. Two ticks is the price of a
++        // hand that is not a function; a drift is what this is not allowed to become.
++        final Rotation to = new Rotation(90f, 40f);
++        Rotation aim = new Rotation(0f, 0f);
++        int ticks = 0;
++        while (ticks < 60 && (Rotation.normalizeYaw(to.getYaw() - aim.getYaw()) != 0f || aim.getPitch() != to.getPitch())) {
++            aim = AimDynamics.humanStep(aim, to, ticks, SENSITIVITY, AimDynamics.CLICK_EASE, TurnPace.MIN);
++            ticks++;
++        }
++        assertEquals("the slowest clicking hand never arrived on yaw", to.getYaw(), aim.getYaw(), 1e-4f);
++        assertEquals("the slowest clicking hand never arrived on pitch", to.getPitch(), aim.getPitch(), 1e-4f);
++        assertTrue("a right angle took " + ticks + " ticks at the slowest tempo with a click waiting", ticks <= 9);
++        assertTrue("a turn of " + ticks + " ticks is a snap, not a hurry", ticks >= 3);
++    }
++
+     @Test
+     public void theCarryFollowsThePitchTooAndStaysALegalAngle() {
+         final Rotation aimed = AimDynamics.overshoot(new Rotation(0f, 0f), new Rotation(0f, 45f), 0);
+diff --git a/src/test/java/baritone/behavior/look/HumanlikeLookFuzzTest.java b/src/test/java/baritone/behavior/look/HumanlikeLookFuzzTest.java
+index 69d36bce..c1f81e28 100644
+--- a/src/test/java/baritone/behavior/look/HumanlikeLookFuzzTest.java
++++ b/src/test/java/baritone/behavior/look/HumanlikeLookFuzzTest.java
+@@ -85,6 +85,7 @@ public class HumanlikeLookFuzzTest {
+                                  Rotation camera, boolean pathing, boolean inControl, boolean interacting,
+                                  boolean blockInteract,
+                                  Rotation[] aim, int[] aimAge, Rotation[] lastWanted, Rotation[] turnFrom,
++                                 TurnPace[] turnPace,
+                                  IdleGlance[] glance, ReactionDelay[] reaction, HeadWander[] wander,
+                                  int[] glanceCamera, float[] sway) {
+         final Outcome outcome = new Outcome();
+@@ -102,11 +103,15 @@ public class HumanlikeLookFuzzTest {
+             if (aim[0] == null || AimDynamics.separation(lastWanted[0], wanted) > ReactionDelay.NEW_DIRECTION_ANGLE) {
+                 aimAge[0] = 0;
+                 turnFrom[0] = from;
++                // and the tempo the turn will be made at, drawn once for the turn rather than once a tick:
++                // the same ninety degrees is not the same eight ticks of the same eight steps every time
++                turnPace[0].begin();
+             }
+             if (standingStill && reaction[0].holding(wanted)) {
+                 aim[0] = from;
+                 aimAge[0] = 0;
+                 turnFrom[0] = from;
++                turnPace[0].begin();
+             } else {
+                 // What the hand is asked for is not always exactly what is being aimed at: while the body
+                 // is walking and nothing is being clicked, a turn that is only a direction to travel is
+@@ -121,7 +126,7 @@ public class HumanlikeLookFuzzTest {
+                                 + " deg past what it was walking at",
+                         AimDynamics.separation(to, wanted) <= AimDynamics.OVERSHOOT_MAX + 0.01f);
+                 final Rotation next = AimDynamics.humanStep(from, to, aimAge[0], sensitivity,
+-                        interacting ? AimDynamics.CLICK_EASE : AimDynamics.AIM_EASE);
++                        interacting ? AimDynamics.CLICK_EASE : AimDynamics.AIM_EASE, turnPace[0].pace());
+                 assertTrue("the aim moved further than a flick in one tick",
+                         AimDynamics.separation(aim[0] != null ? aim[0] : from, next) <= AimDynamics.MAX_YAW_STEP + 0.01f);
+                 aim[0] = next;
+@@ -251,6 +256,7 @@ public class HumanlikeLookFuzzTest {
+             final IdleGlance glance = new IdleGlance(new Random(seed + 1));
+             final ReactionDelay reaction = new ReactionDelay(new Random(seed + 2));
+             final HeadWander wander = new HeadWander(new Random(seed + 3));
++            final TurnPace turnPace = new TurnPace(new Random(seed + 4));
+             int glanceActive = 0;
+             float sway = 0f;
+ 
+@@ -274,6 +280,7 @@ public class HumanlikeLookFuzzTest {
+                 final int[] ageRef = {aimAge};
+                 final Rotation[] lastRef = {lastWanted};
+                 final Rotation[] turnRef = {turnFrom};
++                final TurnPace[] paceRef = {turnPace};
+                 final IdleGlance[] glanceRef = {glance};
+                 final ReactionDelay[] reactionRef = {reaction};
+                 final HeadWander[] wanderRef = {wander};
+@@ -281,7 +288,7 @@ public class HumanlikeLookFuzzTest {
+                 final float[] swayRef = {sway};
+ 
+                 final Rotation applied = tick(rand, sensitivity, speedSquared, wanted, camera, pathing, inControl,
+-                        interacting, blockInteract, aimRef, ageRef, lastRef, turnRef, glanceRef, reactionRef,
++                        interacting, blockInteract, aimRef, ageRef, lastRef, turnRef, paceRef, glanceRef, reactionRef,
+                         wanderRef, glanceRef2, swayRef);
+ 
+                 aim = aimRef[0];
+@@ -377,7 +384,11 @@ public class HumanlikeLookFuzzTest {
+     @Test
+     public void aHeldTargetIsAlwaysArrivedAt() {
+         // Whatever the aim has to travel and wherever it starts, and at every sensitivity, it has to land -
+-        // exactly, not approximately, because placing and breaking gate on the aim being on target.
++        // exactly, not approximately, because placing and breaking gate on the aim being on target. At every
++        // tempo of the hand's too: the pace a turn draws for itself moves how quickly the turn is made and
++        // never whether it gets there, and the arrival gates every click in the mod waits on cannot depend
++        // on the mood of the hand that is doing the clicking.
++        for (float pace : new float[]{TurnPace.MIN, 1.0f, TurnPace.MAX}) {
+         for (double sensitivity : SENSITIVITIES) {
+             for (float fromYaw : new float[]{0f, 179f, -179f, 90f, -90f}) {
+                 for (float toYaw : new float[]{0f, 179f, -179f, 90f, -90f}) {
+@@ -391,15 +402,18 @@ public class HumanlikeLookFuzzTest {
+                         // than at it. Arrival is exact all the same, because the carry decays to nothing
+                         // long before the hand gets there - and if it ever did not, this is the test that
+                         // would say so, since every click in the mod waits on it.
+-                        aim = AimDynamics.humanStep(aim, AimDynamics.overshoot(turnFrom, to, ticks), ticks, sensitivity);
++                        aim = AimDynamics.humanStep(aim, AimDynamics.overshoot(turnFrom, to, ticks), ticks,
++                                sensitivity, AimDynamics.AIM_EASE, pace);
+                         ticks++;
+                     }
+-                    assertEquals("never arrived from " + fromYaw + " to " + toYaw + " at sensitivity " + sensitivity,
++                    assertEquals("never arrived from " + fromYaw + " to " + toYaw + " at sensitivity " + sensitivity
++                                    + " and tempo " + pace,
+                             toYaw, aim.getYaw(), 0f);
+-                    assertTrue("arrival took " + ticks + " ticks", ticks <= 60);
++                    assertTrue("arrival took " + ticks + " ticks at tempo " + pace, ticks <= 60);
+                 }
+             }
+         }
++        }
+     }
+ 
+     /**
+diff --git a/src/test/java/baritone/behavior/look/TurnPaceTest.java b/src/test/java/baritone/behavior/look/TurnPaceTest.java
+new file mode 100644
+index 00000000..ae9c1964
+--- /dev/null
++++ b/src/test/java/baritone/behavior/look/TurnPaceTest.java
+@@ -0,0 +1,97 @@
++/*
++ * This file is part of Baritone.
++ *
++ * Baritone is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU Lesser General Public License as published by
++ * the Free Software Foundation, either version 3 of the License, or
++ * (at your option) any later version.
++ *
++ * Baritone is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public License
++ * along with Baritone.  If not, see <https://www.gnu.org/licenses/>.
++ */
++
++package baritone.behavior.look;
++
++import org.junit.Test;
++
++import java.util.HashSet;
++import java.util.Random;
++import java.util.Set;
++
++import static org.junit.Assert.assertEquals;
++import static org.junit.Assert.assertTrue;
++
++/**
++ * The tempo a turn is made at has one job: make two turns to the same place into two different turns, and
++ * stay inside the band the rest of the aim was measured against while doing it.
++ */
++public class TurnPaceTest {
++
++    @Test
++    public void aTempoIsDrawnInsideItsBand() {
++        final TurnPace pace = new TurnPace(new Random(1));
++        for (int i = 0; i < 2000; i++) {
++            final float drawn = pace.begin();
++            assertTrue("a tempo of " + drawn + " is quicker than the band allows", drawn <= TurnPace.MAX);
++            assertTrue("a tempo of " + drawn + " is slower than the band allows", drawn >= TurnPace.MIN);
++        }
++    }
++
++    @Test
++    public void theBandIsWideEnoughToBeWorthDrawingFrom() {
++        // A band that draws the same number every time is a constant with extra steps, and the whole point
++        // of this class is that the same turn is not the same turn twice.
++        final TurnPace pace = new TurnPace(new Random(7));
++        float min = Float.MAX_VALUE;
++        float max = -Float.MAX_VALUE;
++        final Set<Integer> seen = new HashSet<>();
++        for (int i = 0; i < 200; i++) {
++            final float drawn = pace.begin();
++            min = Math.min(min, drawn);
++            max = Math.max(max, drawn);
++            seen.add(Math.round(drawn * 1000f));
++        }
++        assertTrue("200 draws only produced " + seen.size() + " tempos", seen.size() > 100);
++        assertTrue("the band was only ever drawn from at one end: " + min + " to " + max,
++                max - min > (TurnPace.MAX - TurnPace.MIN) * 0.9f);
++    }
++
++    @Test
++    public void aTurnKeepsTheTempoItStartedWith() {
++        // Per turn, not per tick: a hand that drew again every tick would have no tempo at all, it would be
++        // the per-tick shiver the tremor's smoothing exists to remove.
++        final TurnPace pace = new TurnPace(new Random(11));
++        final float drawn = pace.begin();
++        for (int t = 0; t < 100; t++) {
++            assertEquals("the tempo changed under a turn that was already under way", drawn, pace.pace(), 0f);
++        }
++        final float next = pace.begin();
++        assertEquals("a new turn did not get the tempo it drew", next, pace.pace(), 0f);
++        assertTrue("two consecutive turns drew exactly the same tempo", Math.abs(next - drawn) > 1e-6f);
++    }
++
++    @Test
++    public void anUntouchedTempoIsTheOrdinarySpeed() {
++        // A caller that never starts a turn must get the turn it always got, to the last degree: this is the
++        // value that reproduces the trajectories in AimDynamicsTest.
++        assertEquals(1.0f, new TurnPace(new Random(3)).pace(), 0f);
++    }
++
++    @Test
++    public void theClockSeededConstructorDrawsToo() {
++        // The one constructor with no argument is the only one that seeds itself, the way it is everywhere
++        // else in this package; what matters is that it also produces a tempo rather than a constant.
++        final TurnPace pace = new TurnPace();
++        final float first = pace.begin();
++        boolean differs = false;
++        for (int i = 0; i < 100 && !differs; i++) {
++            differs = Math.abs(pace.begin() - first) > 1e-6f;
++        }
++        assertTrue("the clock-seeded tempo never moved off its first draw", differs);
++    }
++}
+-- 
+2.47.3
+
