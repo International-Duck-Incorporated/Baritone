@@ -1,0 +1,413 @@
+diff --git a/src/main/java/baritone/process/elytra/ElytraBehavior.java b/src/main/java/baritone/process/elytra/ElytraBehavior.java
+index 7d2d216d..51331da2 100644
+--- a/src/main/java/baritone/process/elytra/ElytraBehavior.java
++++ b/src/main/java/baritone/process/elytra/ElytraBehavior.java
+@@ -28,8 +28,8 @@ import baritone.api.utils.input.Input;
+ import baritone.pathing.movement.MovementHelper;
+ import baritone.process.ElytraProcess;
+ import baritone.utils.BlockStateInterface;
+-import baritone.utils.Cadence;
+ import baritone.utils.IRenderer;
++import baritone.utils.InventoryTransaction;
+ import baritone.utils.PathRenderer;
+ import baritone.utils.accessor.IFireworkRocketEntity;
+ import com.mojang.blaze3d.vertex.BufferBuilder;
+@@ -63,7 +63,6 @@ import net.minecraft.world.phys.Vec3;
+ import java.awt.*;
+ import java.util.*;
+ import java.util.List;
+-import java.util.Queue;
+ import java.util.concurrent.*;
+ import java.util.function.UnaryOperator;
+ 
+@@ -122,10 +121,8 @@ public final class ElytraBehavior implements Helper {
+     private long timeLastCacheCull = 0L;
+ 
+     // auto swap
+-    private int invTickCountdown = 0;
+-    private final Queue<Runnable> invTransactionQueue = new LinkedList<>();
+-    /** One run-local source for the small gap variation between queued inventory clicks. */
+-    private final Random inventoryCadenceRand = new Random();
++    /** The three window clicks of a swap, and the rule about the window they belong to. */
++    private final InventoryTransaction invTransaction = new InventoryTransaction();
+ 
+     public ElytraBehavior(Baritone baritone, ElytraProcess process, NetherPathfinderContext npf, BlockPos destination, boolean appendDestination) {
+         this.baritone = baritone;
+@@ -1320,21 +1317,19 @@ public final class ElytraBehavior implements Helper {
+      * only the gaps after a click are varied, using the same bounded jitter as normal inventory moves. A
+      * person who swaps an elytra still takes the configured average time, but does not hit the same window
+      * slot at an exact metronome interval.
++     * <p>
++     * The window they land in is the transaction's own rule ({@link InventoryTransaction}): the player's own
++     * inventory is the only menu these clicks were written for - with a container open the game drops a
++     * click whose window id is not the open menu's, so a swap fired there stalls half applied instead of
++     * failing loudly - and a sequence that has begun is finished even if the window goes away under it.
+      */
+     private void tickInventoryTransactions() {
+-        if (invTickCountdown <= 0) {
+-            Runnable r = invTransactionQueue.poll();
+-            if (r != null) {
+-                r.run();
+-                invTickCountdown = Cadence.jitter(this.inventoryCadenceRand,
+-                        Baritone.settings().ticksBetweenInventoryMoves.value);
+-            }
+-        }
+-        if (invTickCountdown > 0) invTickCountdown--;
++        invTransaction.tick(ctx.player().containerMenu == ctx.player().inventoryMenu,
++                Baritone.settings().ticksBetweenInventoryMoves.value);
+     }
+ 
+     private void queueWindowClick(int windowId, int slotId, int button, ContainerInput type) {
+-        invTransactionQueue.add(() -> ctx.playerController().windowClick(windowId, slotId, button, type, ctx.player()));
++        invTransaction.click(() -> ctx.playerController().windowClick(windowId, slotId, button, type, ctx.player()));
+     }
+ 
+     private int findGoodElytra() {
+@@ -1349,7 +1344,7 @@ public final class ElytraBehavior implements Helper {
+     }
+ 
+     private void trySwapElytra() {
+-        if (!Baritone.settings().elytraAutoSwap.value || !invTransactionQueue.isEmpty()) {
++        if (!Baritone.settings().elytraAutoSwap.value || invTransaction.waiting()) {
+             return;
+         }
+ 
+diff --git a/src/main/java/baritone/utils/InventoryTransaction.java b/src/main/java/baritone/utils/InventoryTransaction.java
+new file mode 100644
+index 00000000..68cf194e
+--- /dev/null
++++ b/src/main/java/baritone/utils/InventoryTransaction.java
+@@ -0,0 +1,124 @@
++/*
++ * This file is part of Baritone.
++ *
++ * Baritone is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU Lesser General Public License as published by
++ * the Free Software Foundation, either version 3 of the License, or
++ * (at your option) any later version.
++ *
++ * Baritone is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public License
++ * along with Baritone.  If not, see <https://www.gnu.org/licenses/>.
++ */
++
++package baritone.utils;
++
++import java.util.ArrayDeque;
++import java.util.Queue;
++import java.util.Random;
++
++/**
++ * The clicks of one move of items that takes more than one window click. The elytra auto-swap is the one
++ * that exists: it picks the spare elytra up, swaps it with the worn one, and puts the worn one back, and
++ * each of those three is a click of its own.
++ * <p>
++ * The gaps between the clicks are ordinary inventory timing - the configured average, with
++ * {@link Cadence#jitter}'s tick of slack drawn afresh each time ({@code ticksBetweenInventoryMoves}), the
++ * first click available as soon as there is one - which is what the auto-swap has done since Tempo-2's
++ * {@code fe0a9d55} spaced it. What this class adds is the rule about <em>where</em> they land.
++ * <p>
++ * A window click carries the id of the window it was written for, and the game drops a click whose id is
++ * not the menu that is open in front of the player. So a sequence fired while a chest or a crafting table
++ * is open does not fail loudly, it stalls half applied: the spare elytra on the cursor and the worn one
++ * still on the back, which is worse than either end of the move. A person swapping an elytra with a chest
++ * open is holding the elytra out over the chest.
++ * <p>
++ * So the clicks wait for the player's own inventory to be the menu in front, and the sequence is treated
++ * as a sequence rather than as three clicks that happen to be queued together:
++ * <ul>
++ * <li>a sequence that has <em>not begun</em> when its window is gone is given up whole, silently. Nothing
++ * has happened, the items are where they were, and the job that asked for the swap asks again if it still
++ * wants it - which costs nothing, because the reason for the swap is a worn elytra that is still worn;</li>
++ * <li>a sequence that <em>has begun</em> waits for the window to come back and then finishes, however long
++ * that takes, because the half-applied state is the one worth avoiding.</li>
++ * </ul>
++ * The rest of the hand rules are the helpers' ({@code BlockBreakHelper}, {@code BlockPlaceHelper}) and the
++ * inventory's own wind-up ({@code InventorySwap}, {@code InventoryBehavior#onTick}, which asks its three
++ * questions - the request still alive, the setting still on, the player's own menu still open - about the
++ * swap it does itself). This is the same class of rule for a move that is several clicks long.
++ * <p>
++ * Free of Minecraft and of the settings that feed it, so that it can be tested: {@code InventoryTransactionTest}
++ * covers the wait, the give-up and the finish, and pins the gaps this class must keep.
++ */
++public final class InventoryTransaction {
++
++    private final Queue<Runnable> clicks = new ArrayDeque<>();
++    private final Random rand;
++
++    /** Ticks still to wait before the next click of a sequence that has begun. */
++    private int countdown;
++    /** Whether a click of the sequence being drained has already gone out. */
++    private boolean begun;
++
++    public InventoryTransaction() {
++        this(new Random());
++    }
++
++    public InventoryTransaction(Random rand) {
++        this.rand = rand;
++    }
++
++    /**
++     * Adds one click to the sequence being assembled.
++     */
++    public void click(Runnable click) {
++        this.clicks.add(click);
++    }
++
++    /**
++     * Whether a click is still waiting to go out.
++     */
++    public boolean waiting() {
++        return !this.clicks.isEmpty();
++    }
++
++    /**
++     * One tick of the sequence: at most one click goes out, and only while the window it was written for is
++     * the one in front.
++     *
++     * @param windowIsOurs       whether the menu the player has open is their own inventory
++     * @param ticksBetweenClicks the configured gap, read every tick rather than when the sequence was
++     *                           written, so a setting changed mid-swap is obeyed like every other interval
++     * @return whether a click went out on this tick
++     */
++    public boolean tick(boolean windowIsOurs, int ticksBetweenClicks) {
++        if (this.clicks.isEmpty()) {
++            this.begun = false;
++            return false;
++        }
++        if (!windowIsOurs) {
++            // a click with a window id that is not the open menu's is dropped by the game, which is how a
++            // swap ends up half applied - see the class comment for what is done about it
++            if (!this.begun) {
++                this.clicks.clear();
++                this.countdown = 0;
++            }
++            return false;
++        }
++        if (this.countdown > 0) {
++            this.countdown--;
++            return false;
++        }
++        this.clicks.poll().run();
++        this.begun = !this.clicks.isEmpty();
++        // the gap is counted from the tick the click went out on: the configured interval, drawn afresh,
++        // so a setting of one tick puts the next click on the next tick, which is what the auto-swap did
++        // before this class existed and is what "the setting is the average interval" means here
++        this.countdown = this.begun ? Math.max(0, Cadence.jitter(this.rand, ticksBetweenClicks) - 1) : 0;
++        return true;
++    }
++}
+diff --git a/src/test/java/baritone/utils/ButtonWritesTest.java b/src/test/java/baritone/utils/ButtonWritesTest.java
+index 3e20d021..d09d0cdf 100644
+--- a/src/test/java/baritone/utils/ButtonWritesTest.java
++++ b/src/test/java/baritone/utils/ButtonWritesTest.java
+@@ -74,9 +74,12 @@ public class ButtonWritesTest {
+             // the idle fidget and the arm that swings while the aim holds still: animation packets with no
+             // click behind them, which is what makes them safe to send on somebody else's behalf
+             "src/main/java/baritone/behavior/LookBehavior.java",
+-            // elytra flight: the one click here is the firework, an item use on a control loop with a
+-            // deadline, and it is gated on the hand being out of its own wind-up; the rest of the file is
+-            // flight control, which HUMANLIKE.md excuses from the other rules
++            // elytra flight, and neither of its two clicks is a click on a block. The firework is an item
++            // use on a control loop with a deadline, gated on the hand being out of its own wind-up; the
++            // auto-swap's window clicks are the queued sequence in InventoryTransaction, which waits for
++            // the player's own inventory to be the menu in front, gives up a sequence that has not begun
++            // with the window it was written for, and finishes one that has. The rest of the file is flight
++            // control, which HUMANLIKE.md excuses from the other rules
+             "src/main/java/baritone/process/elytra/ElytraBehavior.java",
+     };
+ 
+@@ -94,6 +97,10 @@ public class ButtonWritesTest {
+             {"src/main/java/baritone/behavior/LookBehavior.java", "ServerboundPunchPacket.INSTANCE"},
+             // the firework is not clicked until the hand has finished changing
+             {"src/main/java/baritone/process/elytra/ElytraBehavior.java", "getInventoryBehavior().switchingHands()"},
++            // the auto-swap's clicks wait for the player's own inventory: the window they were written for
++            // is the question, and the transaction that does the waiting is asked whether it is still there
++            {"src/main/java/baritone/process/elytra/ElytraBehavior.java", "ctx.player().containerMenu == ctx.player().inventoryMenu"},
++            {"src/main/java/baritone/process/elytra/ElytraBehavior.java", "invTransaction.tick("},
+             // the one place that talks to the game's controller rather than to the mod's own wrapper
+             {"src/main/java/baritone/utils/player/BaritonePlayerController.java", "mc.gameMode."},
+     };
+diff --git a/src/test/java/baritone/utils/InventoryTransactionTest.java b/src/test/java/baritone/utils/InventoryTransactionTest.java
+new file mode 100644
+index 00000000..ec6e0fd4
+--- /dev/null
++++ b/src/test/java/baritone/utils/InventoryTransactionTest.java
+@@ -0,0 +1,172 @@
++/*
++ * This file is part of Baritone.
++ *
++ * Baritone is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU Lesser General Public License as published by
++ * the Free Software Foundation, either version 3 of the License, or
++ * (at your option) any later version.
++ *
++ * Baritone is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public License
++ * along with Baritone.  If not, see <https://www.gnu.org/licenses/>.
++ */
++
++package baritone.utils;
++
++import org.junit.Test;
++
++import java.util.ArrayList;
++import java.util.List;
++import java.util.Random;
++
++import static org.junit.Assert.assertEquals;
++import static org.junit.Assert.assertFalse;
++import static org.junit.Assert.assertTrue;
++
++/**
++ * The elytra auto-swap's three window clicks, and the rule about the window they land in: they wait for the
++ * player's own inventory to be the menu in front, a sequence that has not begun when its window is gone is
++ * given up whole, and one that has begun is finished. The gaps are the auto-swap's own timing and are pinned
++ * here too, so that the rule written around them does not quietly re-time them: they are the configured
++ * interval, drawn afresh, which is the shape every other hand rule in this fork has.
++ */
++public class InventoryTransactionTest {
++
++    /**
++     * One swap: three clicks that record the tick each of them went out on, and the transaction they were
++     * queued in. The clock is the test's own, so a click's tick is a number this class can assert about.
++     */
++    private static final class Swap {
++        private final InventoryTransaction transaction;
++        private final List<Integer> ticks = new ArrayList<>();
++        private int tick;
++
++        Swap(int seed) {
++            this.transaction = new InventoryTransaction(new Random(seed));
++            for (int click = 0; click < 3; click++) {
++                this.transaction.click(() -> this.ticks.add(this.tick));
++            }
++        }
++
++        /** Advances the clock one tick and reports whether a click went out on it. */
++        boolean tick(boolean windowIsOurs, int setting) {
++            this.tick++;
++            return this.transaction.tick(windowIsOurs, setting);
++        }
++
++        /** Queues one click of a later swap, the way the auto-swap writes one once the last has gone out. */
++        void andAnother() {
++            this.transaction.click(() -> this.ticks.add(this.tick));
++        }
++
++        /** Advances the clock until the swap has run every click, and returns the ticks they went out on. */
++        List<Integer> runOut(int setting) {
++            for (int guard = 0; guard < 500 && this.ticks.size() < 3; guard++) {
++                tick(true, setting);
++            }
++            return this.ticks;
++        }
++
++        boolean waiting() {
++            return this.transaction.waiting();
++        }
++    }
++
++    @Test
++    public void theFirstClickIsAvailableAtOnce() {
++        final Swap swap = new Swap(1);
++        assertTrue("a transaction with a click queued did nothing on its first tick", swap.tick(true, 5));
++        assertEquals("more than one click went out in one tick", 1, swap.ticks.size());
++        assertTrue("a transaction with clicks left is not waiting", swap.waiting());
++    }
++
++    @Test
++    public void theClicksAreSpacedByTheSetting() {
++        for (int setting : new int[]{1, 2, 5, 20}) {
++            final Swap swap = new Swap(setting);
++            final List<Integer> ticks = swap.runOut(setting);
++            assertEquals("the transaction did not finish on setting " + setting + ": " + ticks,
++                    3, ticks.size());
++            assertEquals("the first click is not the first tick on setting " + setting + ": " + ticks,
++                    Integer.valueOf(1), ticks.get(0));
++            for (int i = 1; i < ticks.size(); i++) {
++                final int gap = ticks.get(i) - ticks.get(i - 1);
++                assertTrue("a gap of " + gap + " ticks is off the setting's band on setting " + setting
++                                + ": " + ticks,
++                        gap >= Math.max(1, setting - Cadence.JITTER)
++                                && gap <= setting + Cadence.JITTER);
++            }
++            assertFalse("a finished transaction is still waiting", swap.waiting());
++        }
++    }
++
++    @Test
++    public void oneTickBetweenClicksIsTheNextTick() {
++        // the floor of the setting: the three clicks of a swap go out on three consecutive ticks, which is
++        // what the auto-swap did before the gaps were drawn and what a swap with a deadline needs
++        final Swap swap = new Swap(6);
++        assertEquals("a one-tick transaction is not three consecutive ticks",
++                List.of(1, 2, 3), swap.runOut(1));
++        assertFalse("a finished transaction is still waiting", swap.waiting());
++    }
++
++    @Test
++    public void aTransactionThatHasNotBegunIsGivenUpWithItsWindow() {
++        final Swap swap = new Swap(2);
++        for (int tick = 0; tick < 50; tick++) {
++            // a chest or a crafting table in front of the player: not the window these clicks were for
++            assertFalse("a click went out into somebody else's window", swap.tick(false, 1));
++        }
++        assertFalse("a transaction that never began is still waiting", swap.waiting());
++        assertEquals("a click went out into a window that was not the one it was written for",
++                0, swap.ticks.size());
++        // and it is gone for good: a window that comes back does not fire a swap that was given up
++        for (int tick = 0; tick < 10; tick++) {
++            swap.tick(true, 1);
++        }
++        assertEquals("a given-up transaction fired when its window came back", 0, swap.ticks.size());
++    }
++
++    @Test
++    public void aTransactionThatHasBegunIsFinished() {
++        final Swap swap = new Swap(3);
++        assertTrue("the transaction did not begin", swap.tick(true, 1));
++        // the window goes away with the first click of three already out: the spare elytra is on the cursor
++        // and the worn one is still on the back, so this is the one state that must not be left standing
++        for (int tick = 0; tick < 50; tick++) {
++            swap.tick(false, 1);
++        }
++        assertEquals("a begun transaction was given up halfway", 1, swap.ticks.size());
++        assertTrue("a begun transaction stopped waiting for its window", swap.waiting());
++        for (int tick = 0; tick < 10 && swap.ticks.size() < 3; tick++) {
++            swap.tick(true, 1);
++        }
++        assertEquals("a begun transaction did not finish when its window came back", 3, swap.ticks.size());
++        assertFalse("a finished transaction is still waiting", swap.waiting());
++    }
++
++    @Test
++    public void aSecondSequenceStartsAtOnce() {
++        // the auto-swap asks for a swap only when none is in flight, so a second sequence begins with the
++        // state the first one ended in rather than carrying its countdown
++        final Swap swap = new Swap(7);
++        swap.runOut(5);
++        assertEquals("the first transaction did not finish", 3, swap.ticks.size());
++        swap.andAnother();
++        assertTrue("a new sequence waited on the old one's clock", swap.tick(true, 5));
++        assertEquals("a new sequence did not begin at once", 4, swap.ticks.size());
++    }
++
++    @Test
++    public void anEmptyTransactionDoesNothing() {
++        final InventoryTransaction transaction = new InventoryTransaction(new Random(5));
++        for (int tick = 0; tick < 20; tick++) {
++            assertFalse("an empty transaction sent a click", transaction.tick(tick % 2 == 0, 5));
++        }
++        assertFalse("an empty transaction is waiting", transaction.waiting());
++    }
++}

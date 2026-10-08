@@ -1,0 +1,37 @@
+diff --git a/HUMANLIKE.md b/HUMANLIKE.md
+index 6e2a4f6f..29b610c5 100644
+--- a/HUMANLIKE.md
++++ b/HUMANLIKE.md
+@@ -70,6 +70,18 @@ ticks instead of stopping on the tick the movement stops asking (`Cadence.sprint
+ a quarter faster); inventory moves, including the queued Elytra auto-swap clicks, are spaced by a redrawn
+ interval rather than a fixed one.
+ 
++The auto-swap's three clicks are one *transaction* (`utils/InventoryTransaction`), and it is treated as
++one. A window click carries the id of the window it was written for and the game drops a click whose id is
++not the menu in front of the player, so a sequence fired with a chest or a crafting table open does not
++fail loudly - it stalls half applied, the spare elytra on the cursor and the worn one still on the back,
++which is worse than either end of the move. So the clicks wait for the player's own inventory to be the
++menu in front (`ElytraBehavior#tickInventoryTransactions` asks it); a sequence that has *not begun* when
++its window is gone is given up whole and silently, because nothing has happened, the items are where they
++were, and the job that wanted the swap asks again while the elytra is still worn; and a sequence that
++*has begun* waits the window out and finishes, however long that takes, because the half-applied state is
++the one worth avoiding. A person swapping an elytra with a chest open is holding the elytra out over the
++chest.
++
+ ## Steering
+ 
+ | what | where | the rule |
+@@ -129,9 +141,10 @@ two mixin bridges that carry the aim and the elytra solver, each of which puts t
+ POST. `CameraWritesTest` counts them, so a fifth file fails the build with this list beside it. The other two
+ edges of the hand are counted the same way: `HandWritesTest` counts the files that may write the selected
+ slot, and `ButtonWritesTest` counts the files that may press a mouse button or swing an arm - the two
+-helpers, the inventory swap, the idle fidget and the elytra's firework - asserting beside each one the beat
+-it is on the list for and pinning the wait itself: the gate `InputOverrideHandler` computes from the
+-inventory's wind-up and the question each helper asks before it presses. A click with no reaction in front of
++helpers, the inventory swap, the idle fidget, and the elytra's two, the firework and the window clicks of
++the auto-swap - asserting beside each one the beat it is on the list for and pinning the wait itself: the
++gate `InputOverrideHandler` computes from the inventory's wind-up, the question each helper asks before it
++presses, and the window the auto-swap's clicks wait for (`InventoryTransaction`). A click with no reaction in front of
+ it, or one pressed with the hand between items, cannot be added without saying so.
+ 
+ The third edge of a click is where it may go, and that is counted too. Every click in the movement and
