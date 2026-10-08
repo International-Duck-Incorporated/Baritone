@@ -1,0 +1,82 @@
+From 1f13eb4578b6f1217677ba844cba906a65c9f808 Mon Sep 17 00:00:00 2001
+From: 0xFFshell <0xffshell@users.noreply.gitlab.com>
+Date: Thu, 8 Oct 2026 11:55:19 +0000
+Subject: [PATCH] Open doors and gates with the hand the rest of the mod uses
+
+A door in the way was the one block the bot clicked without the rules
+every other click follows.
+
+The half of the door that is actually blocking is now the half aimed at
+(upstream always aimed at positionsToBreak[0], door or not), the point
+comes from RotationUtils#reachable so it is a point of the door's own and
+one that can be seen from where the player stands, and CLICK_RIGHT is
+only asked for once the crosshair is on the door or the hand has arrived
+at its point - the same question Movement#prepared and MineProcess ask.
+Before this the button went down on the tick the door was noticed, with
+the hand still turning, so the click went out on whatever the crosshair
+crossed on the way: the frame, the wall beside the doorway, or - with a
+throwaway block in hand - the wall itself.
+
+The gate branch gets the same arrival question. Both keep the old blind
+centre aim and ungated click as the fallback for a door with no reachable
+point, which is what upstream did.
+---
+ .../movement/movements/MovementTraverse.java  | 35 +++++++++++++++++--
+ 1 file changed, 32 insertions(+), 3 deletions(-)
+
+diff --git a/src/main/java/baritone/pathing/movement/movements/MovementTraverse.java b/src/main/java/baritone/pathing/movement/movements/MovementTraverse.java
+index 10669f25..cf40f05c 100644
+--- a/src/main/java/baritone/pathing/movement/movements/MovementTraverse.java
++++ b/src/main/java/baritone/pathing/movement/movements/MovementTraverse.java
+@@ -231,8 +231,30 @@ public class MovementTraverse extends Movement {
+             boolean canOpen = !(Blocks.IRON_DOOR.equals(pb0.getBlock()) || Blocks.IRON_DOOR.equals(pb1.getBlock()));
+ 
+             if (notPassable && canOpen) {
+-                return state.setTarget(new MovementState.MovementTarget(RotationUtils.calcRotationFromVec3d(ctx.playerHead(), VecUtils.calculateBlockCenter(ctx.world(), positionsToBreak[0]), ctx.playerRotations()), true))
+-                        .setInput(Input.CLICK_RIGHT, true);
++                // The half of the door that is actually in the way is the half to put the hand on. Upstream
++                // always aimed at positionsToBreak[0], whether or not that was the half that blocked us.
++                final BlockPos door = pb0.getBlock() instanceof DoorBlock ? positionsToBreak[0] : positionsToBreak[1];
++                // A door is a block about to be clicked, so the hand goes to a point of its own rather than
++                // to the exact centre of its box, and only to a point that can actually be seen from where
++                // the player stands - the rule every other block the mod clicks follows, see AimScatter.
++                // When nothing on the door can be reached from here the centre is aimed at blind, as it
++                // always was, and the click is not held back for it.
++                final Optional<Rotation> somewhereOnIt = RotationUtils.reachable(ctx, door);
++                state.setTarget(new MovementState.MovementTarget(somewhereOnIt.orElseGet(() -> RotationUtils.calcRotationFromVec3d(
++                        ctx.playerHead(), VecUtils.calculateBlockCenter(ctx.world(), door), ctx.playerRotations())), true));
++                // And the button goes down on the tick the crosshair is on the door - or on the tick the hand
++                // has got to its point on it, which is the same question every other click in the mod is
++                // asked (see Movement#prepared, MineProcess). It used to go down on the tick the door was
++                // noticed, with the hand still on its way: a click that lands on whatever the crosshair
++                // crosses in the meantime - the frame, the wall beside the doorway - and with a throwaway
++                // block in hand, a block placed against that wall. The beat before the click runs underneath
++                // this, the way it does for every other click in the mod. With no point on the door to aim
++                // at there is nothing to wait for, so the click is not held back for one.
++                if (ctx.isLookingAt(door)
++                        || somewhereOnIt.map(rot -> baritone.getLookBehavior().hasArrivedAt(rot)).orElse(true)) {
++                    state.setInput(Input.CLICK_RIGHT, true);
++                }
++                return state;
+             }
+         }
+ 
+@@ -243,7 +265,14 @@ public class MovementTraverse extends Movement {
+             if (blocked != null) {
+                 Optional<Rotation> rotation = RotationUtils.reachable(ctx, blocked);
+                 if (rotation.isPresent()) {
+-                    return state.setTarget(new MovementState.MovementTarget(rotation.get(), true)).setInput(Input.CLICK_RIGHT, true);
++                    // The same hand rule the door above follows: reachable gives a point of the gate's own
++                    // that can be seen from here, and the button goes down once the crosshair is on it - or
++                    // once the hand has got there, the question every other click is asked.
++                    state.setTarget(new MovementState.MovementTarget(rotation.get(), true));
++                    if (ctx.isLookingAt(blocked) || baritone.getLookBehavior().hasArrivedAt(rotation.get())) {
++                        state.setInput(Input.CLICK_RIGHT, true);
++                    }
++                    return state;
+                 }
+             }
+         }
+-- 
+2.47.3
+
