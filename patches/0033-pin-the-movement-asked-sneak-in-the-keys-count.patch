@@ -1,0 +1,39 @@
+From f38e60eac218ad224831deee64fd038dfc831ba7 Mon Sep 17 00:00:00 2001
+From: 0xFFshell <0xffshell@users.noreply.gitlab.com>
+Date: Thu, 8 Oct 2026 14:21:42 +0000
+Subject: [PATCH] test: pin the movement-asked sneak in the keys count
+
+KeyWritesTest's shapes pin the forced reads of JUMP and SPRINT and the
+footing half of the sneak, but not the movement-asked half -
+PlayerMovementInput:69's isInputForcedDown(Input.SNEAK). Removing that
+term broke the magma sneak (MovementTraverse:264), the ladder crouch in
+prepared() and the movement's bridge asks (:368) with the suite entirely
+green - found on the second prose read of 77f772a1 (patch 0031); Curlew
+signed off without answering, so by the announced rule the one-line
+repair is free.
+
+Tooth verified by mutation: with the SNEAK term removed,
+theFilesThatWriteTheKeysStillHoldTheRulesInThem fails on exactly this
+shape line; the mutation was reverted byte-identical. Full suite:
+42 classes, 345 tests, 0 failures, 0 errors, 0 skipped.
+---
+ src/test/java/baritone/utils/KeyWritesTest.java | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/src/test/java/baritone/utils/KeyWritesTest.java b/src/test/java/baritone/utils/KeyWritesTest.java
+index c55672af..05b6b5fb 100644
+--- a/src/test/java/baritone/utils/KeyWritesTest.java
++++ b/src/test/java/baritone/utils/KeyWritesTest.java
+@@ -96,6 +96,9 @@ public class KeyWritesTest {
+             // the jump, the sneak and the sprint through the handler rather than read from the keyboard
+             {"src/main/java/baritone/utils/PlayerMovementInput.java", "handler.isInputForcedDown(Input.JUMP)"},
+             {"src/main/java/baritone/utils/PlayerMovementInput.java", "handler.isInputForcedDown(Input.SPRINT)"},
++            // the movement's own sneak ask, without which every crouch a movement requests - the magma
++            // walk, the ladder, the movement's bridge - is silently gone while the count still passes
++            {"src/main/java/baritone/utils/PlayerMovementInput.java", "handler.isInputForcedDown(Input.SNEAK)"},
+             // the crouch a person keeps while the footing is not certain, which is why the sneak the game
+             // sees is this OR that and not either one of them
+             {"src/main/java/baritone/utils/PlayerMovementInput.java", "handler.isCrouchingForTheFooting()"},
+-- 
+2.47.3
+
