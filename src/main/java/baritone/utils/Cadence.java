@@ -137,6 +137,24 @@ public final class Cadence {
     }
 
     /**
+     * Ticks of walking before the sprint key goes down on a new run: two to four.
+     * <p>
+     * The hangover is the hand coming <em>off</em> control. Starting a run was still the other tell: W
+     * and control in the same tick, every time a traverse asked for a sprint. A person walks first and
+     * then sprints. Parkour, climbs, water and air skip this - there the speed on the first tick is load
+     * bearing. See {@code SprintWindup}.
+     */
+    public static final int SPRINT_WINDUP_MIN = 2;
+    public static final int SPRINT_WINDUP_MAX = 4;
+
+    /**
+     * @return ticks of walking before a new sprint; inclusive of both ends
+     */
+    public static int sprintWindup(Random rand) {
+        return SPRINT_WINDUP_MIN + rand.nextInt(SPRINT_WINDUP_MAX - SPRINT_WINDUP_MIN + 1);
+    }
+
+    /**
      * Ticks the hands come off the walking keys when the direction reverses: one to two.
      * <p>
      * The four keys are decided from scratch every tick, so a direction that changed did so by flipping

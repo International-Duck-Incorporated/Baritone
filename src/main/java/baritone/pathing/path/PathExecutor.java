@@ -32,6 +32,7 @@ import baritone.pathing.movement.CalculationContext;
 import baritone.pathing.movement.HeadFirst;
 import baritone.pathing.movement.KeyBeat;
 import baritone.pathing.movement.Movement;
+import baritone.pathing.movement.SprintWindup;
 import baritone.pathing.movement.MovementHelper;
 import baritone.pathing.movement.movements.*;
 import baritone.utils.BlockStateInterface;
@@ -88,6 +89,7 @@ public class PathExecutor implements IPathExecutor, Helper {
      */
     private int sprintHangover;
     private final Random cadenceRand = new Random();
+    private final SprintWindup sprintWindup = new SprintWindup(this.cadenceRand);
 
     /**
      * Ticks left of the beat after a fall landed before the keys move again. See
@@ -505,17 +507,44 @@ public class PathExecutor implements IPathExecutor, Helper {
             // Something wants us running: the key is held, and the hand comes off within this many ticks
             // of nothing wanting it any more.
             this.sprintHangover = Cadence.sprintHangover(this.cadenceRand);
-            return true;
+            return this.sprintWindup.tick(true, canWindUpSprint());
         }
         if (this.sprintHangover > 0 && canTrailOffSprint()) {
             // Nothing wants it any more, but the key does not come off on this tick. Baritone only forces
             // the sprint key down - vanilla still decides whether the player is sprinting - so this holds
             // the key, it does not make the player do anything they could not have done anyway.
             this.sprintHangover--;
+            this.sprintWindup.keepHeld();
             return true;
         }
         this.sprintHangover = 0;
+        this.sprintWindup.tick(false, false);
         return false;
+    }
+
+    /**
+     * Whether a new sprint may start with a beat of walking first.
+     * <p>
+     * Only a flat run on the ground. Climbs, drops, parkour, water and air all need the speed they asked
+     * for on the tick they asked: delaying control there is a miss, not a personality trait.
+     */
+    private boolean canWindUpSprint() {
+        if (pathPosition >= path.length()) {
+            return false;
+        }
+        final IMovement movement = path.movements().get(pathPosition);
+        if (movement instanceof MovementParkour
+                || movement instanceof MovementAscend
+                || movement instanceof MovementDescend
+                || movement instanceof MovementFall
+                || movement instanceof MovementPillar
+                || movement.getDirection().getY() != 0) {
+            return false;
+        }
+        if (!ctx.player().onGround() || ctx.player().isInWater() || ctx.player().isInLava()) {
+            return false;
+        }
+        return true;
     }
 
     /**
@@ -857,6 +886,7 @@ public class PathExecutor implements IPathExecutor, Helper {
             ret.ticksOnCurrent = ticksOnCurrent;
             ret.sprintHangover = sprintHangover; // continuing the same run, so not a boundary the player can feel
             ret.landingRest = landingRest; // and the landing beat goes on across the splice too
+            ret.sprintWindup.copyFrom(this.sprintWindup);
             return ret;
         }).orElseGet(this::cutIfTooLong); // dont actually call cutIfTooLong every tick if we won't actually use it, use a method reference
     }
@@ -880,6 +910,7 @@ public class PathExecutor implements IPathExecutor, Helper {
             ret.ticksOnCurrent = ticksOnCurrent;
             ret.sprintHangover = sprintHangover; // continuing the same run, so not a boundary the player can feel
             ret.landingRest = landingRest; // and the landing beat goes on across the trim too
+            ret.sprintWindup.copyFrom(this.sprintWindup);
             return ret;
         }
         return this;

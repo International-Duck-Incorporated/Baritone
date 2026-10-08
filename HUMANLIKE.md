@@ -64,6 +64,7 @@ a quarter faster); inventory moves are spaced by a redrawn interval rather than 
 | Which keys walk which way | `pathing/movement/MovementOption.java` | The eight combinations of four keys, compared by *angle* to the direction the movement asked for, never by a scaled distance. |
 | The camera and the keys are chosen together | `MovementOption#lookYaw`, `MovementHelper#moveTowardsWithSlightRotation` | The camera turns in whole 45° steps and the keys cover the rest, both measured against the angle the camera is being told to hold - because that is the angle the game turns the pressed keys by. Chosen separately, the two roundings disagree by a whole step and the bot walks 45° off its own path. |
 | The body goes where the eyes go | `MovementOption#lookYaw`, `pathing/movement/StraightRun.java` | The camera is never left more than one step - a diagonal - off the way the feet are going, so the keys a route is walked on are W, or W with A or D, and never S or a bare strafe: upstream anchored the camera to whichever step it was nearest, which walked a bot that was facing away when it was told to go the whole way there backwards. The diagonal is for the first steps of a heading and for the staircases and two-to-one slopes a path makes toward a goal off its axes, which are walked facing the diagonal with the keys alternating under a steady head, the way a person walks them; a straight is faced outright from its third block, with W alone. |
+| A run walks before it sprints | `pathing/movement/SprintWindup.java`, `PathExecutor#shouldSprintNextTick` | Control used to go down on the same tick a traverse asked for a sprint. A new run now walks two to four ticks first (`Cadence.sprintWindup`). Parkour, climbs, drops, water and air skip it - the speed on those ticks is load bearing. A hangover still holding the key is the same run and does not wind up again. |
 | A direction and its opposite are a beat apart | `pathing/movement/KeyBeat.java`, `InputOverrideHandler#beatTheKeys` | The four keys are decided fresh every tick, so a turn-around arrived as W becoming S in one tick - through the game's own input packet, to anybody watching. A reversal now costs one to two ticks of no keys while the hand repositions, and only a reversal: lifting a finger, landing a finger, and the W+S someone brakes with all answer the tick they are asked. Only at a run on the ground - sneaking along a bridge, backing away from a drop, water, air, and the elytra loop all get their keys immediately, because there the keys are a control loop and not fingers (`InputOverrideHandler#atAPace`). |
 | The feet wait for the head | `pathing/movement/HeadFirst.java`, `PathExecutor#letTheHeadLead` | The body is steered by the angle a movement asks for on the tick it asks, while the head eases there over the ticks after - so at a sharp turn the body used to set off while the head still faced the old way, a half turn walked backwards for as long as the head took to come round. The walking keys and the jump are now kept off until the head is inside 60° of the way the feet are going from a standstill (a quarter turn costs three ticks, a half turn eight), and at a walk only a turn sharper than 100° - a turn-around - stops the feet, for six ticks on a half turn. Never in the air or in water, never past ten ticks, and never twice for one turn; the sneak and the mouse buttons go around it. |
 
@@ -128,18 +129,18 @@ POST. `CameraWritesTest` counts them, so a fifth file fails the build with this 
   running game goes in its own class in `behavior/look` with a test next to it, the way `AimDynamics`,
   `IdleGlance`, `WalkGlance`, `Newcomer`, `HeadWander`, `PitchWander`, `IdleFidget`, `GazeAhead` and `ReactionDelay` are - or, for
   a rule about the keys rather than the camera, in `pathing/movement` beside `MovementOption`, the way
-  `KeyBeat`, `HeadFirst` and `StraightRun` are, for a rule about the hands in `utils` beside the helpers that press the buttons,
+  `KeyBeat`, `HeadFirst`, `StraightRun` and `SprintWindup` are, for a rule about the hands in `utils` beside the helpers that press the buttons,
   the way `HotbarSwitch` is, and for a rule about what to do next rather than how to look doing it, beside the process
   that uses it, the way `FollowProgress` is.
 - Everything with a random source takes it through its constructor - `HeadWander`, `PitchWander`,
-  `IdleGlance`, `WalkGlance`, `Newcomer`, `IdleFidget`, `ReactionDelay`, `KeyBeat` - and the constructor with no argument is the
+  `IdleGlance`, `WalkGlance`, `Newcomer`, `IdleFidget`, `ReactionDelay`, `KeyBeat`, `SprintWindup` - and the constructor with no argument is the
   only one that seeds itself from the clock. Every machine in a test run draws from that run's seed,
   because a failure reported for a seed has to be reproducible by running that seed.
 - The numbers are allowed to move; the invariants are not. `HumanlikeLookFuzzTest` runs the hand
   through twenty thousand hostile ticks and asserts that the aim never moves more than its tick limit,
   that a settled hand is always arrived, and that the sway never escapes its band. `AimDynamicsTest`,
   `IdleGlanceTest`, `WalkGlanceTest`, `NewcomerTest`, `PitchWanderTest`, `IdleFidgetTest`, `GazeAheadTest`, `KeyBeatTest`, `HeadFirstTest`,
-  `StraightRunTest`, `FollowProgressTest`, `HotbarSwitchTest` and `CadenceTest` cover the rules themselves.
+  `StraightRunTest`, `SprintWindupTest`, `FollowProgressTest`, `HotbarSwitchTest` and `CadenceTest` cover the rules themselves.
 - Behaviour that already exists as a setting - `randomLooking`, `randomLooking113`, `smoothLook`,
   `smoothLookTicks`, `blockBreakSpeed`, `mineGoalUpdateInterval`, `ticksBetweenInventoryMoves`,
   `autoTool` - keeps its meaning. Where a setting names an interval, the interval is now what the

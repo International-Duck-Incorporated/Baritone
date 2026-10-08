@@ -120,6 +120,24 @@ public class CadenceTest {
     }
 
     @Test
+    public void aSprintStartsAfterAWalk() {
+        assertTrue("a zero windup presses control on the first tick of a run",
+                Cadence.SPRINT_WINDUP_MIN >= 1);
+        assertTrue("a windup this long is standing around, not starting a run",
+                Cadence.SPRINT_WINDUP_MAX <= 5);
+        final Random rand = new Random(1618);
+        final Set<Integer> seen = new HashSet<>();
+        for (int i = 0; i < 1000; i++) {
+            final int windup = Cadence.sprintWindup(rand);
+            seen.add(windup);
+            assertTrue("windup " + windup + " below the minimum", windup >= Cadence.SPRINT_WINDUP_MIN);
+            assertTrue("windup " + windup + " above the maximum", windup <= Cadence.SPRINT_WINDUP_MAX);
+        }
+        assertEquals("a windup that is always the same length is a timer, not a hand",
+                Cadence.SPRINT_WINDUP_MAX - Cadence.SPRINT_WINDUP_MIN + 1, seen.size());
+    }
+
+    @Test
     public void theSettleIsPaidOncePerArrival() {
         // The whole point of charging it on the rising edge: a run of blocks clicked with the crosshair
         // never leaving a face is one arrival and one reaction, not a reaction before every block. A settle
