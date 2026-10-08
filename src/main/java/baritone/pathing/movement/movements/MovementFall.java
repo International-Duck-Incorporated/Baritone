@@ -17,6 +17,7 @@
 
 package baritone.pathing.movement.movements;
 
+import baritone.Baritone;
 import baritone.api.IBaritone;
 import baritone.api.pathing.movement.MovementStatus;
 import baritone.api.utils.BetterBlockPos;
@@ -33,6 +34,7 @@ import baritone.utils.pathing.MutableMoveResult;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.Vec3i;
+import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -102,12 +104,28 @@ public class MovementFall extends Movement {
 
         boolean isWater = destState.getFluidState().getType() instanceof WaterFluid;
         if (!isWater && willPlaceBucket() && !playerFeet.equals(dest)) {
-            if (!Inventory.isHotbarSlot(ctx.player().getInventory().findSlotMatchingItem(STACK_BUCKET_WATER)) || ctx.world().dimension() == Level.NETHER) {
+            final int bucket = ctx.player().getInventory().findSlotMatchingItem(STACK_BUCKET_WATER);
+            if (!Inventory.isHotbarSlot(bucket) || ctx.world().dimension() == Level.NETHER) {
                 return state.setStatus(MovementStatus.UNREACHABLE);
             }
 
+            if (!ctx.player().onGround()) {
+                // A person who means to catch a fall with water has the bucket out before the ground is
+                // close: they take it out on the way down. So does this, from the first tick of the fall.
+                // The beat every other change of the held item pays (see HotbarSwitch) is two to five
+                // ticks, and spending them up here, in the air, is what keeps them out of the tick that
+                // needs the water. Nothing else about the fall moves for it.
+                ((Baritone) baritone).getInventoryBehavior().hold(bucket);
+            }
+
             if (ctx.player().position().y - dest.getY() < ctx.playerController().getBlockReachDistance() && !ctx.player().onGround()) {
-                ctx.player().getInventory().setSelectedSlot(ctx.player().getInventory().findSlotMatchingItem(STACK_BUCKET_WATER));
+                // And the landing guarantee underneath that ask: if the crosshair is on the spot before the
+                // hand is there, the bucket goes into it on this tick rather than the click being missed.
+                // It costs nothing when the beat has run - an ask that is already in hand is dropped, and
+                // the behaviour that presses the keys runs between this ask and the click - so a fall that
+                // would have been caught on this tick still is. This is the one write left in the mod that
+                // puts an item in the hand itself; HandWritesTest counts them, so a new one has to say why.
+                ctx.player().getInventory().setSelectedSlot(bucket);
 
                 targetRotation = new Rotation(toDest.getYaw(), 90.0F);
 
@@ -123,8 +141,16 @@ public class MovementFall extends Movement {
         }
         if (playerFeet.equals(dest) && (ctx.player().position().y - playerFeet.getY() < 0.094 || isWater)) { // 0.094 because lilypads
             if (isWater) { // only match water, not flowing water (which we cannot pick up with a bucket)
-                if (Inventory.isHotbarSlot(ctx.player().getInventory().findSlotMatchingItem(STACK_BUCKET_EMPTY))) {
-                    ctx.player().getInventory().setSelectedSlot(ctx.player().getInventory().findSlotMatchingItem(STACK_BUCKET_EMPTY));
+                // The bucket that just poured this water is empty and in the hand, and a person picks the
+                // water back up with the bucket they are holding rather than going looking for another one.
+                // Only when the hand is holding something else does it have to be asked for, and then the
+                // click waits for it the way every other click does. Nothing here is in a hurry: the player
+                // is floating, and the movement stays running until the click lands.
+                final int empty = ctx.player().getItemInHand(InteractionHand.MAIN_HAND).is(Items.BUCKET)
+                        ? ctx.player().getInventory().getSelectedSlot()
+                        : ctx.player().getInventory().findSlotMatchingItem(STACK_BUCKET_EMPTY);
+                if (Inventory.isHotbarSlot(empty)) {
+                    ((Baritone) baritone).getInventoryBehavior().hold(empty);
                     if (ctx.player().getDeltaMovement().y >= 0) {
                         return state.setInput(Input.CLICK_RIGHT, true);
                     } else {
