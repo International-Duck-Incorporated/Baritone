@@ -112,6 +112,18 @@ chest.
 - **Elytra flight** sets the aim straight to its target. It is a control loop: the flight solver
   assumes the angles it asked for last tick are the angles it has this tick, so a lagging aim there is
   a crash rather than a personality trait.
+- **A fall that means to catch itself with a bucket aims straight down, and stays aimed at the spot.**
+  `MovementFall` sets one rotation for the whole of that approach - `new Rotation(toDest.getYaw(), 90.0F)`,
+  marked as an interaction with a block rather than a look at where the movement is going - and the click
+  goes out when the trace is on the landing spot (`ctx.isLookingAt(dest) || ctx.isLookingAt(dest.below())`).
+  The pitch is not a decoration on that fall and is not left to wander, lean or carry past the target the
+  way a walking gaze is: the crosshair *is* what catches the fall, so the one angle the water depends on is
+  aimed at exactly, and holds there for as long as the fall has left to run. It is the other half of why the
+  bucket is asked for on the way down rather than on the tick it is used (`Cadence.hotbarSwitch`, and the
+  landing guarantee underneath it in the same file): the beat is spent where the hand has nothing else to
+  do, and the aim was never the part of that fall that could afford to wait for one. The straight-down aim
+  is therefore not a leftover and not a thing to soften - a bot that walked its pitch back up on the way
+  down would miss the spot and land on the fall instead of the water.
 - **Under free look** (`freeLook`, `antiCheatCompatibility`), the rotations Baritone drives are sent to
   the server while the player's own camera is handed back untouched. Everyone else sees the aim move;
   the person at the keyboard sees their own view. What is sent is the same either way, and so is the rule
