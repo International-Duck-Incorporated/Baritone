@@ -1,3 +1,46 @@
+commit 9ca8323ca04557eb3b8180304478b468f0482e17
+Author: 0xFFshell <0xffshell@users.noreply.gitlab.com>
+Date:   Thu, 8 Oct 2026 12:26:35 +0000
+
+    let the builder break outwards from where it stands
+    
+    The placement search was changed to work outwards from the player's feet
+    in 32308640. The break search beside it, on the other half of the same
+    tick, was left on the loops it replaced: x from the west edge of the box
+    inwards, then y, then z. So the block the builder took out was whichever
+    breakable block sat furthest west in an eleven-by-eleven box, not the one
+    it was standing next to - the order anchored to the world's axes rather
+    than to where the person was standing, which is the defect that commit
+    was written to remove.
+    
+    A wall came down from a corner and went back up from where the player was
+    standing, and the head swung the width of the box and back for every
+    block. It is also the half a spectator watches.
+    
+    toBreakNearPlayer now walks PlaceSearch.COLUMNS with the vertical range
+    inner, exactly as searchForPlacables does. The break box keeps its own
+    range - one below the feet only with breakFromAbove, five above - and the
+    block the player is supported by is still never mined. Order only: the
+    same blocks are considered, the same ones turn out reachable, and nothing
+    about what gets built or what a path costs has moved.
+    
+    PlaceSearchTest now pins the break search to the shared column order and
+    to the box it has always covered, counted from the source the way
+    CameraWritesTest counts camera writes. The count is what was missing when
+    the placement half moved and this one did not: both orders consider the
+    same blocks, so nothing failed and the only thing that changed was which
+    of them the builder reached for first.
+    
+    305 tests, 0 failures, 0 skipped. Verified the new test has teeth by
+    putting the raw loop back: it fails.
+    
+
+    Note: this commit also adds this patch file to `patches/`, and that hunk is left out of the diff
+    below, because a patch cannot contain itself. Everything after this header is the rest of the
+    commit's diff, byte for byte, and it reproduces the commit's tree apart from that one file
+    (checked 2026-10-08 13:30 UTC, in a scratch worktree at 9ca8323c^: applied, `git write-tree`
+    differs from the commit's tree by exactly `patches/0022-let-the-builder-break-outwards.patch`).
+
 diff --git a/HUMANLIKE.md b/HUMANLIKE.md
 index ce4a998e..ba503fb6 100644
 --- a/HUMANLIKE.md

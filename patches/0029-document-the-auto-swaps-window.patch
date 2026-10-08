@@ -1,3 +1,20 @@
+From 281d87dbabae72d0f1a431489d35876102926a31 Mon Sep 17 00:00:00 2001
+From: 0xFFshell <0xffshell@users.noreply.gitlab.com>
+Date: Thu, 8 Oct 2026 13:14:31 +0000
+Subject: [PATCH] document the auto-swap's window and the count's two clicks
+
+HUMANLIKE.md's Timing section said the auto-swap's clicks were spaced by a redrawn
+interval and stopped there; the rule about where they land is the other half of
+the same thing and is now written next to it, with the half-applied state named as
+the reason. The paragraph about the hand's counted edges said ButtonWritesTest's
+list held "the elytra's firework" - it holds the file, and the file has two clicks
+- so it says both, and names the window the auto-swap's clicks wait for.
+
+Docs only; the change it describes is the commit before this one.
+---
+ HUMANLIKE.md | 19 ++++++++++++++++---
+ 1 file changed, 16 insertions(+), 3 deletions(-)
+
 diff --git a/HUMANLIKE.md b/HUMANLIKE.md
 index 6e2a4f6f..29b610c5 100644
 --- a/HUMANLIKE.md
@@ -35,3 +52,6 @@ index 6e2a4f6f..29b610c5 100644
  it, or one pressed with the hand between items, cannot be added without saying so.
  
  The third edge of a click is where it may go, and that is counted too. Every click in the movement and
+-- 
+2.47.3
+

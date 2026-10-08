@@ -1,3 +1,47 @@
+From 31a1864c56ebd86c3df85619e489445abfdeedd0 Mon Sep 17 00:00:00 2001
+From: 0xFFshell <0xffshell@users.noreply.gitlab.com>
+Date: Thu, 8 Oct 2026 13:14:28 +0000
+Subject: [PATCH] let the auto-swap's window clicks wait for their window
+
+The elytra auto-swap's three clicks were the last click in the fork with no
+context rule in front of it: trySwapElytra queued them and tickInventoryTransactions
+drained them, one every drawn gap, into whatever menu happened to be open. A window
+click carries the id of the window it was written for and the game drops a click
+whose id is not the open menu's, so a sequence fired with a chest or a crafting
+table in front did not fail loudly - it stalled half applied, the spare elytra on
+the cursor and the worn one still on the back, which is worse than either end of
+the move.
+
+utils/InventoryTransaction now owns the sequence and its window: the clicks wait
+for the player's own inventory to be the menu in front, a sequence that has not
+begun when its window is gone is given up whole and silently - nothing has
+happened, the items are where they were, and the job that wanted the swap asks
+again while the elytra is still worn - and a sequence that has begun waits the
+window out and finishes, however long that takes. The gaps are unchanged: the
+configured interval, drawn afresh, the first click available as soon as there is
+one, which is what Tempo-2 spaced them to at fe0a9d55.
+
+The rule is in its own Minecraft-free class with InventoryTransactionTest beside
+it, the way the other hand rules are: the wait, the give-up and the finish, the
+gaps pinned, and both rules checked for teeth by removing them one at a time
+(aTransactionThatHasNotBegunIsGivenUpWithItsWindow and
+aTransactionThatHasBegunIsFinished fail when they are taken out, then restored).
+
+ButtonWritesTest's allow-list entry for ElytraBehavior said "the one click here
+is the firework" and had been false since the queue was added - the file has two
+click sites - so the reason is corrected and the new rule is pinned in it: the
+window question and the transaction it is asked of.
+
+./gradlew :test: 38 classes, 314 tests, 0 failures, 0 errors, 0 skipped.
+---
+ .../process/elytra/ElytraBehavior.java        |  29 ++-
+ .../baritone/utils/InventoryTransaction.java  | 124 +++++++++++++
+ .../java/baritone/utils/ButtonWritesTest.java |  13 +-
+ .../utils/InventoryTransactionTest.java       | 172 ++++++++++++++++++
+ 4 files changed, 318 insertions(+), 20 deletions(-)
+ create mode 100644 src/main/java/baritone/utils/InventoryTransaction.java
+ create mode 100644 src/test/java/baritone/utils/InventoryTransactionTest.java
+
 diff --git a/src/main/java/baritone/process/elytra/ElytraBehavior.java b/src/main/java/baritone/process/elytra/ElytraBehavior.java
 index 7d2d216d..51331da2 100644
 --- a/src/main/java/baritone/process/elytra/ElytraBehavior.java
@@ -411,3 +455,6 @@ index 00000000..ec6e0fd4
 +        assertFalse("an empty transaction is waiting", transaction.waiting());
 +    }
 +}
+-- 
+2.47.3
+
