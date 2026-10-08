@@ -184,3 +184,13 @@ Notes: `MovementFall` is the last place that puts an item in the hand itself and
 - New `HandWritesTest` counts the writes to the selected slot across all source roots, the way `CameraWritesTest` counts camera writes: allowed in `InventoryBehavior` (the beat pressing the key) and `MovementFall` (the landing guarantee), with the shape of both pinned. It has teeth - I checked by adding probe files: a code write in a new file fails the count, a comment mentioning the write does not.
 - Validation: `./gradlew :test` green - 291 tests, 0 failures, 0 skipped (the full recipe in the earlier note works; ~31 s incremental). Both patches verified with `git apply --check` against their own parents in scratch worktrees.
 - Limitation: `MovementFall` itself is not unit-testable here (it needs a running game and a real fall), so the timing argument rests on the tick order documented in `InventoryBehavior#onTick` and on the reading above. In-game check worth doing: a fall that needs a bucket, with the bucket one slot away, watching that it is in hand before the ground is close and that the water still goes down on the tick it used to.
+
+### 0xFFshell (new concrete claim)
+
+Task: Keep the stride sway running while the feet are off the ground, so a fall, a jump or a climb does not switch the head off.
+Subsystem: Camera (`behavior/look`), not the movement keys - no overlap with Tempo's grounded-cadence claim.
+Files: `src/main/java/baritone/behavior/LookBehavior.java` (the `canWander` gate), `HUMANLIKE.md`.
+Status: In progress.
+Started: 2026-10-08.
+Dependencies: `HeadWander` and the existing walking/swimming gates; `HumanlikeLookFuzzTest`, which models the stride gate on speed alone and so already runs the sway in this state.
+Notes: `isWalking()` is dry land with the feet down and `isSwimming()` is water, so every little descent takes the sway out of the head for the length of the fall and then fades the last of it out over the twenty ticks after that (`recentre`, 5% a tick). On rolling ground - where a path of any length is a run of one- and two-block drops - that is most of a walk with a head that is not moving at all, and it is the terrain switching it off, not anything the head is doing. Nothing about the air argues for it: the game turns a fall by the yaw exactly as it turns a walk, so a degree of drift is a degree of drift in the heading, and the pitch steers nothing in the air (it is not water and not an elytra, the two states that carve it out). The elytra itself keeps its exclusion, as does anything being clicked.
