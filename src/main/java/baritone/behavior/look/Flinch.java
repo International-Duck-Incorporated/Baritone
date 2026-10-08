@@ -164,9 +164,11 @@ public final class Flinch {
     /**
      * One tick of the flinch.
      *
-     * @param base   the rotation the head would be holding without this offset - the aim, the angle a
-     *               glance would ride on, or the camera: whatever this is being added to. Only read
-     *               while {@code wanted}, so a caller with nothing to measure may pass {@code null}
+     * @param base   the rotation the head is holding without this offset, and it has to be the rotation
+     *               this offset is added to - the aim, or the aim plus whatever a glance is putting on
+     *               the head - or the stare lands beside the attacker rather than on them. The sway is
+     *               deliberately not in it: the sway keeps riding on the stare. Only read while
+     *               {@code wanted}, so a caller with nothing to measure may pass {@code null}
      * @param moving whether the feet are moving. True, the turn stops at {@link #NECK_YAW}; false,
      *               the whole body may come round
      * @param wanted whether the head is free for this at all. False while anything is being clicked
@@ -223,7 +225,9 @@ public final class Flinch {
 
     /**
      * Whether a blow is still owed a look: true from the blow until the stare has been taken or
-     * whoever did it has gone. Only for the tests.
+     * whoever did it has gone. The caller reads it to stand the glances down for the episode - one thing
+     * on the head at a time while somebody is being stared at - and the run in {@code FlinchTest} and
+     * {@code HumanlikeLookFuzzTest} reads it to know when a blow is still owed.
      */
     public boolean answering() {
         return this.answering;

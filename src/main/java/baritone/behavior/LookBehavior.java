@@ -732,8 +732,12 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
                     this.idleBase = camera;
                 }
                 final Rotation base = theirs ? camera : this.idleBase;
-                final Rotation wanted = this.idleGlance.next(base, allowed, theirs, this::idleStep,
-                        this::somethingNearby);
+                // A blow that is still owed a look is not a tick for the idle glance either, and for the
+                // same reason: the flinch's angle is added beside this one's, so a glance riding out under a
+                // stare is the stare pointing somewhere else. The glance comes home; the sway does not, and
+                // neither does the flinch. See Flinch.
+                final Rotation wanted = this.idleGlance.next(base, allowed && !this.flinch.answering(), theirs,
+                        this::idleStep, this::somethingNearby);
                 // What the sway and the flinch below ride on: the glance's angle when one is out, the base
                 // otherwise. The sway is read against the base rather than the glance's own angle so that it
                 // cannot be mistaken for the glance's bookkeeping, which stays exactly where it was and so
@@ -886,8 +890,13 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
         // Something nearby worth looking at is offered as a way off the aim, which is what the glance is
         // made of.
         final boolean onTheWalk = walking || (waiting && this.walkGlance.out());
+        // A blow that is still owed a look is not a tick for the road: a person staring at whoever just hit
+        // them is not also looking at the cow. The flinch's angle is added on top of this glance's (below),
+        // and this glance is the one that can be tens of degrees wide, so a glance that started before the
+        // blow is handed back rather than ridden out under the stare - and one that comes home leaves the
+        // head where the stare put it. See Flinch.
         this.walkGlance.advance(onTheWalk && this.walkGlance.welcomed() && !this.target.blockInteract
-                && this.target.mode != Target.Mode.NONE, () -> {
+                && this.target.mode != Target.Mode.NONE && !this.flinch.answering(), () -> {
             final Rotation nearby = this.somethingNearby();
             if (nearby == null) {
                 return null;
@@ -900,9 +909,13 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
         // being clicked in it - and stood down wherever it is not. The feet half of it is the walk: a body
         // that is walking cannot come round without walking backwards, so the turn is held to a neck's
         // worth while it is one, and a body that is standing still turns whole. It is measured against the
-        // angle it is added to, so the stare lands on the attacker and not on the attacker plus whatever a
-        // glance happened to be doing. See Flinch.
-        this.flinch.advance(base, walking, true);
+        // angle it is added to - which is the walking glance's as well, since that is on the head and is
+        // what this is added on top of - so the stare lands on the attacker rather than on the attacker
+        // plus whatever the road was showing at the time. The sway is deliberately not in there: it is
+        // meant to keep riding on the stare. See Flinch.
+        final Rotation stareFrom = new Rotation(base.getYaw() + this.walkGlance.yaw(),
+                base.getPitch() + this.walkGlance.pitch());
+        this.flinch.advance(stareFrom, walking, true);
         ctx.player().setYRot(base.getYaw() + this.walkGlance.yaw() + this.headWander.yaw() * fraction + this.flinch.yaw());
         ctx.player().setXRot(Rotation.clampPitch(base.getPitch() + this.walkGlance.pitch() + this.headWander.pitch() * fraction + this.flinch.pitch()));
     }

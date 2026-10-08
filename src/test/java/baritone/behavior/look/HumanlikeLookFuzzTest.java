@@ -28,20 +28,30 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 /**
- * Drives all five look state machines together through a long, hostile run and asserts the properties the
+ * Drives all six look state machines together through a long, hostile run and asserts the properties the
  * game depends on, whatever the input.
  * <p>
  * The individual tests cover each rule on its own. This covers the things nobody thinks to write a rule
  * for: that nothing ever produces a NaN, that no state can be entered from which the aim stops moving, that
- * a target which never settles still gets arrived at, that a walking sway can never drive the head at the
- * same time as a glance, and that no sequence of player states can leave the head - or one of the state
+ * a target which never settles still gets arrived at, that the standing glance and the walking sway never
+ * drive the head together, and that no sequence of player states can leave the head - or one of the state
  * machines that moves it - stuck. Those are the
  * failures that would not look like a bug in a short playtest; they would look like Baritone being strange
  * a few minutes in.
  * <p>
- * What it does not model is the pitch: the settle of a gaze nobody has an opinion about is covered by
- * PitchWanderTest, and the aim here is asked for the target's own pitch, which is the case that has an
- * opinion - a block to break, a face to place against.
+ * It is also where the offsets are added up the caller's way, which no single machine's own test can check:
+ * the aim, the two glances, the sway and the stare land on one head in the caller's order and against the
+ * caller's bases, so an offset added twice, or measured against a head it is not added to, shows up as a
+ * jump or as a stare that settles beside the attacker instead of on them.
+ * <p>
+ * What it does not model: the pitch, where the settle of a gaze nobody has an opinion about is covered by
+ * PitchWanderTest while the aim here is asked for the target's own pitch, which is the case that has an
+ * opinion - a block to break, a face to place against; the person's own camera, since everything here is
+ * driven on one head; the executor's conditions for welcoming a glance, which are its business while the
+ * glance's own cooldown sets the rate; the feet stopping for a look worth it (WalkGlance#stopped, which the
+ * caller's PathExecutor acts on) - the speed here is drawn, never held by a glance; and the halves of the
+ * caller's gates that need the ground under it, which are pinned by reading instead. See the notes where
+ * each of those is dealt with below.
  */
 public class HumanlikeLookFuzzTest {
 
@@ -64,9 +74,12 @@ public class HumanlikeLookFuzzTest {
         boolean flinchOut;
         /** Whether the flinch was still owed a look this tick: from the blow until it has been taken. */
         boolean flinchAnswering;
-        /** Whether the flinch's angle was actually added to the head this tick. */
-        boolean flinchApplied;
         float flinchYaw;
+        /** Whether the walk's glance was allowed this tick - what LookBehavior asks before it advances. */
+        boolean walkGlanceGate;
+        /** Whether the walk's glance was off the bearing at all after this tick. */
+        boolean walkGlanceOut;
+        float walkGlanceYaw;
     }
 
     private static Rotation target(Random rand) {
@@ -96,14 +109,15 @@ public class HumanlikeLookFuzzTest {
                                  Rotation[] aim, int[] aimAge, Rotation[] lastWanted, Rotation[] turnFrom,
                                  TurnPace[] turnPace,
                                  IdleGlance[] glance, ReactionDelay[] reaction, HeadWander[] wander,
-                                 int[] glanceCamera, float[] sway, Flinch flinch, Rotation attacker) {
+                                 int[] glanceCamera, float[] sway, Flinch flinch, WalkGlance walkGlance,
+                                 Rotation attacker, Rotation[] them) {
         final Outcome outcome = new Outcome();
         // A blow lands, if one does this tick: the caller hands the flinch the bearing, and it is asked for
         // again on every tick of the stare - here for an attacker who stands still, because what one who
         // walks about does to it is FlinchTest's business. It is delivered before the rest of the tick
         // because that is when the caller's own IN event sees it, and the onset counts from there.
         if (attacker != null) {
-            flinch.blow(() -> attacker);
+            flinch.blow(() -> them[0]);
         }
         // the glance is only ever consulted when there is no target at all, so a tick with a target must not
         // inherit the previous tick's answer
@@ -213,42 +227,74 @@ public class HumanlikeLookFuzzTest {
         final float swayPitch = fraction * wander[0].pitch();
         outcome.applied = null;
 
-        if (wanted == null) {
-            // the idle path writes nothing at all unless the head was ours this tick; when it is ours, the
-            // sway is added to whatever the glance asked for, or to the camera if it asked for nothing
-            if (!idleSway) {
-                applied = null;
-            } else {
-                final Rotation base = applied != null ? applied : camera;
-                applied = new Rotation(base.getYaw() + sway[0], Rotation.clampPitch(base.getPitch() + swayPitch));
-            }
-        } else if (walkingSway || waitingSway) {
-            // the aim drives the head and the sway rides on top of it; when the sway is not running it is
-            // simply not added, which is what leaves the aim exactly on target while a block is swinging
-            final Rotation base = applied != null ? applied : camera;
-            applied = new Rotation(base.getYaw() + sway[0], Rotation.clampPitch(base.getPitch() + swayPitch));
+        // The walk's glance, advanced before the stare and on the caller's own gates: welcome by the walk,
+        // nothing about to be clicked aimed at, the head not the person's own (Mode.NONE), and - since the
+        // stare is measured against the angle this is putting on the head - no blow still owed a look. It
+        // keeps its own out-clause once the feet have stopped for a look that is already out, and with
+        // nothing aimed at the caller only ever tells it that it is not welcome.
+        // The walk's glance: clocked every tick, and welcomed on every tick the walk under way is a plain
+        // one - which is how the caller's executor offers it, on the ground and three plain movements ahead
+        // rather than now and then, and about the movements rather than about what is being aimed at. A
+        // welcome not repeated is gone, so this is every tick of a plain walk; and whether it is welcome is
+        // asked again below, on the caller's own gate, with the target and the click and the stare in it.
+        walkGlance.tick();
+        if (pathing && walking && !interacting) {
+            walkGlance.welcome();
         }
-        // The flinch, advanced on the same three gates the sway is advanced on and measured against what
-        // it is added to, exactly as the caller measures it: the bearing is asked for again every tick, so
-        // a stare rides on whatever the head is doing rather than on where it was when the blow landed.
-        // `moving` is the stride gate - the feet, which this harness has only as speed. It is advanced
-        // whenever the head is ours at all, which is what lets a stand-down happen where it is owed. With
-        // the gates shut it comes home instead of turning, and what is left of it is still added, because
-        // the offset is physically on the rotation the caller last wrote: a head that was mid-stare when
-        // the pickaxe came out comes off whoever hit it at the speed of a look rather than vanishing, and
-        // a tick that writes no head at all carries none of it.
+        final boolean onTheWalk = walkingSway || (waitingSway && walkGlance.out());
+        final boolean walkGlanceAllowed = wanted != null && onTheWalk && walkGlance.welcomed()
+                && !blockInteract && !flinch.answering();
+        walkGlance.advance(walkGlanceAllowed, () -> {
+            if (rand.nextInt(10) < 3) {
+                return null; // nothing in particular, which is most of a walk
+            }
+            return new Rotation(rand.nextFloat() * 2f * WalkGlance.MAX_INTEREST_YAW - WalkGlance.MAX_INTEREST_YAW,
+                    rand.nextFloat() * 2f * WalkGlance.MAX_INTEREST_PITCH - WalkGlance.MAX_INTEREST_PITCH);
+        });
+        outcome.walkGlanceGate = walkGlanceAllowed;
+        outcome.walkGlanceOut = walkGlance.out();
+        outcome.walkGlanceYaw = walkGlance.out() ? walkGlance.yaw() : 0f;
+
+        // The flinch, advanced on the same three gates the sway is advanced on and measured against the head
+        // it is added to - the walk's glance included, because that is on the head too - exactly as the
+        // caller measures it: the bearing is asked for again every tick, so a stare rides on whatever the
+        // head is doing rather than on where it was when the blow landed. `moving` is the stride gate - the
+        // feet, which this harness has only as speed. It is advanced whenever the head is ours at all, which
+        // is what lets a stand-down happen where it is owed. With the gates shut it comes home instead of
+        // turning, and what is left of it is still added, because the offset is physically on the rotation
+        // the caller last wrote: a head that was mid-stare when the pickaxe came out comes off whoever hit it
+        // at the speed of a look rather than vanishing, and a tick that writes no head at all carries none
+        // of it. The sway is deliberately not in the base the stare is measured from: it is meant to keep
+        // riding on the stare.
         final boolean flinchGate = walkingSway || waitingSway || idleSway;
-        final Rotation riding = applied != null ? applied : camera;
-        flinch.advance(riding, wanted != null && walking, flinchGate);
+        final Rotation head = applied != null ? applied : camera;
+        // The base is the head the offset is added to, and which head that is depends on the caller's path:
+        // with something aimed at, the walk's glance is on this head, so the stare is measured against the
+        // head plus that glance; with nothing aimed at, the caller only tells the glance it is not welcome,
+        // and the stare rides on what the idle path is holding.
+        final Rotation stareFrom = wanted == null ? head
+                : new Rotation(head.getYaw() + walkGlance.yaw(), head.getPitch() + walkGlance.pitch());
+        flinch.advance(stareFrom, wanted != null && walking, flinchGate);
         outcome.flinchGate = flinchGate;
         outcome.flinchOut = flinch.out();
         outcome.flinchAnswering = flinch.answering();
         outcome.flinchYaw = flinch.out() ? flinch.yaw() : 0f;
-        outcome.flinchApplied = false;
-        if (applied != null && flinch.out()) {
-            applied = new Rotation(riding.getYaw() + flinch.yaw(),
-                    Rotation.clampPitch(riding.getPitch() + flinch.pitch()));
-            outcome.flinchApplied = true;
+
+        // What the head is holding after all of it, which is the caller's own sum: the aim (or whatever the
+        // idle path is holding), the walk's glance, the sway, and the stare - and on a stand-down tick, when
+        // something is being clicked or the head is not ours, no sway at all, but whatever is still
+        // physically on the rotation the caller last wrote comes off rather than vanishing.
+        if (wanted == null) {
+            // the idle path writes nothing at all unless the head was ours this tick; the walk's glance is
+            // not on this head - with nothing aimed at, the caller only tells it that it is not welcome
+            applied = idleSway ? new Rotation(head.getYaw() + sway[0] + flinch.yaw(),
+                    Rotation.clampPitch(head.getPitch() + swayPitch + flinch.pitch())) : null;
+        } else if (walkingSway || waitingSway) {
+            applied = new Rotation(head.getYaw() + walkGlance.yaw() + sway[0] + flinch.yaw(),
+                    Rotation.clampPitch(head.getPitch() + walkGlance.pitch() + swayPitch + flinch.pitch()));
+        } else if (walkGlance.out() || flinch.out()) {
+            applied = new Rotation(head.getYaw() + walkGlance.yaw() + flinch.yaw(),
+                    Rotation.clampPitch(head.getPitch() + walkGlance.pitch() + flinch.pitch()));
         }
         outcome.applied = applied;
         lastOutcome = outcome;
@@ -303,6 +349,16 @@ public class HumanlikeLookFuzzTest {
         int blown = 0;
         int stared = 0;
         int neckChecked = 0;
+        int glanced = 0;
+        int interrupted = 0;
+        // The stare, per blow: how long it has been owed for, how much of that the head was free for, the
+        // closest the head came to the attacker, and whether the neck was what stopped it. Since the guards
+        // below ask after the last of those, they live out here with the other counters and are reset when a
+        // blow lands.
+        // (the stare's own landing is a focused test below rather than a line in here: in a run whose aim
+        // is drawn again every few ticks, a stare is judged on whether it arrives, which is a chase, and
+        // the chase is FlinchTest's; what this run holds about the stare is where its angle may be added
+        // and what the head does while something is being clicked)
         for (double sensitivity : SENSITIVITIES) {
             final Random rand = new Random(seed);
             Rotation aim = null;
@@ -317,6 +373,7 @@ public class HumanlikeLookFuzzTest {
             final HeadWander wander = new HeadWander(new Random(seed + 3));
             final TurnPace turnPace = new TurnPace(new Random(seed + 4));
             final Flinch flinch = new Flinch(new Random(seed + 5));
+            final WalkGlance walkGlance = new WalkGlance(new Random(seed + 6));
             int glanceActive = 0;
             float sway = 0f;
 
@@ -327,7 +384,11 @@ public class HumanlikeLookFuzzTest {
             boolean previousWanted = false;
             float previousFlinchYaw = 0f;
             int shutRun = 0;
-            int walkRun = 0;
+            int glanceShutRun = 0;
+            boolean previousGlanceRunning = false;
+            boolean stareWalk = false;        // whether the blow the stare is owed for landed on a walk
+            boolean walkingDuringStare = false;
+            final Rotation[] them = {null};  // who the stare is on now, re-asked by the flinch every tick
 
             for (int t = 0; t < ticks; t++) {
                 final boolean pathing = rand.nextInt(10) > 2;
@@ -342,12 +403,20 @@ public class HumanlikeLookFuzzTest {
                 final Rotation wanted = rand.nextInt(100) < 70 ? target(rand) : null;
                 // A blow lands, sometimes, at a bearing of its own: the caller hands the flinch the bearing
                 // and is asked for it again on every tick of the stare, and a fixed attacker is what makes
-                // the stare's own tracking FlinchTest's business rather than this run's.
-                final Rotation attacker = rand.nextInt(100) < 4
+                // the stare's own tracking FlinchTest's business rather than this run's. Three ticks in a
+                // thousand, which is a punch every sixteen seconds of running: rarer than that and the
+                // flinch goes untested, and much more often and the bot is simply being beaten up - a stare
+                // outlasts the gap between blows, so an answering flinch becomes the standing state and the
+                // glances, which stand down while one is owed, never get to run at all.
+                final Rotation attacker = rand.nextInt(1000) < 3
                         ? new Rotation(rand.nextFloat() * 360f - 180f, rand.nextFloat() * 120f - 60f) : null;
                 if (attacker != null) {
                     blown++;
+                    them[0] = attacker; // who the stare is on, asked for again every tick until it is done
+                    // whether this blow landed on a walking body, which is the whole of the neck's bound
+                    stareWalk = speedSquared > 0.02 * 0.02;
                 }
+                walkingDuringStare = wanted != null && speedSquared > 0.02 * 0.02;
 
                 final Rotation[] aimRef = {aim};
                 final int[] ageRef = {aimAge};
@@ -362,7 +431,7 @@ public class HumanlikeLookFuzzTest {
 
                 final Rotation applied = tick(rand, sensitivity, speedSquared, wanted, camera, pathing, inControl,
                         interacting, blockInteract, aimRef, ageRef, lastRef, turnRef, paceRef, glanceRef, reactionRef,
-                        wanderRef, glanceRef2, swayRef, flinch, attacker);
+                        wanderRef, glanceRef2, swayRef, flinch, walkGlance, attacker, them);
 
                 aim = aimRef[0];
                 aimAge = ageRef[0];
@@ -384,8 +453,15 @@ public class HumanlikeLookFuzzTest {
                             finite(applied));
                     assertTrue("pitch escaped its range: " + applied.getPitch(),
                             applied.getPitch() >= -90f && applied.getPitch() <= 90f);
-                    assertTrue("yaw escaped its range: " + applied.getYaw(),
-                            applied.getYaw() >= -180f && applied.getYaw() <= 180f);
+                    // The head is a sum of raw angles, so it may read outside a half turn by the size of the
+                    // offsets on it - which is what the caller does and what the server normalises on use.
+                    // What has to hold is that the sum cannot be further round than the pieces could push it:
+                    // the aim's own half turn, a glance, the sway, and a stare, which is unbounded while the
+                    // feet are still. Each of those is bounded where it is produced, above and in its own
+                    // test; this is the sum's.
+                    assertTrue("the head is further round than the offsets on it can carry: " + applied.getYaw(),
+                            Math.abs(applied.getYaw()) <= 180f + WalkGlance.MAX_INTEREST_YAW + 2f
+                                    + HeadWander.MAX_YAW + 180f + 1f);
                 }
                 if (aim != null) {
                     assertTrue("the aim became non-finite", finite(aim));
@@ -461,8 +537,14 @@ public class HumanlikeLookFuzzTest {
                 // The feet's half of the neck's bound, measured once a walk has had its own worth of ticks
                 // to pull in whatever a standing body had turned the whole way round: a blow that lands on
                 // a standing head is allowed the whole turn, and the walk it then starts is not.
-                walkRun = wanted != null && speedSquared > 0.02 * 0.02 ? walkRun + 1 : 0;
-                if (walkRun >= 8 && lastOutcome.flinchGate && lastOutcome.flinchAnswering) {
+                // The feet's half of the neck's bound, stated so that it holds from one tick to the next: on
+                // a walking tick with the head free, a stare that was inside a neck's worth stays inside it,
+                // because every step it takes is measured against a target no further round than the neck.
+                // What this deliberately does not judge is a stare that is already past the neck when the
+                // feet start moving - pulled in from a standing turn - since that is a turn that has to come
+                // back, and FlinchTest's walking bracket is where it is held.
+                if (stareWalk && lastOutcome.flinchAnswering && lastOutcome.flinchGate && walkingDuringStare
+                        && Math.abs(previousFlinchYaw) <= Flinch.NECK_YAW + Flinch.ARRIVED) {
                     neckChecked++;
                     assertTrue("a flinch on a walking head reached " + lastOutcome.flinchYaw + " degrees round",
                             Math.abs(lastOutcome.flinchYaw) <= Flinch.NECK_YAW + Flinch.ARRIVED + 1e-3f);
@@ -470,20 +552,52 @@ public class HumanlikeLookFuzzTest {
                 if (lastOutcome.flinchGate && lastOutcome.flinchOut) {
                     stared++;
                 }
-                // The head that the aim, a glance, the sway and the flinch add up to cannot jump further in
-                // one tick than the hand's flick plus a flinch: a flinch added twice, or added against a
-                // base it was not measured against, is a jump like that, and nothing else in this run would
-                // see it. Measured only while the same kind of path drives both ticks - the harness's aims
-                // start from the camera, which by construction is not where the last aim finished, so a tick
-                // that hands over from one kind to the other is a seam in the model, not a movement.
+                // The head that the aim, the two glances, the sway and the flinch add up to cannot jump
+                // further in one tick than the hand's flick plus a glance plus a flinch: an offset added
+                // twice, or added against a base it was not measured against, is a jump like that, and
+                // nothing else in this run would see it. Measured only while the same kind of path drives
+                // both ticks - the harness's aims start from the camera, which by construction is not where
+                // the last aim finished, so a tick that hands over from one kind to the other is a seam in
+                // the model, not a movement.
                 if (applied != null && previousApplied != null && (wanted != null) == previousWanted) {
                     assertTrue("the head jumped " + AimDynamics.separation(previousApplied, applied)
                                     + " degrees in one tick",
-                            AimDynamics.separation(previousApplied, applied)
-                                    <= AimDynamics.MAX_YAW_STEP + Flinch.STEP + HeadWander.MAX_YAW + 1f);
+                            AimDynamics.separation(previousApplied, applied) <= AimDynamics.MAX_YAW_STEP
+                                    + Flinch.STEP + WalkGlance.MAX_STEP + HeadWander.MAX_YAW + 1f);
                 }
                 previousApplied = applied;
                 previousWanted = wanted != null;
+
+                // The walk's glance. Its own rules - the cooldown, the phases, the amplitudes, the step -
+                // are WalkGlanceTest's; what this run holds is its place in the caller's wiring: that what
+                // it puts on the head is within what a glance may turn to (an interest within its own
+                // bounds, plus the couple of degrees of jitter the amplitude carries), that it comes home
+                // once it is not welcome rather than sitting out there, and that the stare is measured
+                // against the head it is on.
+                if (lastOutcome.walkGlanceOut) {
+                    assertTrue("the walk's glance reached " + lastOutcome.walkGlanceYaw + " degrees round",
+                            Math.abs(lastOutcome.walkGlanceYaw)
+                                    <= WalkGlance.MAX_INTEREST_YAW + 2f + 1e-3f);
+                }
+                // A glance that was running when the gate shut: the run's dice shut it often, which is the
+                // hostile half of this - in the game the welcome is a plain walk's and outlasts a glance.
+                if (previousGlanceRunning && !lastOutcome.walkGlanceGate) {
+                    interrupted++;
+                }
+                previousGlanceRunning = lastOutcome.walkGlanceGate && lastOutcome.walkGlanceOut;
+                if (lastOutcome.walkGlanceOut && !lastOutcome.walkGlanceGate) {
+                    // from the widest a glance may be, at the speed it recovers at: ten ticks is the
+                    // arithmetic, and one more is the tick the recovery starts on
+                    assertTrue("the walk's glance was still out " + glanceShutRun
+                                    + " ticks after it stopped being welcome",
+                            ++glanceShutRun <= 1 + (int) Math.ceil(
+                                    (WalkGlance.MAX_INTEREST_YAW + 2f) / WalkGlance.RECOVER_STEP) + 1);
+                } else {
+                    glanceShutRun = 0;
+                }
+                if (lastOutcome.walkGlanceGate && lastOutcome.walkGlanceOut) {
+                    glanced++;
+                }
 
                 // walking or not, the sway must not be able to push the walk off its line
                 sideways += BLOCKS_PER_TICK * Math.sin(Math.toRadians(sway));
@@ -505,10 +619,61 @@ public class HumanlikeLookFuzzTest {
         // edited, a blow moved behind one - fails here instead of passing by never exercising the leg.
         assertTrue("no blow landed in the whole run", blown > 0);
         assertTrue("no blow was ever stared at", stared > 0);
+        assertTrue("the walk's glance never once went out", glanced > 0);
         if (ticks == TICKS) {
             assertTrue("the neck's bound was never reached with a stare on a walking head", neckChecked > 0);
+            assertTrue("no glance was ever interrupted", interrupted > 0);
         }
         return head.toString();
+    }
+
+    /**
+     * The stare lands on whoever hit us, even with a glance out. The caller sums four things onto one head -
+     * the aim, the walk's glance, the sway and the stare - and the stare is worth nothing unless it is
+     * measured against the head it is added to, the glance included. Measured against the bare aim instead,
+     * it settles at the attacker <i>plus</i> whatever the road was showing at the time, which is up to a
+     * glance's seventy degrees and is the defect this test was written for: a bot punched mid-glance does
+     * not look at whoever did it, it looks past them.
+     * <p>
+     * Driven without the run's noise, because it is a rule about one sum and not about a chase: the aim held
+     * still, the glance out at forty degrees, the attacker at ninety - so the stare needs fifty of its
+     * seventy degrees of neck - and blows every few ticks, since somebody being stared at is somebody who is
+     * still hitting us, and each blow re-arms the stare rather than starting a new reaction.
+     */
+    @Test
+    public void aStareLandsOnWhoeverHitUsWithAGlanceOut() {
+        final WalkGlance walk = new WalkGlance(new Random(7));
+        final Flinch flinch = new Flinch(new Random(7));
+        final Rotation aim = new Rotation(0f, 0f);
+        final Rotation interest = new Rotation(40f, 0f);
+        final Rotation attacker = new Rotation(90f, 0f);
+        int judged = 0;
+        for (int t = 0; t < 900; t++) {
+            // the walk keeps being plain, and the glance's first look is drawn a hundred welcome ticks away
+            walk.tick();
+            walk.welcome();
+            walk.advance(true, () -> interest);
+            if (t % 6 == 0) {
+                flinch.blow(() -> attacker);
+            }
+            // the caller's own sum, and the caller's own base: the head this offset is added to
+            final Rotation stareFrom = new Rotation(aim.getYaw() + walk.yaw(), aim.getPitch() + walk.pitch());
+            flinch.advance(stareFrom, true, true);
+            final float head = aim.getYaw() + walk.yaw() + flinch.yaw();
+            // judged only where the neck is not the thing that stops it: with the glance swinging to the
+            // other side now and then, the stare for an attacker at ninety would need more than the seventy
+            // degrees of neck a walking body has, and a clamped stare is FlinchTest's business
+            final float needed = Rotation.normalizeYaw(attacker.getYaw() - (aim.getYaw() + walk.yaw()));
+            if (t >= 12 && flinch.answering() && Math.abs(walk.yaw()) >= 20f
+                    && Math.abs(needed) <= Flinch.NECK_YAW - 5f) {
+                // three degrees of slack: the glance carries a couple of degrees of jitter on its amplitude,
+                // and the stare is done when it is within a degree of what it is chasing
+                assertEquals("the stare settled beside whoever hit us, not on them, with a glance "
+                        + walk.yaw() + " degrees out", attacker.getYaw(), head, 3f);
+                judged++;
+            }
+        }
+        assertTrue("the glance was never out by enough for the two to be told apart", judged >= 5);
     }
 
     @Test
