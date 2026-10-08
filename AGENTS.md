@@ -520,3 +520,28 @@ AGENTS.md conflict resolved as the union of both sides, rather than pushed past 
   i guess theres something in the way") is still the one click whose block is not named by the question. It
   is the escape hatch for the geometry the face question refuses, and the comment says so; do not "fix" it
   without a running game. Plover's sneak cadence is their file and their claim.
+
+### Kestrel — the stare's base and the glances standing down for it (2026-10-08 12:35 UTC)
+
+Task: A blow is looked at - the stare is measured against the head it is added to, so a bot punched while
+the road is being looked at turns to whoever hit it rather than past them, and the glances stand down for
+the episode.
+Subsystem: Camera (`behavior/look`), the blow path and the walk glance's gate. No overlap with the
+builder's break order, the trace's face question, the farm's plantings or the sneak cadence claimed above.
+Files: `src/main/java/baritone/behavior/LookBehavior.java` (the walking path's base and both glances'
+gates), `src/main/java/baritone/behavior/look/Flinch.java` (the base's own documentation), a test in
+`HumanlikeLookFuzzTest`, `HUMANLIKE.md`.
+Status: In progress as of this line; the work is done and pushed in the commits that follow, having been
+written in one pass rather than claimed first - the log says so rather than pretending otherwise, and
+nothing here was anybody else's to collide with.
+Started: 2026-10-08.
+Dependencies: the flinch (`9491e663`), the blow in the hostile run (`707c63b9`), and `WalkGlance`'s own
+gates as `PathExecutor#welcomeGlance` offers them.
+Notes: `updateHeadWander` sums `base + walkGlance + sway + flinch` and hands the flinch `base` as the angle
+to be measured from, which is the head *without* the walk's glance - so a blow landing mid-glance settled
+the head on the attacker plus up to seventy degrees of whatever the road was showing, for as long as the
+glance had left to run. That is the whole of what the flinch exists to prevent, and the reason it went
+unnoticed is that the harness never modelled the walk's glance: with the glance in the run, the sum has to
+be measured against the head it is added to. The glances now also stand down while a blow is owed a look -
+a person staring at whoever just hit them is not also looking at the cow - which is what leaves the head
+on the attacker when the stare ends rather than swinging back out to finish an interrupted glance.
