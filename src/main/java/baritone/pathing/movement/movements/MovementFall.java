@@ -151,6 +151,9 @@ public class MovementFall extends Movement {
                         : ctx.player().getInventory().findSlotMatchingItem(STACK_BUCKET_EMPTY);
                 if (Inventory.isHotbarSlot(empty)) {
                     ((Baritone) baritone).getInventoryBehavior().hold(empty);
+                    // ungated click: the water being picked up is the block the player is floating in, so
+                    // there is nothing to look at that the crosshair is not already on. ClickGatesTest
+                    // counts the clicks that say this sentence instead of asking the crosshair or the hand.
                     if (ctx.player().getDeltaMovement().y >= 0) {
                         return state.setInput(Input.CLICK_RIGHT, true);
                     } else {

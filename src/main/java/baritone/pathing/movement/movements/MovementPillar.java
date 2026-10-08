@@ -38,6 +38,7 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.SlabType;
 import net.minecraft.world.phys.Vec3;
 
+import java.util.Optional;
 import java.util.Set;
 
 public class MovementPillar extends Movement {
@@ -213,11 +214,18 @@ public class MovementPillar extends Movement {
                 Block fr = frState.getBlock();
                 // TODO: Evaluate usage of getMaterial().isReplaceable()
                 if (!(fr instanceof AirBlock || frState.canBeReplaced())) {
-                    RotationUtils.reachable(ctx, src, ctx.playerController().getBlockReachDistance())
-                            .map(rot -> new MovementState.MovementTarget(rot, true))
-                            .ifPresent(state::setTarget);
+                    // The click is for the block in the way, so the hand has to be on it before the button
+                    // goes down: the aim is moved to it on this tick, and a click sent while the hand is
+                    // still turning lands on whatever the crosshair crosses on the way - the question
+                    // Movement#prepared and the door branch of MovementTraverse already ask. A block with
+                    // nothing on it to aim at (the shape is empty, so there is no point to reach) keeps
+                    // the old click, which is what there was before this gate.
+                    final Optional<Rotation> reachable = RotationUtils.reachable(ctx, src, ctx.playerController().getBlockReachDistance());
+                    reachable.map(rot -> new MovementState.MovementTarget(rot, true)).ifPresent(state::setTarget);
                     state.setInput(Input.JUMP, false); // breaking is like 5x slower when you're jumping
-                    state.setInput(Input.CLICK_LEFT, true);
+                    if (reachable.isEmpty() || ctx.isLookingAt(src) || baritone.getLookBehavior().hasArrivedAt(reachable.get())) {
+                        state.setInput(Input.CLICK_LEFT, true);
+                    }
                     blockIsThere = false;
                 } else if (ctx.player().isCrouching() && (ctx.isLookingAt(src.below()) || ctx.isLookingAt(src)) && ctx.player().position().y > dest.getY() + 0.1) {
                     state.setInput(Input.CLICK_RIGHT, true);

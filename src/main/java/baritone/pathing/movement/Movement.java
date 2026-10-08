@@ -180,7 +180,9 @@ public abstract class Movement implements IMovement, MovementHelper {
                 state.setTarget(new MovementState.MovementTarget(RotationUtils.calcRotationFromVec3d(ctx.playerHead(),
                         VecUtils.getBlockPosCenter(blockPos), ctx.playerRotations()), true)
                 );
-                // don't check selectedblock on this one, this is a fallback when we can't see any face directly, it's intended to be breaking the "incorrect" block
+                // ungated click: don't check selectedblock on this one, this is a fallback when we can't see
+                // any face directly, and it is intended to be breaking the "incorrect" block. ClickGatesTest
+                // counts the clicks that say this sentence instead of asking the crosshair or the hand.
                 state.setInput(Input.CLICK_LEFT, true);
                 return false;
             }
