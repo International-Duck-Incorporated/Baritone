@@ -124,6 +124,17 @@ slot, and `ButtonWritesTest` counts the files that may press a mouse button or s
 helpers, the inventory swap, the idle fidget and the elytra's firework - asserting beside each one the beat
 it is on the list for, so a click with no reaction in front of it cannot be added without saying so.
 
+The third edge of a click is where it may go, and that is counted too. Every click in the movement and
+process layers is asked for with the crosshair or the hand already on the block it is for - the ray on the
+block (`ctx.isLookingAt`), the hand arrived at the point it was sent to (`LookBehavior#hasArrivedAt`), a
+place attempt that has confirmed the face (`PlaceResult#READY_TO_PLACE`), the block under the crosshair a
+process has picked out - or it carries the sentence `ungated click:` with its reason written where it
+stands. There are two of those: the blind break `Movement#prepared` falls back to when no face of the block
+can be seen from anywhere, and the water bucket taken out of the block the player is floating in.
+`ClickGatesTest` counts the sites and the questions, so a click that acts on nothing in particular cannot
+be added without saying so - and both things it now counts were real: a door put its button down the tick
+it was noticed, with the hand still turning, and the pillar did the same to the block in its feet.
+
 The item in the hand has the same rule, and it is counted the same way. It is written in two files: `InventoryBehavior` (the beat, pressing the key that was asked for) and `MovementFall` (the fall's landing guarantee underneath it, written when the crosshair reaches the spot before the hand does, because the tick that needs the water is not a tick to wait a beat out). `HandWritesTest` counts them, so a third file fails the build with the reason beside it - and it has already been forgotten twice, which is why it is a test now rather than a note: the elytra firework and the bucket fall both clicked on the tick they asked for an item.
 
 ## What is not smoothed
@@ -160,8 +171,8 @@ The item in the hand has the same rule, and it is counted the same way. It is wr
   `IdleGlanceTest`, `WalkGlanceTest`, `NewcomerTest`, `PitchWanderTest`, `IdleFidgetTest`, `GazeAheadTest`, `KeyBeatTest`, `HeadFirstTest`,
   `StraightRunTest`, `SprintWindupTest`, `FollowProgressTest`, `HotbarSwitchTest`, `InventorySwapTest`,
   `UnattendedTest`, `TurnPaceTest`, `HandWritesTest` and `CadenceTest` cover the rules themselves, and
-  `CameraWritesTest`, `HandWritesTest` and `ButtonWritesTest` guard the camera, the hand and the buttons
-  those rules are spent through.
+  `CameraWritesTest`, `HandWritesTest`, `ButtonWritesTest` and `ClickGatesTest` guard the camera, the hand,
+  the buttons and where a click may go.
 - Behaviour that already exists as a setting - `randomLooking`, `randomLooking113`, `smoothLook`,
   `smoothLookTicks`, `blockBreakSpeed`, `mineGoalUpdateInterval`, `ticksBetweenInventoryMoves`,
   `autoTool` - keeps its meaning. Where a setting names an interval, the interval is now what the
