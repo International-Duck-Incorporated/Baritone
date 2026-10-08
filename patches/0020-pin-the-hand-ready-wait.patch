@@ -1,0 +1,83 @@
+From 30886e7ebfb4247d1c3707364877f4c22eb12c69 Mon Sep 17 00:00:00 2001
+From: 0xFFshell <0xffshell@users.noreply.gitlab.com>
+Date: Thu, 8 Oct 2026 12:09:15 +0000
+Subject: [PATCH] Pin the hand-ready wait in the button guard
+
+ButtonWritesTest's allow-list says which files may press a button and that each still contains its pending beat, but it never named the wire between them: InputOverrideHandler computes 'handReady' once per tick from switchingHands() and passes it to both helpers, and the helpers are what actually hold the button down. Nothing failed if that gate line was deleted, if one helper kept the old one-argument tick, or if a helper stopped reading the flag - the guard named in HUMANLIKE.md would still pass while a swap could press a block.
+
+The same guard now pins the literal gate and call shapes as HAND_READY_SHAPES - the '!switchingHands()' assignment, both 'tick(isInputForcedDown(Input.CLICK_...), handReady)' calls, the two-argument tick signatures, the 'isLeftClick && isBlockTrace && handReady' condition in BlockBreakHelper and the '!handReady' condition in BlockPlaceHelper - so that a refactor that drops the wait has to change a pin, and the failure names the file it happened in. Checked with teeth: replacing the gate with '!false' fails exactly the new test, naming InputOverrideHandler.java, and restoring the file makes it green again.
+
+HUMANLIKE.md's guard paragraph now says the wait itself is pinned, not only the beats, since that was the one place the document promised more than the test enforced.
+---
+ HUMANLIKE.md                                  |  4 ++-
+ .../java/baritone/utils/ButtonWritesTest.java | 32 +++++++++++++++++++
+ 2 files changed, 35 insertions(+), 1 deletion(-)
+
+diff --git a/HUMANLIKE.md b/HUMANLIKE.md
+index 1adc9691..ce4a998e 100644
+--- a/HUMANLIKE.md
++++ b/HUMANLIKE.md
+@@ -122,7 +122,9 @@ POST. `CameraWritesTest` counts them, so a fifth file fails the build with this
+ edges of the hand are counted the same way: `HandWritesTest` counts the files that may write the selected
+ slot, and `ButtonWritesTest` counts the files that may press a mouse button or swing an arm - the two
+ helpers, the inventory swap, the idle fidget and the elytra's firework - asserting beside each one the beat
+-it is on the list for, so a click with no reaction in front of it cannot be added without saying so.
++it is on the list for and pinning the wait itself: the gate `InputOverrideHandler` computes from the
++inventory's wind-up and the question each helper asks before it presses. A click with no reaction in front of
++it, or one pressed with the hand between items, cannot be added without saying so.
+ 
+ The third edge of a click is where it may go, and that is counted too. Every click in the movement and
+ process layers is asked for with the crosshair or the hand already on the block it is for - the ray on the
+diff --git a/src/test/java/baritone/utils/ButtonWritesTest.java b/src/test/java/baritone/utils/ButtonWritesTest.java
+index 70fe471c..3e20d021 100644
+--- a/src/test/java/baritone/utils/ButtonWritesTest.java
++++ b/src/test/java/baritone/utils/ButtonWritesTest.java
+@@ -98,6 +98,25 @@ public class ButtonWritesTest {
+             {"src/main/java/baritone/utils/player/BaritonePlayerController.java", "mc.gameMode."},
+     };
+ 
++    /**
++     * The wiring of the wait itself, which is what the helpers' beats are worth: a helper that is never told
++     * the hand is busy presses the button anyway, and a helper that is told and does not look is the same
++     * thing with more code. The rule is one line in {@code InputOverrideHandler} and one condition in each
++     * helper, and it is pinned here because it has already been bypassed twice by callers that clicked on
++     * the tick they asked for an item (the elytra firework and the bucket fall - see {@code HandWritesTest}).
++     */
++    private static final String[][] HAND_READY_SHAPES = {
++            // the gate, computed once a tick from the inventory's own wind-up
++            {"src/main/java/baritone/utils/InputOverrideHandler.java", "final boolean handReady = !baritone.getInventoryBehavior().switchingHands();"},
++            {"src/main/java/baritone/utils/InputOverrideHandler.java", "blockBreakHelper.tick(isInputForcedDown(Input.CLICK_LEFT), handReady)"},
++            {"src/main/java/baritone/utils/InputOverrideHandler.java", "blockPlaceHelper.tick(isInputForcedDown(Input.CLICK_RIGHT), handReady)"},
++            // and looked at by both helpers before anything is pressed
++            {"src/main/java/baritone/utils/BlockBreakHelper.java", "public void tick(boolean isLeftClick, boolean handReady)"},
++            {"src/main/java/baritone/utils/BlockBreakHelper.java", "isLeftClick && isBlockTrace && handReady"},
++            {"src/main/java/baritone/utils/BlockPlaceHelper.java", "public void tick(boolean rightClickRequested, boolean handReady)"},
++            {"src/main/java/baritone/utils/BlockPlaceHelper.java", "!handReady"},
++    };
++
+     /** Calls that press a button, in the spelling they are made in: the game's, vanilla's and the mod's. */
+     private static final String[] BUTTONS = {
+             "clickBlock(",
+@@ -153,6 +172,19 @@ public class ButtonWritesTest {
+         }
+     }
+ 
++    @Test
++    public void theButtonsWaitForTheHandThatWasDecidedOn() {
++        final Path root = repoRoot();
++        assumeTrue("the sources are not next to this test run", root != null);
++        for (String[] shape : HAND_READY_SHAPES) {
++            assertTrue("the file " + shape[0] + " no longer contains \"" + shape[1] + "\": that line is the wait"
++                            + " for the item in the hand - the gate computed from the inventory's wind-up and"
++                            + " the question each helper asks before it presses - and without it a right click"
++                            + " with the wrong item in hand is not a missed place, it is a bucket emptied",
++                    read(root.resolve(shape[0])).stream().anyMatch(line -> line.contains(shape[1])));
++        }
++    }
++
+     @Test
+     public void theOnlySwingWithNoClickBehindItIsTheFidget() {
+         final Path root = repoRoot();
+-- 
+2.47.3
+
