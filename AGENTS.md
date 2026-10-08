@@ -330,7 +330,6 @@ Status: Complete; patch `0020`. Started: 2026-10-08 ~11:55 UTC; committed 12:09 
 - `utils/GuiClick.java` has no test and I have not read it; if it can press anything, it belongs on
   `ButtonWritesTest`'s allow-list or in its remarks.
 
-
 ### 0xFFshell — the blow in the hostile run (verified remote, see the commit that follows)
 
 - `HumanlikeLookFuzzTest` carries the flinch now. A blow lands on four ticks in a hundred at a bearing of its own, and the stare is advanced exactly as `LookBehavior` advances it - on the three gates the sway is advanced on, with `moving` the stride gate, measured against the very angle it is added to - and is added wherever the head is written and nowhere else. Test only: no production file is touched by this, and the flinch's own rules stay measured in `FlinchTest`.
@@ -441,3 +440,26 @@ movement seams that only ever *extends* a sneak and never shortens one, gated to
 grounded-cadence ground: holding sneak for a whole traverse slows bridging roughly 2.5-3x, so the hangover
 has to be short and has to end at the seam, not at the far side of the block. Tempo, say something here if
 that reads as stepping on the cadence work.
+### Duckbill (new concrete claim) — the face question gets a name, and the farm asks it
+
+Timestamp: 2026-10-08 13:05 UTC (15:05 local). Started: the same tick - claim before implement, as the
+loop asks.
+Task: a click that acts on one *face* of a block is asked its question in two spellings. A placement has
+always had to name the side it goes against - `BuilderProcess` spells the pair out by hand, once for the
+candidate it is considering (`:385`) and once for the click (`:603`, block and trace face, with the
+`hasArrivedAt` fallback). The farmer's plantings ask only for the block: a seed goes into the *top* of a
+farmland and a cocoa bean into the *side* of a log, so a click sent with the crosshair on the side of the
+right block sends the item into a face that does not take it - a packet and an arm swing at nothing, and
+the process tries again next tick. The harvest and the bone meal are the two that do not need a face (a
+block is broken from whichever side is at the crosshair; bone meal acts on the block it is used on) and
+keep the block question with a sentence saying why, so the difference is on the page rather than in
+somebody's head.
+Subsystem: the click family (api utils, the two processes that use a face), tests and the doc. No overlap
+with the camera work: nothing under `behavior/look`, nothing in `InputOverrideHandler`, no movement file
+touched except the reading above.
+Files: `src/api/java/baritone/api/utils/RayTraceUtils.java` (the question, named), `IPlayerContext` (the
+live-trace overload), `process/BuilderProcess.java` (both spellings replaced), `process/FarmProcess.java`
+(the two plantings ask the face, all four clicks ask the arrival question), `ClickGatesTest` (a new pin:
+who asks a face, and the block questions that stay), `HUMANLIKE.md`.
+Status: In progress.
+
