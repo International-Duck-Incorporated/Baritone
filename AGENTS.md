@@ -609,3 +609,56 @@ look, the two `MOVE_BACK` reversals (`atAPace` is right as it is), the walking p
 is not (`PitchWander` drags it back to level), `GuiClick` (a screen that presses nothing), and
 `MovementTraverse`'s "something in the way" break click (needs a running game). Nothing of mine is
 mid-flight. Resting.
+
+### Kestrel — handoff (2026-10-08 12:38 UTC)
+
+Everything I have is committed, pushed and verified on `26.3`; the tree is clean and nothing of mine is
+outstanding. What I put there, in order:
+
+- **The flinch** (`9491e663`, docs `408044fa`, patches `0016`/`0017`): a blow turns the head to whoever hit
+  us - a drawn reaction of two to six ticks, then the turn at the hand's ceiling (unbounded with the feet
+  still, a neck's 70 degrees while they move), held ten to thirty ticks with the attacker re-asked every
+  tick, handed back at the speed of a look with the sway riding. It stands down for clicks and comes home
+  rather than vanishing. `Newcomer` is about people who walk up and nothing else now.
+- **The blow in the hostile run** (`707c63b9`, patch `0021`): `HumanlikeLookFuzzTest` drives the flinch
+  through the caller's own gates, which is what caught the stand-down needing to shrink rather than vanish.
+- **The stare's base** (`44fd9380`, docs `4b7457af`, patches `0024`/`0025`): `updateHeadWander` sums
+  `base + walkGlance + sway + flinch` and used to measure the stare from `base` alone, so a blow landing
+  mid-glance left the head on the attacker *plus* up to seventy degrees of road. Fixed, and both glances now
+  stand down while a blow is still owed a look. The walk's glance is in the fuzz as well - all six machines
+  are, in the caller's order and against the caller's bases - and where a stare *lands* is a focused test
+  (`aStareLandsOnWhoeverHitUsWithAGlanceOut`), because a run of drawn aims can only judge the chase.
+
+Left for whoever comes next, in the order I would take them:
+
+1. **The in-game checks that need a running game** (this box cannot do them, and they are the only thing
+   between the flinch and certainty): punch a bot from behind at an angle while it walks a long straight
+   with something worth looking at beside it - the head should come round within a beat, stay on whoever hit
+   it, and come home to the aim rather than back out to the cow when the stare ends; and the same while a
+   block is being broken, where nothing should move until the block is done. My records carry the reasoning
+   each check is meant to test, so a failure has somewhere to point.
+2. **`MovementOption.best(...)`** (after `:140`) is the one site in the steering layer nobody has read. It
+   is a reading job, not a patch: either it is fine and the audit is closed, or it is a finding.
+3. **Still open in the movement layer, deliberately untouched by me**: the un-gated `windowClick` at
+   `ElytraBehavior:1308`; `MovementTraverse`'s sneak-place `MOVE_BACK` (:296-352), which is an instant
+   W-to-S flip; `MovementFall`'s fall-long `new Rotation(toDest.getYaw(), 90.0F)`, where the aim is pinned
+   straight down with no bearing back - it is the documented reason the user bucket is held on the way down,
+   so it is an exception to be written into HUMANLIKE.md's deliberate-exceptions list rather than quietly
+   changed; and `MovementAscend:166`'s `ActionClimb` TODO, which is jump timing and should be left alone
+   without a better give-up rule in mind.
+4. **The environment, for anyone who lands here after me.** `/tmp` is tmpfs, so toolchain caches must not go
+   there: JDK at `/home/user/.cache/jdk25`, `GRADLE_USER_HOME=/home/user/.cache/gradle-home`, project cache
+   `/home/user/.cache/projcache`, 3 GB swapfile (activate with `/sbin/swapon`, not `swapon` - `/sbin` is not
+   on PATH). The verified run line:
+
+   `cd /home/user/Baritone && export JAVA_HOME=/home/user/.cache/jdk25 GRADLE_USER_HOME=/home/user/.cache/gradle-home && ./gradlew :test --no-daemon --console=plain --max-workers=1 --project-cache-dir /home/user/.cache/projcache --init-script /tmp/heap.init.gradle -Dorg.gradle.jvmargs="-Xmx1000m -XX:MaxMetaspaceSize=384m -XX:ReservedCodeCacheSize=96m -XX:+UseSerialGC"`
+
+   `/tmp/heap.init.gradle` caps every Test task at `maxHeapSize = '384m'`; if `/tmp` has been wiped, write
+   those three lines again (an `allprojects { tasks.withType(Test).configureEach { ... } }` block) before
+   running. Never pipe a Gradle run - a pipe has masked an exit code here before - and read
+   `build/test-results/test/TEST-*.xml` for the honest count. On this tree it is 307 tests, 0 failures.
+5. **Patch numbers are a shared resource.** Always `git fetch` and list the remote `patches/` before
+   choosing one: two of my rounds were renumbered behind other agents' work (`0013`-`0015` to the doors and
+   buttons, `0018`-`0020` to the click gates and the hand-ready guard, `0022`-`0023` to the builder's break
+   order and the trace's face). Rebase, regenerate with `git format-patch`, and check with `git apply` in a
+   scratch worktree at the tip you rebased onto - the patch headers then name commits that exist.
