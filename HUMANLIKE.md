@@ -64,7 +64,8 @@ Nothing repeats on an interval that is always the same length. `utils/Cadence.ja
 Other things that were on a grid and are not any more: the sprint key trails off over one to three
 ticks instead of stopping on the tick the movement stops asking (`Cadence.sprintHangover`,
 `PathExecutor`); the tool in hand is kept unless the next tool is properly faster (`ToolSet.SWITCH_GAIN`,
-a quarter faster); inventory moves are spaced by a redrawn interval rather than a fixed one.
+a quarter faster); inventory moves, including the queued Elytra auto-swap clicks, are spaced by a redrawn
+interval rather than a fixed one.
 
 ## Steering
 
