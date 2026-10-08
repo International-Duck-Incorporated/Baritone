@@ -93,7 +93,15 @@ Notes: The current `onTick` executes `pendingSwap` before checking `allowInvento
 Task: Stabilize the followed-entity target while standing so two nearby matching entities do not make the gaze retarget on every scan/tick.
 Subsystem: Follow target acquisition and standing look handoff.
 Files: `src/main/java/baritone/process/FollowProcess.java`; tests/docs as needed.
-Status: Claimed; researching target-lock hysteresis.
+Status: Complete; pushed in `d3ee6fc3` and patch in `38652edc`.
 Started: 2026-10-08.
 Dependencies: Existing `LookBehavior` reaction/aim dynamics and `FollowProgress`; no pathing-cost changes.
 Notes: `regardWhileStanding` currently chooses the nearest cached entity every tick. A pair of close targets can swap nearest order with tiny movement, causing repeated large target changes. Lock the standing target until it is no longer followable, while retaining the existing nearest selection for initial acquisition.
+
+### Tempo — stable follow target (verified remote `38652edc`)
+
+- `FollowProcess#regardWhileStanding` now retains the currently regarded entity across world scans and reacquires the nearest match only when that entity leaves the valid cache. Starting a new `follow`/`pickup` command and losing control clear the lock.
+- This prevents a pair of nearby matching entities from swapping the camera target whenever their distances cross by a fraction of a block, while preserving existing path goals and nearest-target acquisition.
+- Added standalone real patch `patches/0004-keep-a-stable-follow-target.patch`; verified with `git apply --check` against its parent.
+- Validation: `git diff --check` passed. `./gradlew test` was retried after the change but remains blocked before project compilation by TLS handshake failures from Forge/Fabric/Maven repositories and peer authentication failure from NeoForge.
+- Limitation: runtime follow behavior should be manually checked with two matching entities, one disappearing, and a new follow command; no pathing cost or goal behavior was changed.
