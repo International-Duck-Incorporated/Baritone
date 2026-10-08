@@ -1,4 +1,4 @@
-From 93b2647fa2cda0accc03ec0d4ff40ff4cf55d30a Mon Sep 17 00:00:00 2001
+From 408044fa2ce3b902a9be7b4528a60227788e3709 Mon Sep 17 00:00:00 2001
 From: 0xFFshell <0xffshell@users.noreply.gitlab.com>
 Date: Thu, 8 Oct 2026 11:58:19 +0000
 Subject: [PATCH] Document the flinch
@@ -14,7 +14,7 @@ blows do not go through the arrival path any more.
  1 file changed, 2 insertions(+), 2 deletions(-)
 
 diff --git a/HUMANLIKE.md b/HUMANLIKE.md
-index ad19172c..95fa9d1e 100644
+index 678774d8..3fccd2f1 100644
 --- a/HUMANLIKE.md
 +++ b/HUMANLIKE.md
 @@ -22,7 +22,7 @@ opt-in: a bot that has to be told to look alive is a bot that looks dead by defa
