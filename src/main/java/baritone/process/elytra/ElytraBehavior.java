@@ -778,13 +778,32 @@ public final class ElytraBehavior implements Helper {
                 logDirect("no fireworks");
                 return;
             }
-            logVerbose("attempting to use firework" + (forceUseFirework ? " (forced)" : ""));
-            if (ctx.playerController().processRightClick(ctx.player(), ctx.world(), InteractionHand.MAIN_HAND) == InteractionResult.SUCCESS) {
-                // Firing a rocket is an item use, and vanilla's use path swings the arm on the way through.
-                // Nothing else here needs it - the flight itself is a control loop and stays one.
-                ctx.player().swing(InteractionHand.MAIN_HAND, SwingAnimation.DEFAULT, false);
+            // InventoryBehavior deliberately winds a hotbar change up over a few ticks. This direct item-use
+            // path used to click immediately after throwaway() asked for a slot, which could fire whatever
+            // happened to be in the old hand (and could not use a rocket that was in the off hand at all).
+            // Let the hand finish first; the next tick will ask again and find the requested item in place.
+            if (baritone.getInventoryBehavior().switchingHands()) {
+                return;
             }
-            this.minimumBoostTicks = 10 * (1 + getFireworkBoost(ctx.player().getItemInHand(InteractionHand.MAIN_HAND)).orElse(0));
+            final InteractionHand fireworkHand;
+            if (isFireworks(ctx.player().getItemInHand(InteractionHand.MAIN_HAND))) {
+                fireworkHand = InteractionHand.MAIN_HAND;
+            } else if (isFireworks(ctx.player().getItemInHand(InteractionHand.OFF_HAND))) {
+                fireworkHand = InteractionHand.OFF_HAND;
+            } else {
+                // A pending inventory move is reported by throwaway() as unavailable. If a slot changed
+                // between that check and this tick, do not mark a boost until an actual rocket is present.
+                return;
+            }
+            final int boostTicks = 10 * (1 + getFireworkBoost(ctx.player().getItemInHand(fireworkHand)).orElse(0));
+            logVerbose("attempting to use firework" + (forceUseFirework ? " (forced)" : ""));
+            if (ctx.playerController().processRightClick(ctx.player(), ctx.world(), fireworkHand) != InteractionResult.SUCCESS) {
+                return;
+            }
+            // Firing a rocket is an item use, and vanilla's use path swings the arm on the way through.
+            // Nothing else here needs it - the flight itself is a control loop and stays one.
+            ctx.player().swing(fireworkHand, SwingAnimation.DEFAULT, false);
+            this.minimumBoostTicks = boostTicks;
             this.remainingFireworkTicks = 10;
             this.deployedFireworkLastTick = true;
         }
