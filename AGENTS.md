@@ -266,3 +266,65 @@ Started: 2026-10-08.
 - **Validation.** `./gradlew :test` on the current tree: **BUILD SUCCESSFUL in 31s, 302 tests, 0 failures, 0 errors, 0 skipped, 37 classes**, `ClickGatesTest` (2 tests) among them - on the tree rebased onto the flinch work (`e9f5abee`), which landed while this was being written; the remote moved twice and this was rebased onto it rather than pushed past it. Both patches verified with `git apply --check` and applied in sequence in a scratch worktree at their parents.
 - **The box's recipe, now measured twice (please use it instead of the earlier notes).** The daemon deaths were memory: the daemon plus an unbounded test fork do not fit in ~2 GB. What works, repeatedly, today: `JAVA_HOME=/usr/lib/jvm/java-25-openjdk-amd64 GRADLE_USER_HOME=/var/tmp/gradle-home ./gradlew :test --no-daemon --console=plain --max-workers=1 --project-cache-dir /var/tmp/gradle-project-cache --init-script /var/tmp/lean.init.gradle -Dorg.gradle.jvmargs="-Xmx900m -XX:MaxMetaspaceSize=256m -XX:+UseSerialGC -XX:ReservedCodeCacheSize=96m"`, where the init script caps every `Test` task at `maxHeapSize 320m` with SerialGC and `maxParallelForks 1`. Incremental whole-suite run: ~30 s. Do not start a second build while one runs, and expect a `bash` call issued mid-build to fire late rather than fail.
 - **Left for the next agent.** `MovementTraverse`'s bridge branch still clicks left "well i guess theres something in the way" on `hasArrivedAt` of the *placement* aim, which is the one click whose block is not named by the question (`ClickGatesTest` accepts it because the question is asked); worth a look with a running game. The `MovementPillar` stuck rule (forty ticks of jumping, then MOVE_FORWARD) is still a fixed count and still load bearing - do not touch it without a better give-up rule. Jump timing everywhere else remains load bearing; do not add beats to it.
+
+### Duckbill — new name, timestamps (2026-10-08 12:10 UTC / 14:10 local)
+
+Read the human notice at the top and am complying: from this entry on I write under **Duckbill** (the
+previous entries under `0xFFshell` were mine - the doors and the click gates - but the name is the
+human's, so it is theirs again), and every entry now carries a UTC timestamp (this box is UTC; the
+human's clock reads +2). The git identity is untouched: this repo's configured committer is
+`0xFFshell <0xffshell@users.noreply.gitlab.com>` and the operator instruction is to commit as the
+configured identity, so the commits stay as they are even though the chat name changes.
+
+### Duckbill (new concrete claim) — the wait between the decision and the buttons
+
+Task: `ButtonWritesTest` knew *which* files may press a button and *that* each still contains its
+pending beat, but not that the beat is actually waited on - the tick where the hand is decided ready and
+the two calls that carry that decision to the helpers could be deleted one at a time with the guard
+still green.
+Subsystem: tests and docs only (`utils/ButtonWritesTest`, `HUMANLIKE.md`); no production file changed.
+Overlap: none - the flinch agent's `48a6a7b5` was a comment in `AGENTS.md`, and nothing under
+`behavior/look` was touched.
+Files: `src/test/java/baritone/utils/ButtonWritesTest.java`, `HUMANLIKE.md`.
+Status: Complete; patch `0020`. Started: 2026-10-08 ~11:55 UTC; committed 12:09 UTC.
+
+### Duckbill — the hand-ready wait (verified remote, `f4ddd248`, 2026-10-08 12:10 UTC)
+
+- **The gap.** `HUMANLIKE.md` says the hands wait for the hand that was decided on: `InputOverrideHandler`
+  asks `!switchingHands()` once a tick and passes the answer to both helpers, and the helpers refuse to
+  press while it is false. `ButtonWritesTest` pinned the pending beat (`this.sightSettle.waiting(` in both
+  helpers, `this.swap.tick()`, the firework's gate) and the file allow-list, but a refactor that dropped
+  the decision line, kept a one-argument `tick`, or made a helper ignore the flag would not have failed
+  anything. The document promised more than the test enforced - in the one place that is between a
+  queued swap and a placed block.
+- **The pins.** `ButtonWritesTest` now carries `HAND_READY_SHAPES` and a fourth test,
+  `theButtonsWaitForTheHandThatWasDecidedOn()`, asserting the literal lines: the
+  `final boolean handReady = !baritone.getInventoryBehavior().switchingHands();` assignment, both
+  `tick(isInputForcedDown(Input.CLICK_LEFT), handReady)` / `...CLICK_RIGHT..., handReady)` calls, both
+  two-argument `tick(...)` signatures, `isLeftClick && isBlockTrace && handReady` in `BlockBreakHelper`
+  and `!handReady` in `BlockPlaceHelper`. A refactor that drops the wait now has to change a pin, and the
+  failure names the file it happened in.
+- **Teeth, checked by hand (12:03 UTC).** Replacing the gate line with `!false` in
+  `InputOverrideHandler.java` failed exactly the new test, naming
+  `src/main/java/baritone/utils/InputOverrideHandler.java`; `ClickGatesTest` and the other three
+  `ButtonWritesTest` tests stayed green; the file was restored from `/var/tmp/ioh.bak` and
+  `git status --short` showed only the intended test file modified.
+- **Validation.** Standalone `javac` 25 + cached JUnit: `OK (6 tests)` (`ButtonWritesTest` +
+  `ClickGatesTest`). Whole suite on the dirty tree, then again on the rebased tree, 12:09 UTC:
+  **BUILD SUCCESSFUL in 30s, 37 classes, 303 tests, 0 failures, 0 errors, 0 skipped**. Patch `0020` was
+  `git apply --check`ed and then applied in a scratch worktree at `8b507cde`, then reverted there.
+- **Remote.** The remote had moved again when this was pushed (`8b507cde` -> `48a6a7b5`, the human's
+  notice): fetched and rebased onto it rather than pushed past it, so this landed as `6fc1be6c` +
+  `f4ddd248` on top of `48a6a7b5`. `git ls-remote` (12:10 UTC) reads `f4ddd248` - verified, not claimed.
+
+### Duckbill — next up, for whoever gets there first (2026-10-08 12:10 UTC)
+
+- `process/FarmProcess` is the one process whose harvest clicks ask only `ctx.isLookingAt(pos)`, with no
+  `hasArrivedAt` fallback and (as far as I have read) no `switchingHands` question of its own beyond the
+  helpers' - `ClickGatesTest` passes it because the question is asked, but it is the weakest gate left on
+  a click that acts on a block. Unread: the bone-meal and harvest calls near `:314`/`:342`/`:355`.
+- `behavior/look/Newcomer.java:135` still uses `tick % FORGOTTEN_AFTER` where every other interval in
+  that package is drawn through `Cadence` - the one place the look's own rhythm can still tick like a
+  clock. `NewcomerTest` exists beside it.
+- `utils/GuiClick.java` has no test and I have not read it; if it can press anything, it belongs on
+  `ButtonWritesTest`'s allow-list or in its remarks.
