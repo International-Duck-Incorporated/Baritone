@@ -124,8 +124,14 @@ public class KeyWritesTest {
 
     /**
      * Writes to the player's own movement input, in the spellings they are made in: the game's record and
-     * move vector, the input object itself, the keyboard it is handed back to, and the three ways to reach
-     * around all of it (vanilla's key mappings, their down-state, and the player's own movement flags).
+     * move vector, the input object itself, the keyboard it is handed back to, and the ways to reach
+     * around all of it (the key-mapping class's own static entry points, a mapping's down-state, and the
+     * player's own movement flags). {@code KeyMapping.set} and {@code KeyMapping.click} are public statics
+     * with no caller in the fork today - they are watched for the same reason the count exists: a key held
+     * or clicked through vanilla's own plumbing has gone around every rule about the key stream, and the
+     * next reader should find it watched rather than discover it. {@code setAll} and {@code releaseAll}
+     * are the same entry points in bulk; the binding-table rewrites ({@code resetMapping},
+     * {@code resetToggleKeys}) are configuration rather than a key, and are left out.
      */
     private static final String[] WRITES = {
             "keyPresses =",
@@ -136,6 +142,10 @@ public class KeyWritesTest {
             "setSprinting(",
             "setShiftKeyDown(",
             ".setDown(",
+            "KeyMapping.set(",
+            "KeyMapping.click(",
+            "KeyMapping.setAll(",
+            "KeyMapping.releaseAll(",
     };
 
     private static final String[] SOURCE_ROOTS = {"src/main/java", "src/api/java", "src/launch/java"};
