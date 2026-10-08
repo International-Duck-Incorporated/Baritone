@@ -48,6 +48,8 @@ public final class FollowProcess extends BaritoneProcessHelper implements IFollo
 
     private Predicate<Entity> filter;
     private List<Entity> cache;
+    /** The person currently being regarded while the feet are waiting; retained across scans. */
+    private Entity standingTarget;
     private boolean into; // walk straight into the target, regardless of settings
 
     public FollowProcess(Baritone baritone) {
@@ -80,18 +82,26 @@ public final class FollowProcess extends BaritoneProcessHelper implements IFollo
         if (cache.isEmpty() || baritone.getPathingBehavior().isPathing()) {
             return;
         }
-        Entity nearest = null;
-        double closest = Double.MAX_VALUE;
-        for (Entity entity : cache) {
-            final double distance = entity.distanceToSqr(ctx.player());
-            if (distance < closest) {
-                closest = distance;
-                nearest = entity;
+        // Keep looking at the same person while they remain a valid follow target. Choosing the nearest
+        // entity from scratch every tick makes two nearby matching entities trade the camera whenever their
+        // distances cross by a fraction of a block; a person does not flick between both faces like that.
+        if (this.standingTarget == null || !cache.contains(this.standingTarget)) {
+            Entity nearest = null;
+            double closest = Double.MAX_VALUE;
+            for (Entity entity : cache) {
+                final double distance = entity.distanceToSqr(ctx.player());
+                if (distance < closest) {
+                    closest = distance;
+                    nearest = entity;
+                }
             }
+            this.standingTarget = nearest;
         }
-        baritone.getLookBehavior().updateTarget(
-                RotationUtils.calcRotationFromVec3d(ctx.playerHead(), nearest.getEyePosition(), ctx.playerRotations()),
-                false);
+        if (this.standingTarget != null) {
+            baritone.getLookBehavior().updateTarget(
+                    RotationUtils.calcRotationFromVec3d(ctx.playerHead(), this.standingTarget.getEyePosition(), ctx.playerRotations()),
+                    false);
+        }
     }
 
     /**
@@ -178,6 +188,7 @@ public final class FollowProcess extends BaritoneProcessHelper implements IFollo
     public void onLostControl() {
         filter = null;
         cache = null;
+        standingTarget = null;
     }
 
     @Override
@@ -188,12 +199,14 @@ public final class FollowProcess extends BaritoneProcessHelper implements IFollo
     @Override
     public void follow(Predicate<Entity> filter) {
         this.filter = filter;
+        this.standingTarget = null;
         this.into = false;
     }
 
     @Override
     public void pickup(Predicate<ItemStack> filter) {
         this.filter = e -> e instanceof ItemEntity && filter.test(((ItemEntity) e).getItem());
+        this.standingTarget = null;
         this.into = true;
     }
 
