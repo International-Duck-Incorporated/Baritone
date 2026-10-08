@@ -85,6 +85,7 @@ public class HumanlikeLookFuzzTest {
                                  Rotation camera, boolean pathing, boolean inControl, boolean interacting,
                                  boolean blockInteract,
                                  Rotation[] aim, int[] aimAge, Rotation[] lastWanted, Rotation[] turnFrom,
+                                 TurnPace[] turnPace,
                                  IdleGlance[] glance, ReactionDelay[] reaction, HeadWander[] wander,
                                  int[] glanceCamera, float[] sway) {
         final Outcome outcome = new Outcome();
@@ -102,11 +103,15 @@ public class HumanlikeLookFuzzTest {
             if (aim[0] == null || AimDynamics.separation(lastWanted[0], wanted) > ReactionDelay.NEW_DIRECTION_ANGLE) {
                 aimAge[0] = 0;
                 turnFrom[0] = from;
+                // and the tempo the turn will be made at, drawn once for the turn rather than once a tick:
+                // the same ninety degrees is not the same eight ticks of the same eight steps every time
+                turnPace[0].begin();
             }
             if (standingStill && reaction[0].holding(wanted)) {
                 aim[0] = from;
                 aimAge[0] = 0;
                 turnFrom[0] = from;
+                turnPace[0].begin();
             } else {
                 // What the hand is asked for is not always exactly what is being aimed at: while the body
                 // is walking and nothing is being clicked, a turn that is only a direction to travel is
@@ -121,7 +126,7 @@ public class HumanlikeLookFuzzTest {
                                 + " deg past what it was walking at",
                         AimDynamics.separation(to, wanted) <= AimDynamics.OVERSHOOT_MAX + 0.01f);
                 final Rotation next = AimDynamics.humanStep(from, to, aimAge[0], sensitivity,
-                        interacting ? AimDynamics.CLICK_EASE : AimDynamics.AIM_EASE);
+                        interacting ? AimDynamics.CLICK_EASE : AimDynamics.AIM_EASE, turnPace[0].pace());
                 assertTrue("the aim moved further than a flick in one tick",
                         AimDynamics.separation(aim[0] != null ? aim[0] : from, next) <= AimDynamics.MAX_YAW_STEP + 0.01f);
                 aim[0] = next;
@@ -251,6 +256,7 @@ public class HumanlikeLookFuzzTest {
             final IdleGlance glance = new IdleGlance(new Random(seed + 1));
             final ReactionDelay reaction = new ReactionDelay(new Random(seed + 2));
             final HeadWander wander = new HeadWander(new Random(seed + 3));
+            final TurnPace turnPace = new TurnPace(new Random(seed + 4));
             int glanceActive = 0;
             float sway = 0f;
 
@@ -274,6 +280,7 @@ public class HumanlikeLookFuzzTest {
                 final int[] ageRef = {aimAge};
                 final Rotation[] lastRef = {lastWanted};
                 final Rotation[] turnRef = {turnFrom};
+                final TurnPace[] paceRef = {turnPace};
                 final IdleGlance[] glanceRef = {glance};
                 final ReactionDelay[] reactionRef = {reaction};
                 final HeadWander[] wanderRef = {wander};
@@ -281,7 +288,7 @@ public class HumanlikeLookFuzzTest {
                 final float[] swayRef = {sway};
 
                 final Rotation applied = tick(rand, sensitivity, speedSquared, wanted, camera, pathing, inControl,
-                        interacting, blockInteract, aimRef, ageRef, lastRef, turnRef, glanceRef, reactionRef,
+                        interacting, blockInteract, aimRef, ageRef, lastRef, turnRef, paceRef, glanceRef, reactionRef,
                         wanderRef, glanceRef2, swayRef);
 
                 aim = aimRef[0];
@@ -377,7 +384,11 @@ public class HumanlikeLookFuzzTest {
     @Test
     public void aHeldTargetIsAlwaysArrivedAt() {
         // Whatever the aim has to travel and wherever it starts, and at every sensitivity, it has to land -
-        // exactly, not approximately, because placing and breaking gate on the aim being on target.
+        // exactly, not approximately, because placing and breaking gate on the aim being on target. At every
+        // tempo of the hand's too: the pace a turn draws for itself moves how quickly the turn is made and
+        // never whether it gets there, and the arrival gates every click in the mod waits on cannot depend
+        // on the mood of the hand that is doing the clicking.
+        for (float pace : new float[]{TurnPace.MIN, 1.0f, TurnPace.MAX}) {
         for (double sensitivity : SENSITIVITIES) {
             for (float fromYaw : new float[]{0f, 179f, -179f, 90f, -90f}) {
                 for (float toYaw : new float[]{0f, 179f, -179f, 90f, -90f}) {
@@ -391,14 +402,17 @@ public class HumanlikeLookFuzzTest {
                         // than at it. Arrival is exact all the same, because the carry decays to nothing
                         // long before the hand gets there - and if it ever did not, this is the test that
                         // would say so, since every click in the mod waits on it.
-                        aim = AimDynamics.humanStep(aim, AimDynamics.overshoot(turnFrom, to, ticks), ticks, sensitivity);
+                        aim = AimDynamics.humanStep(aim, AimDynamics.overshoot(turnFrom, to, ticks), ticks,
+                                sensitivity, AimDynamics.AIM_EASE, pace);
                         ticks++;
                     }
-                    assertEquals("never arrived from " + fromYaw + " to " + toYaw + " at sensitivity " + sensitivity,
+                    assertEquals("never arrived from " + fromYaw + " to " + toYaw + " at sensitivity " + sensitivity
+                                    + " and tempo " + pace,
                             toYaw, aim.getYaw(), 0f);
-                    assertTrue("arrival took " + ticks + " ticks", ticks <= 60);
+                    assertTrue("arrival took " + ticks + " ticks at tempo " + pace, ticks <= 60);
                 }
             }
+        }
         }
     }
 

@@ -38,6 +38,7 @@ import baritone.behavior.look.IdleGlance;
 import baritone.behavior.look.Newcomer;
 import baritone.behavior.look.PitchWander;
 import baritone.behavior.look.ReactionDelay;
+import baritone.behavior.look.TurnPace;
 import baritone.behavior.look.Unattended;
 import baritone.behavior.look.WalkGlance;
 import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
@@ -167,6 +168,13 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
      * the player is standing still; see {@link #standingStill()}.
      */
     private final ReactionDelay reaction = new ReactionDelay();
+
+    /**
+     * How quickly the turn under way is being made. Drawn by this behaviour where a turn starts - the same
+     * two places the age of the turn is reset - and read on every tick in between, so that the same turn is
+     * not the same turn twice. See {@link TurnPace}; the ceiling in {@link AimDynamics} is untouched by it.
+     */
+    private final TurnPace turnPace = new TurnPace();
 
     /**
      * The arm's own idle habit: a swing at the air every ten seconds to a minute. It lives here because the
@@ -527,6 +535,9 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
                         // the target is re-set every tick while pathing and the hand never looked fresh.
                         this.aimAge = 0;
                         this.turnFrom = from;
+                        // ... and it is drawn a tempo of its own, so that the same corner is not turned the
+                        // same way every time it is walked. See TurnPace.
+                        this.turnPace.begin();
                     }
                     if (standingStill() && this.reaction.holding(wanted)) {
                         // Notice, then move. Deliberately only while the player is not going anywhere:
@@ -536,6 +547,8 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
                         this.aimRotation = from;
                         this.aimAge = 0;
                         this.turnFrom = from;
+                        // the turn that starts after the beat is a turn of its own, with a tempo of its own
+                        this.turnPace.begin();
                     } else {
                         this.aimRotation = this.humanStep(from, wanted);
                         this.aimAge++;
@@ -1096,7 +1109,7 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
     private Rotation humanStep(Rotation from, Rotation to) {
         final float ease = this.interacting() && !this.crosshairIsOn(to) ? AimDynamics.CLICK_EASE : AimDynamics.AIM_EASE;
         final Rotation wanted = this.carriedPast(this.settledGaze(from, to));
-        return AimDynamics.humanStep(from, wanted, this.aimAge, sensitivity(ctx), ease);
+        return AimDynamics.humanStep(from, wanted, this.aimAge, sensitivity(ctx), ease, this.turnPace.pace());
     }
 
     /**

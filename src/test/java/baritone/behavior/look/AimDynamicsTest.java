@@ -20,7 +20,9 @@ package baritone.behavior.look;
 import baritone.api.utils.Rotation;
 import org.junit.Test;
 
+import java.util.HashSet;
 import java.util.Random;
+import java.util.Set;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -525,6 +527,137 @@ public class AimDynamicsTest {
         final Rotation to = new Rotation(90f, 12f);
         assertEquals(to.getYaw(), AimDynamics.overshoot(null, to, 0).getYaw(), 0f);
         assertEquals(to.getPitch(), AimDynamics.overshoot(null, to, 0).getPitch(), 0f);
+    }
+
+    /**
+     * Runs a turn at one tempo and reports the ticks until it is exactly on target, and the size of its
+     * first step; fails if it never lands.
+     */
+    private static float[] paced(float startYaw, float targetYaw, float pace) {
+        Rotation aim = new Rotation(startYaw, 0f);
+        final Rotation to = new Rotation(targetYaw, 0f);
+        float first = 0f;
+        int ticks = 0;
+        while (ticks < 300 && (Rotation.normalizeYaw(targetYaw - aim.getYaw()) != 0f)) {
+            final Rotation next = AimDynamics.humanStep(aim, to, ticks, SENSITIVITY, AimDynamics.AIM_EASE, pace);
+            assertTrue("a paced hand moved " + Math.abs(Rotation.normalizeYaw(next.getYaw() - aim.getYaw()))
+                            + " degrees of yaw in one tick at tempo " + pace,
+                    Math.abs(Rotation.normalizeYaw(next.getYaw() - aim.getYaw())) <= AimDynamics.MAX_YAW_STEP + 1e-3f);
+            if (ticks == 0) {
+                first = Math.abs(Rotation.normalizeYaw(next.getYaw() - aim.getYaw()));
+            }
+            aim = next;
+            ticks++;
+        }
+        assertTrue("a turn at tempo " + pace + " never landed", ticks < 300);
+        return new float[]{ticks, first};
+    }
+
+    @Test
+    public void theSameTurnIsNotTheSameTurnTwice() {
+        // The trajectory was a function of the angle and nothing else, so every corner of every route was
+        // turned in exactly the same ticks, forever. A person's hand has a tempo of its own from one turn to
+        // the next, and this is that: the same ninety degrees, made over and over, not making the same turn.
+        final TurnPace pace = new TurnPace(new Random(20261008L));
+        final Set<Integer> durations = new HashSet<>();
+        for (int i = 0; i < 60; i++) {
+            durations.add(Math.round(paced(0f, 90f, pace.begin())[0]));
+        }
+        assertTrue("sixty turns to the same place took " + durations.size() + " different times",
+                durations.size() >= 2);
+        assertTrue("every turn to the same place took the same " + durations.iterator().next() + " ticks",
+                durations.size() > 1);
+    }
+
+    @Test
+    public void aTempoChangesTheSpeedAndNeverTheCeiling() {
+        // Every tempo the band allows, plus two it does not - a caller that hands in a nonsense number gets
+        // the ordinary turn rather than a hand that never arrives or one that snaps.
+        for (float pace : new float[]{TurnPace.MIN, 0.6f, 0.95f, 1.0f, TurnPace.MAX, 1.6f, 0f, -3f}) {
+            for (double sensitivity : new double[]{0.0, 0.05, 0.5, 0.87, 1.0}) {
+                final Rotation to = new Rotation(150f, 70f);
+                Rotation aim = new Rotation(0f, 0f);
+                for (int t = 0; t < 80; t++) {
+                    final Rotation next = AimDynamics.humanStep(aim, to, t, sensitivity, AimDynamics.AIM_EASE, pace);
+                    assertTrue("yaw jumped " + Math.abs(Rotation.normalizeYaw(next.getYaw() - aim.getYaw()))
+                                    + " at tempo " + pace + " and sensitivity " + sensitivity,
+                            Math.abs(Rotation.normalizeYaw(next.getYaw() - aim.getYaw())) <= AimDynamics.MAX_YAW_STEP + 1e-3f);
+                    assertTrue("pitch jumped " + Math.abs(next.getPitch() - aim.getPitch())
+                                    + " at tempo " + pace + " and sensitivity " + sensitivity,
+                            Math.abs(next.getPitch() - aim.getPitch()) <= AimDynamics.MAX_PITCH_STEP + 1e-3f);
+                    aim = next;
+                }
+                assertEquals("a turn at tempo " + pace + " did not land on yaw", to.getYaw(), aim.getYaw(), 1e-4f);
+                assertEquals("a turn at tempo " + pace + " did not land on pitch", to.getPitch(), aim.getPitch(), 1e-4f);
+            }
+        }
+    }
+
+    @Test
+    public void aHandAskedToMoveAlwaysMoves() {
+        // The pixel snap rounds to the nearest whole pixel, and with a small fraction of what is left asked
+        // for per tick that rounding can land on none at all while there is still more than a pixel of turn
+        // left - and the aim then sits a fraction of a degree short of the target for as long as it is asked
+        // for it, which is a block face that is never reached and a click that never happens. The ordinary
+        // half cannot do it; anything under a half can, which is how this turned up (see TurnPace).
+        for (float fraction : new float[]{0.05f, 0.1f, 0.25f, 0.3f, 0.45f}) {
+            for (double sensitivity : new double[]{0.0, 0.05, 0.5, 0.87, 1.0}) {
+                final Rotation to = new Rotation(90f, 40f);
+                Rotation aim = new Rotation(0f, 0f);
+                int ticks = 0;
+                while (ticks < 400 && (Rotation.normalizeYaw(to.getYaw() - aim.getYaw()) != 0f || aim.getPitch() != to.getPitch())) {
+                    aim = AimDynamics.humanStep(aim, to, ticks, sensitivity, fraction, 1.0f);
+                    ticks++;
+                }
+                assertEquals("a hand asking for a fraction of " + fraction + " never arrived on yaw at "
+                                + "sensitivity " + sensitivity,
+                        to.getYaw(), aim.getYaw(), 0f);
+                assertEquals("a hand asking for a fraction of " + fraction + " never arrived on pitch at "
+                                + "sensitivity " + sensitivity,
+                        to.getPitch(), aim.getPitch(), 0f);
+            }
+        }
+    }
+
+    @Test
+    public void aTempoOfZeroIsTheOrdinaryTurn() {
+        // Not a stopped hand: the caller that has not started a turn - and the caller that hands in a
+        // number that is not a tempo at all - get the turn every other test in this file measures.
+        assertEquals(paced(0f, 90f, 1.0f)[0], paced(0f, 90f, 0f)[0], 0f);
+        assertEquals(paced(0f, 90f, 1.0f)[0], paced(0f, 90f, -1f)[0], 0f);
+    }
+
+    @Test
+    public void aSlowerTempoGetsGoingSlowerAndTakesLonger() {
+        // The band has to be wide enough that the two ends of it are not the same turn, or the draw is a
+        // constant with extra steps. Measured over the whole turn, not just its first step: one tick of
+        // difference on a right angle is what fifteen percent buys.
+        final float[] slow = paced(0f, 120f, TurnPace.MIN);
+        final float[] quick = paced(0f, 120f, TurnPace.MAX);
+        assertTrue("a slow tempo did not spin up any slower: " + slow[1] + " against " + quick[1],
+                slow[1] < quick[1]);
+        assertTrue("the two ends of the band made the same turn: " + slow[0] + " ticks at the slow end and "
+                + quick[0] + " at the quick one", slow[0] > quick[0]);
+    }
+
+    @Test
+    public void aClickStillHurriesAtTheSlowestTempo() {
+        // The hurry a click turns at is the ceiling - the bot has decided about the block and is waiting on
+        // its own crosshair - and the ceiling does not move with the tempo. What a slow tempo does cost a
+        // click is its tail: the last few pixels of the turn take a little longer, and that is two ticks at
+        // the slow end of the band, against the seven the ordinary tempo takes. Two ticks is the price of a
+        // hand that is not a function; a drift is what this is not allowed to become.
+        final Rotation to = new Rotation(90f, 40f);
+        Rotation aim = new Rotation(0f, 0f);
+        int ticks = 0;
+        while (ticks < 60 && (Rotation.normalizeYaw(to.getYaw() - aim.getYaw()) != 0f || aim.getPitch() != to.getPitch())) {
+            aim = AimDynamics.humanStep(aim, to, ticks, SENSITIVITY, AimDynamics.CLICK_EASE, TurnPace.MIN);
+            ticks++;
+        }
+        assertEquals("the slowest clicking hand never arrived on yaw", to.getYaw(), aim.getYaw(), 1e-4f);
+        assertEquals("the slowest clicking hand never arrived on pitch", to.getPitch(), aim.getPitch(), 1e-4f);
+        assertTrue("a right angle took " + ticks + " ticks at the slowest tempo with a click waiting", ticks <= 9);
+        assertTrue("a turn of " + ticks + " ticks is a snap, not a hurry", ticks >= 3);
     }
 
     @Test

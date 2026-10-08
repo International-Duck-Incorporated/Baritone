@@ -188,8 +188,32 @@ public final class AimDynamics {
      * The same, at a given rate. See {@link #AIM_EASE} and {@link #CLICK_EASE} for the two that are used.
      */
     public static Rotation humanStep(Rotation from, Rotation to, int aimAge, double sensitivity, float ease) {
-        final float ramp = ramp(aimAge);
-        return step(from, to, MAX_YAW_STEP * ramp, MAX_PITCH_STEP * ramp, sensitivity, ease);
+        return humanStep(from, to, aimAge, sensitivity, ease, 1.0f);
+    }
+
+    /**
+     * The same, at a tempo of this turn's own. See {@link TurnPace}.
+     * <p>
+     * {@code pace} scales how much of what is left the hand takes this tick and how quickly it spins up, so
+     * the same turn made twice is not the same two trajectories.
+     * <p>
+     * It deliberately does not scale the flick ceiling, which is left exactly where it was for every pace in
+     * the band and every pace outside it. The ceiling is the one number in here that is about a hand rather
+     * than about a moment - how fast a person can move a mouse at all - and it is also the number every
+     * arrival gate, every timing bound and the whole of {@code turnsTakeAHumanAmountOfTime} were measured
+     * against. A tempo decides how this turn is made; it does not get to decide how fast a hand can move. So
+     * the ramp is scaled only while it is still ramping (the first two ticks, where the hand is spinning up
+     * and a quicker tempo genuinely spins up quicker), and past that the ceiling is the ceiling whatever the
+     * pace. The varying part of a turn is how much of what is left it covers per tick.
+     * <p>
+     * A pace of zero or less is not a tempo, it is a stopped hand, and is taken as the ordinary one: a caller
+     * that has not started a turn should get the turn it always got, not one that never arrives.
+     */
+    public static Rotation humanStep(Rotation from, Rotation to, int aimAge, double sensitivity, float ease, float pace) {
+        final float tempo = pace > 0f ? pace : 1.0f;
+        final float spinning = ramp(aimAge);
+        final float ramp = spinning < 1.0f ? Math.min(1.0f, spinning * tempo) : 1.0f;
+        return step(from, to, MAX_YAW_STEP * ramp, MAX_PITCH_STEP * ramp, sensitivity, ease * tempo);
     }
 
     /**
@@ -265,7 +289,14 @@ public final class AimDynamics {
         }
         final float step = Math.max(-maxStep, Math.min(maxStep, delta * ease));
         final float snapped = Math.round(step / minStep) * minStep;
-        return Rotation.normalizeYaw(current + Math.max(-maxStep, Math.min(maxStep, snapped)));
+        // And what is left of a turn is always taken, whatever fraction of it was asked for. Rounding to
+        // whole mouse pixels can land on none at all while there is still most of a pixel of turn left: at
+        // the ordinary half that cannot happen - half of what is left is never less than half a pixel while
+        // the whole of it is more than one - but a fraction below a half (a slow tempo, see TurnPace) can
+        // leave the aim sitting a fraction of a degree short of its target for as long as it is asked for
+        // it, which arrives at a block face never, and at a click gate never. A hand asked to move moves.
+        final float taken = snapped == 0f && step != 0f ? Math.copySign(minStep, step) : snapped;
+        return Rotation.normalizeYaw(current + Math.max(-maxStep, Math.min(maxStep, taken)));
     }
 
     /**
