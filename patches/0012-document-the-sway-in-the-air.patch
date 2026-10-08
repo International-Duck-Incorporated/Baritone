@@ -1,0 +1,26 @@
+From a3d85ad3db1b9582e7e11673b0d19279a1798078 Mon Sep 17 00:00:00 2001
+From: 0xFFshell <0xffshell@users.noreply.gitlab.com>
+Date: Thu, 8 Oct 2026 11:28:12 +0000
+Subject: [PATCH] Document the sway in the air
+
+The drift row said standing, walking and swimming hand the sway over. The air was the one state that switched it off, and it is in the list now, with what the terrain was doing to it and why the pitch needs no exception up there.
+---
+ HUMANLIKE.md | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/HUMANLIKE.md b/HUMANLIKE.md
+index 5f0c81e2..ad19172c 100644
+--- a/HUMANLIKE.md
++++ b/HUMANLIKE.md
+@@ -40,7 +40,7 @@ The rest of the repertoire, which that rule now keeps alive across the gap:
+ 
+ | what | where | the rule |
+ | --- | --- | --- |
+-| A standing bot drifts | `behavior/look/HeadWander.java` | A degree of yaw and six tenths of a degree of pitch, wandering over periods of two to five seconds - the same sway that runs under a walk, and under a swim, at `IDLE_FRACTION` of it when standing, so standing, walking and swimming hand it over rather than switching it on and off. |
++| A standing bot drifts | `behavior/look/HeadWander.java` | A degree of yaw and six tenths of a degree of pitch, wandering over periods of two to five seconds - the same sway that runs under a walk, and under a swim, and in the air, at `IDLE_FRACTION` of it when standing, so standing, walking, swimming and being off the ground hand it over rather than switching it on and off. The air was the one state that switched it off: the feet leaving the ground ended the sway for the length of the fall and faded the rest out over the twenty ticks after it (`recentre` is five percent a tick), and on rolling ground - where a path of any length is a run of one- and two-block drops - that was most of a walk with a head that was not moving at all, switched by the terrain rather than by anything the head was doing. It runs up there on the same terms as on the ground: the game turns a fall by the yaw as it turns a walk, and the pitch steers nothing in the air, so unlike the swim gate there is no axis to leave alone. Water and the elytra keep their exclusions, because there the look does steer the body. |
+ | ... and looks around | `behavior/look/IdleGlance.java` | A glance every three to eight seconds, held for under a second and given back, bounded to 28° of yaw and 7° of pitch, never outliving 100 ticks, and spun up over its first two ticks like any other turn (`AimDynamics.TURN_RAMP`) - both legs of it, out and home, since each is a turn of its own. Taken on the ticks with nothing aimed at and on the ones where an aim is held but the bot is standing still waiting on it - a door it cannot open, a block that has not updated, a path with nowhere to go this tick (`LookBehavior#updateHeadWander`) - so waiting for something is not the same as staring at it. One glance in four is down at the hand rather than around: a pitch gesture of 24 to 38 degrees below level, never up - somebody already looking at the floor checks what they are holding by doing nothing - held and given back like the rest, so an idle head moves in two dimensions instead of sweeping the horizon forever. |
+ | ... and notices people | `behavior/LookBehavior.java#somethingNearby` | One glance in three goes to the nearest player or creature within twelve blocks that is neither invisible nor behind a wall. People look at people; a bot that never does is the thing that gets noticed. |
+ | ... and sees who walks up | `behavior/look/Newcomer.java`, `LookBehavior#noticeArrivals` | Somebody arriving is not the same as somebody there. Another player coming into view - within twelve blocks, with a line of sight, in front of the head and no further round than a little past the shoulder - is looked at once, a quarter to seven tenths of a second after they appear, by whichever glance is running being prompted ahead of its clock: the idle one if the body is standing, the walking one if it is on a plain walk. The people in view on the first tick are not arrivals, somebody out of sight for under fifteen seconds has not arrived twice, a crowd arriving together is one look at the nearest, two looks are never under four seconds apart, somebody gone again before the head gets round to them is not looked at - a head that turns to where they were is a head that heard them - and a prompt not taken within two seconds is dropped. The prompted glance is the ordinary glance in all but when it starts, so it is still never taken while anything is being clicked, still never outlives its hold, still comes home, and the walking one still has to be welcome on the walk. Somebody arriving behind the head is not seen at all - but somebody who hits us is looked round at whichever way they are, two to six ticks after the blow (`Newcomer#struck`, `LookBehavior#noticeBlows`): the client is only told a blow landed, so the guess is a person's, the nearest player within ten blocks that can be seen or failing one the nearest hostile, and a fall with nobody near is not looked round at. A head that goes on staring at the horizon while it is punched fails the one test every suspected bot gets. |
+-- 
+2.47.3
+

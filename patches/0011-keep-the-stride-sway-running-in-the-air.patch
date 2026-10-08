@@ -1,0 +1,117 @@
+From ffe96b46670a300c0376ee516ded7f166ba4f224 Mon Sep 17 00:00:00 2001
+From: 0xFFshell <0xffshell@users.noreply.gitlab.com>
+Date: Thu, 8 Oct 2026 11:28:12 +0000
+Subject: [PATCH] Keep the stride sway running in the air
+
+The gate asked for dry land with the feet down (isWalking) or water
+(isSwimming), so the feet leaving the ground took the sway off the head for
+the length of the fall and then faded what was left of it out over the
+twenty ticks after that - recentre is five percent a tick. On rolling
+ground, where a path of any length is a run of one- and two-block drops,
+that is most of a walk with a head that is not moving at all, and it is the
+terrain switching it off rather than anything the head is doing.
+
+Nothing about the air argues for it either. The game turns a fall by the
+yaw exactly as it turns a walk, so a degree of drift in the yaw is a degree
+of drift in the heading, which is the sentence the swim gate already makes
+for its own axis; and the pitch steers nothing at all up there, so this gate
+has no axis to leave alone the way that one does. The two states where the
+look does steer the body keep their exclusions: water, where the pitch is
+the depth, and an elytra, which is a control loop.
+
+Deliberately without the speed test the other two carry: a walk stops when
+the player does and the quieter sway takes over, but there is no standing
+still in the air, and a straight drop with no horizontal speed to measure is
+still the body moving under the head.
+
+Validation: ./gradlew :test - 291 tests, 0 failures. The fuzz harness models
+the stride gate on speed alone and cannot see the ground, so it models the
+caller's ground and water halves; its note now says so, so the next reader
+does not mistake those runs for coverage of the airborne half.
+---
+ .../java/baritone/behavior/LookBehavior.java  | 37 +++++++++++++++++--
+ .../behavior/look/HumanlikeLookFuzzTest.java  |  6 +++
+ 2 files changed, 39 insertions(+), 4 deletions(-)
+
+diff --git a/src/main/java/baritone/behavior/LookBehavior.java b/src/main/java/baritone/behavior/LookBehavior.java
+index cd50dbc2..3a448ec9 100644
+--- a/src/main/java/baritone/behavior/LookBehavior.java
++++ b/src/main/java/baritone/behavior/LookBehavior.java
+@@ -929,9 +929,10 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
+     /**
+      * Whether the head is ours to move, for the walk.
+      * <p>
+-     * Three conditions and all three are load bearing. The player has to be moving along - on foot or
+-     * swimming, which are the same deal as far as the head is concerned (see {@link #isSwimming}) - because
+-     * this is the stride, and standing still is a different gate and a quieter sway. Baritone has to be the one driving,
++     * Three conditions and all three are load bearing. The player has to be moving along - on foot, in
++     * water or in the air, which are the same deal as far as the head is concerned (see {@link
++     * #isSwimming} and {@link #isInTheAir}) - because this is the stride, and standing still is a
++     * different gate and a quieter sway. Baritone has to be the one driving,
+      * because a head that moves on its own while a person is walking somewhere is not human, it is broken.
+      * And nothing may be being clicked this tick, for the reason given on {@link #interacting()}: the trace
+      * Baritone aims its own pickaxe and blocks along follows the rotation it last told the server, and a
+@@ -945,7 +946,7 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
+      */
+     private boolean canWander() {
+         return this.target != null
+-                && (this.isWalking() || this.isSwimming())
++                && (this.isWalking() || this.isSwimming() || this.isInTheAir())
+                 && baritone.getPathingBehavior().isPathing()
+                 && !this.interacting();
+     }
+@@ -990,6 +991,34 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
+         return dx * dx + dz * dz > IDLE_SPEED_SQ;
+     }
+ 
++    /**
++     * Whether the player is off the ground and not being steered by the look: a fall, a jump, a climb,
++     * anything between the ground and the ground.
++     * <p>
++     * The feet leaving the ground used to switch the stride off - {@link #isWalking()} is dry land with the
++     * feet down, and {@link #isSwimming()} is water - so every drop of a block or two took the sway out of
++     * the head for the length of the fall and then faded the last of it out over the twenty ticks after
++     * that ({@link HeadWander#recentre} is five percent a tick). On rolling ground, where a path of any
++     * length is a run of little descents, that is most of a walk spent with a head that is not moving at
++     * all: the statue this sway exists to avoid, switched by the shape of the terrain rather than by
++     * anything the head was doing.
++     * <p>
++     * Nothing about the air argues for it. The game turns a fall by the yaw exactly as it turns a walk, so a
++     * degree of drift in the yaw is a degree of drift in the heading - the same sentence the swim gate makes
++     * - and the pitch steers nothing at all up there, which is the one place this gate is simpler than that
++     * one: there is no axis to leave alone. The two states that do steer the body by the look are water,
++     * where the pitch is the depth, and an elytra, which is a control loop; both are excluded here, and the
++     * elytra is excused from everything in this file for that reason.
++     * <p>
++     * Deliberately without the speed test the other two carry. A walk stops when the player does, and the
++     * quieter sway takes over; there is no standing still in the air, and a straight drop with no speed to
++     * measure on either horizontal axis is still the body moving under the head.
++     */
++    private boolean isInTheAir() {
++        return !ctx.player().onGround() && !ctx.player().isInWater() && !ctx.player().isFallFlying();
++    }
++
++
+     /**
+      * Whether an idle glance is appropriate right now.
+      * <p>
+diff --git a/src/test/java/baritone/behavior/look/HumanlikeLookFuzzTest.java b/src/test/java/baritone/behavior/look/HumanlikeLookFuzzTest.java
+index c1f81e28..b8e10163 100644
+--- a/src/test/java/baritone/behavior/look/HumanlikeLookFuzzTest.java
++++ b/src/test/java/baritone/behavior/look/HumanlikeLookFuzzTest.java
+@@ -165,6 +165,12 @@ public class HumanlikeLookFuzzTest {
+         // about under Baritone's control with nothing clicked, runs it at half under the glance. Nothing
+         // being clicked is the gate they all share, because the rotation they are adding to is the one
+         // Baritone traces its own pickaxe and blocks along.
++        //
++        // The body's half of the stride gate is modelled here as speed alone, which is what the two flags
++        // below can express: the caller (LookBehavior#canWander) counts a player who is off the ground as
++        // moving whatever their speed - a fall, a jump, a climb, where the yaw steers a heading just as it
++        // does on foot - and this harness has no ground to stand on. So its walking ticks model the caller's
++        // ground and water halves, and the airborne half is pinned by reading rather than by these runs.
+         final boolean walkingSway = wanted != null && walking && pathing && !interacting;
+         final boolean waitingSway = wanted != null && standingStill && inControl && !interacting;
+         final boolean idleSway = wanted == null && inControl && standingStill && !interacting;
+-- 
+2.47.3
+
