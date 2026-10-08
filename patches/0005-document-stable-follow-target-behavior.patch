@@ -1,0 +1,22 @@
+From 2498814c957d31b0de14b1ce7ac5aa0d3ae46717 Mon Sep 17 00:00:00 2001
+From: 0xFFshell <0xffshell@users.noreply.gitlab.com>
+Date: Thu, 8 Oct 2026 11:07:53 +0000
+Subject: [PATCH] Document stable follow target behavior
+
+---
+ HUMANLIKE.md | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/HUMANLIKE.md b/HUMANLIKE.md
+index c459aea0..c3d85f76 100644
+--- a/HUMANLIKE.md
++++ b/HUMANLIKE.md
+@@ -82,7 +82,7 @@ a quarter faster); inventory moves are spaced by a redrawn interval rather than
+ | what | where | the rule |
+ | --- | --- | --- |
+ | A moving target does not take the walk apart | `process/FollowProgress.java`, `FollowProcess#walkOrTurnAround` | Following used to cancel the path every time the goal stepped clear of where it ended - a stop every second or two at the target's own walking pace. The walk under way now keeps going while its end is still a step toward the thing being followed (closer to it than the player is), and the plan-ahead chains the next stretch to wherever the goal has wandered by then. Only somebody who has actually gone somewhere else - doubled back, run off sideways - makes the bot stop, turn around, and path from where it stands. |
+-| Somebody being followed is faced | `FollowProcess#regardWhileStanding` | While the feet have nowhere to go - close enough already, or waiting on a way - the head is turned to the nearest of whoever is being followed, as a standing target: the turn at the hand's own speed with its beat before it, the sway at half, the idle glance off it and home again, and a slow track as they move about. A walking tick's movement sets its own target afterwards and wins. A person following somebody who stops turns to them; one who goes on facing the last way they walked is a dog on a lead. |
++| Somebody being followed is faced | `FollowProcess#regardWhileStanding` | While the feet have nowhere to go - close enough already, or waiting on a way - the head is turned to the nearest of whoever is being followed, as a standing target: the turn at the hand's own speed with its beat before it, the sway at half, the idle glance off it and home again, and a slow track as they move about. The regarded entity stays selected across scans until it leaves the valid follow set, so two nearby matches do not make the head flick between faces when their distances cross. A walking tick's movement sets its own target afterwards and wins. A person following somebody who stops turns to them; one who goes on facing the last way they walked is a dog on a lead. |
+ 
+ ## Deliberate exceptions
+ 
