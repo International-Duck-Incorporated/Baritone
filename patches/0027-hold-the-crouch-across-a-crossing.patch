@@ -1,0 +1,692 @@
+From fd6388c2f3fccc9e5bbc21e1b203365bd328a08d Mon Sep 17 00:00:00 2001
+From: 0xFFshell <0xFFshell@users.noreply.gitlab.com>
+Date: Thu, 8 Oct 2026 13:11:06 +0000
+Subject: [PATCH] humanize: hold the crouch across a crossing, and charge it
+
+Every key is cleared and re-decided from scratch every tick, and the traverse
+asked for the crouch only on the ticks where the block being stepped onto was
+missing and its placement was ready. A bridge was therefore walked
+crouch-stand-crouch-stand, once per block: the four or five ticks of walking onto
+the block that had just gone in were walked upright, at walk speed, and then the
+crouch went back down for the next one. Nobody crosses a gap that way.
+
+CarefulFooting is the rule, and it is a stance rather than a timer: a movement
+that has to place the block it is stepping onto asks for the crouch
+(Movement#isPlacingUnderItself), it stays down while the block under the step
+after this one has no floor either (Movement#isAnotherGapAhead - the middle of a
+crossing is a block placed with the next gap already in front of the feet), and
+it comes up on the tick there is solid ground under the feet and ahead. Nothing
+is timed and nothing is drawn: the crossing ends where the ground does, which is
+when a person stands up too. It never shortens an ask, and it never invents one -
+a walk that crosses nothing gets no crouch however many holes are beside it,
+because the gap ahead is only read while the crouch is already down. Asked for
+once a tick from Movement.update(), the seam every movement passes through, and
+held by the input layer next to KeyBeat for the same reason KeyBeat is held
+there: the walk onto a just-placed block is a tick the movement boundary is in
+the middle of. assumeSafeWalk, the user's own "do not crouch", is honoured.
+
+The block is then priced as it is walked. The side-place branch of
+MovementTraverse#cost was returning a plain walk cost for a block the bot walks
+crouched, while its own updateState sets the crouch for the side-place path as
+well as the backplace one - and the backplace branch has charged
+SNEAK_ONE_BLOCK_COST / WALK_ONE_BLOCK_COST since it was written. A crouched walk
+priced as an upright one is a cost that does not describe the path, which is the
+one thing the humanlike work here is not allowed to do. This is the change Plover
+withdrew a hangover-fix in favour of at 12:47 UTC: the cadence and the price land
+together, or not at all.
+
+Validation: ./gradlew :test - 39 classes, 318 tests, 0 failures, 0 errors,
+0 skipped (307 before; the eleven new are CarefulFootingTest's eight and
+BridgeCrossingTest's three). Both new tests were checked for teeth rather than
+assumed: removing the multiplier from the side-place branch fails the price pin
+naming the branch; making the crouch a function of the ask alone fails the
+crossing tests with "the bot stood up in the middle of its own crossing"; and
+deleting the traverse's answer to the ask fails the seam pin. One vacuous pass
+was found and fixed on the way: the seam pin skipped instead of failing when its
+method was missing, because it used an assumption where it needed an assertion.
+
+Limitation: the wiring needs a running game, as LookBehavior's does. What to
+watch: cross a gap and the bot should be crouched from the edge to the far side
+and upright on the first solid block after it; stand at the edge of a two-deep
+drop without bridging and it should not crouch at all.
+---
+ HUMANLIKE.md                                  |   8 +-
+ .../pathing/movement/CarefulFooting.java      |  80 +++++++++
+ .../baritone/pathing/movement/Movement.java   |  27 +++
+ .../movement/movements/MovementTraverse.java  |  38 ++++-
+ .../baritone/utils/InputOverrideHandler.java  |  39 +++++
+ .../baritone/utils/PlayerMovementInput.java   |   5 +-
+ .../pathing/movement/BridgeCrossingTest.java  | 157 ++++++++++++++++++
+ .../pathing/movement/CarefulFootingTest.java  | 136 +++++++++++++++
+ 8 files changed, 485 insertions(+), 5 deletions(-)
+ create mode 100644 src/main/java/baritone/pathing/movement/CarefulFooting.java
+ create mode 100644 src/test/java/baritone/pathing/movement/BridgeCrossingTest.java
+ create mode 100644 src/test/java/baritone/pathing/movement/CarefulFootingTest.java
+
+diff --git a/HUMANLIKE.md b/HUMANLIKE.md
+index 16546ff9..c11b34d6 100644
+--- a/HUMANLIKE.md
++++ b/HUMANLIKE.md
+@@ -79,6 +79,7 @@ interval rather than a fixed one.
+ | A run walks before it sprints | `pathing/movement/SprintWindup.java`, `PathExecutor#shouldSprintNextTick` | Control used to go down on the same tick a traverse asked for a sprint. A new run now walks two to four ticks first (`Cadence.sprintWindup`). Parkour, climbs, drops, water and air skip it - the speed on those ticks is load bearing. A hangover still holding the key is the same run and does not wind up again. |
+ | A direction and its opposite are a beat apart | `pathing/movement/KeyBeat.java`, `InputOverrideHandler#beatTheKeys` | The four keys are decided fresh every tick, so a turn-around arrived as W becoming S in one tick - through the game's own input packet, to anybody watching. A reversal now costs one to two ticks of no keys while the hand repositions, and only a reversal: lifting a finger, landing a finger, and the W+S someone brakes with all answer the tick they are asked. Only at a run on the ground - sneaking along a bridge, backing away from a drop, water, air, and the elytra loop all get their keys immediately, because there the keys are a control loop and not fingers (`InputOverrideHandler#atAPace`). |
+ | The feet wait for the head | `pathing/movement/HeadFirst.java`, `PathExecutor#letTheHeadLead` | The body is steered by the angle a movement asks for on the tick it asks, while the head eases there over the ticks after - so at a sharp turn the body used to set off while the head still faced the old way, a half turn walked backwards for as long as the head took to come round. The walking keys and the jump are now kept off until the head is inside 60° of the way the feet are going from a standstill (a quarter turn costs three ticks, a half turn eight), and at a walk only a turn sharper than 100° - a turn-around - stops the feet, for six ticks on a half turn. Never in the air or in water, never past ten ticks, and never twice for one turn; the sneak and the mouse buttons go around it. |
++| A crossing is walked crouched, from one edge to the other | `pathing/movement/CarefulFooting.java`, `InputOverrideHandler#carefulFooting`, `Movement#isPlacingUnderItself`, `MovementTraverse` | Every key is cleared and re-decided from scratch every tick, and the traverse asked for the crouch only on the ticks where the block being stepped onto was missing and its placement was ready - so a bridge was walked crouch-stand-crouch-stand, once per block: the four or five ticks of walking onto the block that had just gone in were walked upright, and then the crouch went back down for the next one. A person crouches at the edge and stays down until they are across, and that is the whole rule: a movement that has to place the block it is stepping onto asks for the crouch (`Movement#isPlacingUnderItself`), it stays down while the block under the step after this one has no floor either (`Movement#isAnotherGapAhead`, which is what the middle of a crossing looks like: a block placed, and the next gap already in front of the feet), and it comes up on the tick there is solid ground under the feet and solid ground ahead. Nothing about it is timed and nothing is drawn - the crossing ends when the ground does, which is when a person stands up too. It is asked for once a tick from `Movement.update()`, where the movement's inputs are applied, because the state has to outlive the movement that asked: the walk onto a just-placed block is a tick the movement boundary is in the middle of. It never shortens an ask and never invents one - a walk that crosses nothing gets no crouch, however many holes are beside it. `assumeSafeWalk` is the user saying they do not want the crouch and gets none of it. And the block is priced as it is walked: the side-place branch of `MovementTraverse#cost` charges `SNEAK_ONE_BLOCK_COST / WALK_ONE_BLOCK_COST` for it, the way the backplace branch always has, because a crouched walk priced as an upright one is a path cost that does not describe the path. |
+ 
+ ## Following
+ 
+@@ -183,7 +184,7 @@ The item in the hand has the same rule, and it is counted the same way. It is wr
+   running game goes in its own class in `behavior/look` with a test next to it, the way `AimDynamics`,
+   `IdleGlance`, `WalkGlance`, `Newcomer`, `HeadWander`, `PitchWander`, `IdleFidget`, `GazeAhead` and `ReactionDelay` are - or, for
+   a rule about the keys rather than the camera, in `pathing/movement` beside `MovementOption`, the way
+-  `KeyBeat`, `HeadFirst`, `StraightRun` and `SprintWindup` are, for a rule about the hands in `utils` beside the helpers that press the buttons,
++  `KeyBeat`, `HeadFirst`, `StraightRun`, `CarefulFooting` and `SprintWindup` are, for a rule about the hands in `utils` beside the helpers that press the buttons,
+   the way `HotbarSwitch` is, and for a rule about what to do next rather than how to look doing it, beside the process
+   that uses it, the way `FollowProgress` is.
+ - Everything with a random source takes it through its constructor - `HeadWander`, `PitchWander`,
+@@ -194,10 +195,11 @@ The item in the hand has the same rule, and it is counted the same way. It is wr
+   through twenty thousand hostile ticks and asserts that the aim never moves more than its tick limit,
+   that a settled hand is always arrived, and that the sway never escapes its band. `AimDynamicsTest`,
+   `IdleGlanceTest`, `WalkGlanceTest`, `NewcomerTest`, `PitchWanderTest`, `IdleFidgetTest`, `GazeAheadTest`, `KeyBeatTest`, `HeadFirstTest`,
+-  `StraightRunTest`, `SprintWindupTest`, `FollowProgressTest`, `HotbarSwitchTest`, `InventorySwapTest`,
++  `StraightRunTest`, `CarefulFootingTest`, `SprintWindupTest`, `FollowProgressTest`, `HotbarSwitchTest`, `InventorySwapTest`,
+   `UnattendedTest`, `TurnPaceTest`, `HandWritesTest` and `CadenceTest` cover the rules themselves, and
+   `CameraWritesTest`, `HandWritesTest`, `ButtonWritesTest` and `ClickGatesTest` guard the camera, the hand,
+-  the buttons and where a click may go.
++  the buttons and where a click may go, and `BridgeCrossingTest` guards the two ends of the crossing - the ask
++  on every tick of every movement, and both bridge paths charging the crouch they are walked with.
+ - Behaviour that already exists as a setting - `randomLooking`, `randomLooking113`, `smoothLook`,
+   `smoothLookTicks`, `blockBreakSpeed`, `mineGoalUpdateInterval`, `ticksBetweenInventoryMoves`,
+   `autoTool` - keeps its meaning. Where a setting names an interval, the interval is now what the
+diff --git a/src/main/java/baritone/pathing/movement/CarefulFooting.java b/src/main/java/baritone/pathing/movement/CarefulFooting.java
+new file mode 100644
+index 00000000..f2254068
+--- /dev/null
++++ b/src/main/java/baritone/pathing/movement/CarefulFooting.java
+@@ -0,0 +1,80 @@
++/*
++ * This file is part of Baritone.
++ *
++ * Baritone is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU Lesser General Public License as published by
++ * the Free Software Foundation, either version 3 of the License, or
++ * (at your option) any later version.
++ *
++ * Baritone is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public License
++ * along with Baritone.  If not, see <https://www.gnu.org/licenses/>.
++ */
++
++package baritone.pathing.movement;
++
++/**
++ * The crouch a person keeps while their footing is not certain.
++ * <p>
++ * A bridge used to be walked crouch-stand-crouch-stand, once per block. The crouch was asked for by the
++ * traverse only on the ticks where the block being stepped onto was missing and its placement was ready
++ * ({@code MovementTraverse#updateState}), and every key is cleared and re-decided from scratch every tick
++ * ({@code Movement.update()}), so the tick the block went in and the feet stepped onto it - four or five
++ * ticks of walking, at walk speed - the bot stood up, and then crouched again for the next one. Nobody
++ * crosses a gap that way. A person crouches at the edge and stays crouched until they are across.
++ * <p>
++ * That is the whole of what this holds: the ask is a movement that has to place the block it is stepping
++ * onto, and once the crouch is down it stays down until there is nothing ahead to fall into. It does not
++ * time anything, it has no drawn interval and it takes no random source - the crossing ends when the
++ * ground does, which is what makes a person stand up too. It never shortens an ask (a movement that needs
++ * the crouch gets it on the tick it asks), and it never invents one: a walk that is not over a gap gets no
++ * crouch from this class at all, whatever is beside it.
++ * <p>
++ * Free of Minecraft and of the behaviour that drives it, so the rules can be tested - the same terms as
++ * {@link KeyBeat}, {@link SprintWindup} and {@link HeadFirst}. {@code CarefulFootingTest} covers them.
++ */
++public final class CarefulFooting {
++
++    /**
++     * Whether the crouch is down right now.
++     */
++    private boolean crouched;
++
++    /**
++     * One tick of the crouch.
++     *
++     * @param asked             the movement has to place the block it is stepping onto, so there is
++     *                          nothing under the next step yet: the footing is not certain and the
++     *                          crouch goes down - or stays down, if it already was
++     * @param anotherGapIsAhead the block under the step after this one has no floor either, which is
++     *                          what a crossing looks like from the middle: consulted only while the
++     *                          crouch is already down, so a single hole at the side of an ordinary walk
++     *                          is not a bridge and gets no crouch
++     * @return whether the crouch should be down this tick
++     */
++    public boolean tick(boolean asked, boolean anotherGapIsAhead) {
++        this.crouched = asked || (this.crouched && anotherGapIsAhead);
++        return this.crouched;
++    }
++
++    /**
++     * Whether the crouch is down, without ticking it: for a caller that has to know before the tick it
++     * is asking about happens ({@code InputOverrideHandler#atAPace()}, which decides whether a beat of no
++     * keys is safe, and a bridge is the one place it is not).
++     */
++    public boolean crouched() {
++        return this.crouched;
++    }
++
++    /**
++     * Forgets the crouch, for when the bot is handed the keys again after somebody else had them, or when
++     * there is no path any more. A crossing that ended while nobody was looking is not one being walked.
++     */
++    public void reset() {
++        this.crouched = false;
++    }
++}
+diff --git a/src/main/java/baritone/pathing/movement/Movement.java b/src/main/java/baritone/pathing/movement/Movement.java
+index 9d8ec63d..900c081f 100644
+--- a/src/main/java/baritone/pathing/movement/Movement.java
++++ b/src/main/java/baritone/pathing/movement/Movement.java
+@@ -144,6 +144,14 @@ public abstract class Movement implements IMovement, MovementHelper {
+         });
+         currentState.getInputStates().clear();
+ 
++        // The crouch a person keeps while their footing is not certain, asked for here - every tick, by
++        // whichever movement is running - and held by the input layer, which is the only thing that
++        // survives the movement boundary the crouch has to outlive. See CarefulFooting: the tick the block
++        // goes in and the walk onto it are one crossing, and in between them the movement that asked is
++        // already gone. A movement that is not crossing anything answers neither question and stands the
++        // bot up, so the crouch cannot follow a crossing into the movement after it.
++        ((Baritone) baritone).getInputOverrideHandler().carefulFooting(isPlacingUnderItself(), isAnotherGapAhead());
++
+         // If the current status indicates a completed movement
+         if (currentState.getStatus().isComplete()) {
+             baritone.getInputOverrideHandler().clearAllKeys();
+@@ -152,6 +160,25 @@ public abstract class Movement implements IMovement, MovementHelper {
+         return currentState.getStatus();
+     }
+ 
++    /**
++     * Whether this movement has to place the block it is stepping onto: the footing under the next step is
++     * not there yet, so the crouch a person crosses with is asked for. See {@link CarefulFooting}.
++     * <p>
++     * False for everything that is not a crossing, which is what ends the crouch: a movement answers for
++     * itself, so the walk after a crossing stands the bot up on its first tick.
++     */
++    protected boolean isPlacingUnderItself() {
++        return false;
++    }
++
++    /**
++     * Whether the block under the step after this one has no floor either: the middle of a crossing, where
++     * the block just placed is walked with the next gap already in front of the feet.
++     */
++    protected boolean isAnotherGapAhead() {
++        return false;
++    }
++
+     protected boolean prepared(MovementState state) {
+         if (state.getStatus() == MovementStatus.WAITING) {
+             return true;
+diff --git a/src/main/java/baritone/pathing/movement/movements/MovementTraverse.java b/src/main/java/baritone/pathing/movement/movements/MovementTraverse.java
+index 67ffe529..012d2dc9 100644
+--- a/src/main/java/baritone/pathing/movement/movements/MovementTraverse.java
++++ b/src/main/java/baritone/pathing/movement/movements/MovementTraverse.java
+@@ -155,7 +155,13 @@ public class MovementTraverse extends Movement {
+                         continue;
+                     }
+                     if (MovementHelper.canPlaceAgainst(context.bsi, againstX, againstY, againstZ)) { // found a side place option
+-                        return WC + placeCost + hardness1 + hardness2;
++                        // The block goes in under the bot and the bot walks it the way it walks any
++                        // crossing: crouched, because the footing on either side of the block it just put
++                        // down is not certain yet. The behaviour holds that crouch for the whole crossing
++                        // (CarefulFooting), so this is what the block costs to walk. The backplace path
++                        // below has charged it since it was written; the side-place path was pricing a
++                        // crouched walk as an upright one, which is a cost that does not describe the path.
++                        return WC * (SNEAK_ONE_BLOCK_COST / WALK_ONE_BLOCK_COST) + placeCost + hardness1 + hardness2;
+                     }
+                 }
+                 // now that we've checked all possible directions to side place, we actually need to backplace
+@@ -176,6 +182,36 @@ public class MovementTraverse extends Movement {
+         }
+     }
+ 
++    /**
++     * Whether this movement has to place the block it is stepping onto, which is the ask for the crouch a
++     * person crosses with. {@code assumeSafeWalk} is the user saying they do not want the crouch at all -
++     * the same setting that skips this movement's own sneak below - and gets none of it.
++     */
++    @Override
++    protected boolean isPlacingUnderItself() {
++        if (Baritone.settings().assumeSafeWalk.value) {
++            return false;
++        }
++        return !MovementHelper.canWalkOn(ctx, positionToPlace)
++                && !MovementHelper.isClimbable(BlockStateInterface.get(ctx, src.below()).getBlock())
++                && !MovementHelper.canUseFrostWalker(ctx, positionToPlace);
++    }
++
++    /**
++     * Whether the block under the step after this one has no floor either.
++     * <p>
++     * The middle of a crossing is a step whose own block is down and whose next one is not, so this is what
++     * keeps the crouch down for the walk between two placements. It is only ever consulted while the crouch
++     * is already down - a single hole beside an ordinary walk is not a crossing and gets no crouch from it.
++     */
++    @Override
++    protected boolean isAnotherGapAhead() {
++        if (Baritone.settings().assumeSafeWalk.value) {
++            return false;
++        }
++        return !MovementHelper.canWalkOn(ctx, dest.offset(getDirection()).below());
++    }
++
+     @Override
+     public MovementState updateState(MovementState state) {
+         super.updateState(state);
+diff --git a/src/main/java/baritone/utils/InputOverrideHandler.java b/src/main/java/baritone/utils/InputOverrideHandler.java
+index 5ca35458..1fcba8f2 100755
+--- a/src/main/java/baritone/utils/InputOverrideHandler.java
++++ b/src/main/java/baritone/utils/InputOverrideHandler.java
+@@ -23,6 +23,7 @@ import baritone.api.event.events.TickEvent;
+ import baritone.api.utils.IInputOverrideHandler;
+ import baritone.api.utils.input.Input;
+ import baritone.behavior.Behavior;
++import baritone.pathing.movement.CarefulFooting;
+ import baritone.pathing.movement.KeyBeat;
+ import net.minecraft.client.player.KeyboardInput;
+ import net.minecraft.world.phys.Vec3;
+@@ -55,6 +56,15 @@ public final class InputOverrideHandler extends Behavior implements IInputOverri
+      */
+     private final KeyBeat keyBeat = new KeyBeat();
+ 
++    /**
++     * The crouch a person keeps while their footing is not certain, held here for the same reason the key
++     * beat is held here: the crossing it covers outlives the movement that asked for it. A movement that
++     * has to place the block it is stepping onto is the ask, and the walk onto the block it just placed is
++     * the same crossing - which is exactly the tick the movement seam is in the middle of. See
++     * {@link CarefulFooting}.
++     */
++    private final CarefulFooting footing = new CarefulFooting();
++
+     /**
+      * Squared horizontal speed that counts as a run: a walk tops out at 0.216 blocks per tick and every
+      * sprint is at least 0.28, so 0.23 squared is the gap between them.
+@@ -112,9 +122,13 @@ public final class InputOverrideHandler extends Behavior implements IInputOverri
+         blockBreakHelper.tick(isInputForcedDown(Input.CLICK_LEFT), handReady);
+         blockPlaceHelper.tick(isInputForcedDown(Input.CLICK_RIGHT), handReady);
+ 
++        if (!baritone.getPathingBehavior().isPathing()) {
++            footing.reset(); // a crossing that ended while nobody was asking is not one being walked
++        }
+         if (inControl()) {
+             if (ctx.player().input.getClass() != PlayerMovementInput.class) {
+                 keyBeat.reset(); // somebody else had the keys; the hands come to them fresh
++                footing.reset();
+                 ctx.player().input = new PlayerMovementInput(this);
+             }
+         } else {
+@@ -135,6 +149,30 @@ public final class InputOverrideHandler extends Behavior implements IInputOverri
+         return keyBeat.tick(desired, atAPace());
+     }
+ 
++    /**
++     * The crouch a person keeps while their footing is not certain: asked for once a tick by the movement
++     * that is crossing, held across the movement boundary that would otherwise end it (see
++     * {@link CarefulFooting}).
++     *
++     * @param asked             the movement has to place the block it is stepping onto, so the block
++     *                          under the next step is not there yet
++     * @param anotherGapIsAhead the block under the step after this one is missing too, which is what the
++     *                          middle of a crossing looks like
++     * @return whether the crouch is down this tick
++     */
++    public final boolean carefulFooting(boolean asked, boolean anotherGapIsAhead) {
++        return footing.tick(asked, anotherGapIsAhead);
++    }
++
++    /**
++     * Whether that crouch is down: {@link PlayerMovementInput} presses it like the sneak key it is, and
++     * {@link #atAPace()} has to know, because a crossing is the one place a beat of no keys is not a beat
++     * a person would take.
++     */
++    public final boolean isCrouchingForTheFooting() {
++        return footing.crouched();
++    }
++
+     /**
+      * Whether the player is running along the ground somewhere a beat between two directions is a beat a
+      * person would take.
+@@ -153,6 +191,7 @@ public final class InputOverrideHandler extends Behavior implements IInputOverri
+         }
+         if (!ctx.player().onGround()
+                 || ctx.player().isShiftKeyDown()
++                || footing.crouched() // the crouch a crossing is walked with: the keys are a control loop here
+                 || isInputForcedDown(Input.SNEAK)
+                 || ctx.player().isInWater()
+                 || ctx.player().isInLava()
+diff --git a/src/main/java/baritone/utils/PlayerMovementInput.java b/src/main/java/baritone/utils/PlayerMovementInput.java
+index 9dad4cf3..5e141f0e 100644
+--- a/src/main/java/baritone/utils/PlayerMovementInput.java
++++ b/src/main/java/baritone/utils/PlayerMovementInput.java
+@@ -64,7 +64,10 @@ public class PlayerMovementInput extends ClientInput {
+             leftImpulse--;
+         }
+ 
+-        boolean sneaking = handler.isInputForcedDown(Input.SNEAK);
++        // The crouch as the game sees it: the movement's ask, and - held across the movement seam, where
++        // every key is otherwise re-decided from scratch - the crouch a person keeps while the footing is
++        // not certain. See CarefulFooting.
++        boolean sneaking = handler.isInputForcedDown(Input.SNEAK) || handler.isCrouchingForTheFooting();
+ 
+         // Not scaled down here on purpose. This used to multiply the impulses by 0.3, which is what the key
+         // handler did when this class was written; the game no longer scales crouching into the impulse.
+diff --git a/src/test/java/baritone/pathing/movement/BridgeCrossingTest.java b/src/test/java/baritone/pathing/movement/BridgeCrossingTest.java
+new file mode 100644
+index 00000000..578de828
+--- /dev/null
++++ b/src/test/java/baritone/pathing/movement/BridgeCrossingTest.java
+@@ -0,0 +1,157 @@
++/*
++ * This file is part of Baritone.
++ *
++ * Baritone is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU Lesser General Public License as published by
++ * the Free Software Foundation, either version 3 of the License, or
++ * (at your option) any later version.
++ *
++ * Baritone is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public License
++ * along with Baritone.  If not, see <https://www.gnu.org/licenses/>.
++ */
++
++package baritone.pathing.movement;
++
++import org.junit.Test;
++
++import java.io.IOException;
++import java.io.UncheckedIOException;
++import java.nio.file.Files;
++import java.nio.file.Path;
++import java.util.List;
++import java.util.stream.Collectors;
++
++import static org.junit.Assert.assertEquals;
++import static org.junit.Assert.assertTrue;
++import static org.junit.Assume.assumeTrue;
++
++/**
++ * The two places the crouch of a crossing has to be wired, counted from the source, because neither can be
++ * reached without a running game.
++ * <p>
++ * A crossing is walked crouched, so it has to cost what a crouched walk costs: the side-place branch of
++ * {@code MovementTraverse#cost} was returning a plain walk price for a block the bot walks crouched, while
++ * its own {@code updateState} sets the crouch for both the side-place and the backplace path - and the
++ * backplace branch has charged the crouch since it was written. A price that does not describe the path is
++ * a pathfinder that picks routes it cannot walk in the time it thinks, which is the one thing the
++ * behaviour work here is not allowed to do. If the crouch is removed from the walking side one day, the
++ * price has to come off with it, and this fails until the two are decided together.
++ * <p>
++ * The ask is the same kind of pin: the crouch has to be asked for on the tick the block goes in *and* on
++ * the ticks the feet walk onto it, because every key is cleared and re-decided from scratch every tick
++ * ({@code Movement.update()}) and the movement boundary is exactly where the walk onto a just-placed block
++ * happens. Asked on one side of that seam only, the bot stands up in the middle of its own crossing, which
++ * is the thing this whole change is for.
++ */
++public class BridgeCrossingTest {
++
++    private static final String SNEAK_MULTIPLIER = "SNEAK_ONE_BLOCK_COST / WALK_ONE_BLOCK_COST";
++
++    @Test
++    public void bothBridgePricesChargeTheCrouchTheBotWalksWith() {
++        final List<String> lines = code("src/main/java/baritone/pathing/movement/movements/MovementTraverse.java");
++        final List<String> charging = lines.stream().filter(line -> line.contains(SNEAK_MULTIPLIER)).collect(Collectors.toList());
++        assertEquals("exactly the two bridge paths charge the crouch - the backplace path and the"
++                        + " side-place path - and this is what found the second one missing: " + charging,
++                2, charging.size());
++    }
++
++    @Test
++    public void theCrossingIsAskedForEveryTickByWhicheverMovementIsRunning() {
++        final List<String> movement = code("src/main/java/baritone/pathing/movement/Movement.java");
++        final List<String> asks = movement.stream().filter(line -> line.contains("carefulFooting(")).collect(Collectors.toList());
++        assertEquals("the crossing is asked for once a tick, from the one seam every movement passes"
++                        + " through - asked anywhere else, a movement that is not a traverse never ticks the"
++                        + " crouch and a crossing followed by one leaves the bot walking away crouched: " + asks,
++                1, asks.size());
++        assertTrue("the tick no longer asks whether the movement has to place under itself, which is what"
++                        + " starts a crouch: " + asks,
++                asks.get(0).contains("isPlacingUnderItself()"));
++        assertTrue("the tick no longer asks whether the step after this one has a floor either, which is"
++                        + " what holds the crouch through the walk onto the block just placed: " + asks,
++                asks.get(0).contains("isAnotherGapAhead()"));
++
++        final List<String> traverse = code("src/main/java/baritone/pathing/movement/movements/MovementTraverse.java");
++        assertTrue("the traverse stopped answering the ask: nothing would crouch on a bridge",
++                traverse.stream().anyMatch(line -> line.contains("protected boolean isPlacingUnderItself()")));
++        assertTrue("the traverse stopped answering whether another gap is ahead: the crouch would come up"
++                        + " in the middle of its own crossing",
++                traverse.stream().anyMatch(line -> line.contains("protected boolean isAnotherGapAhead()")));
++        assertTrue("the ask no longer honours assumeSafeWalk: the user who turned the crouch off would"
++                        + " get it back on every bridge",
++                methodBody(traverse, "protected boolean isPlacingUnderItself()")
++                        .stream().anyMatch(line -> line.contains("assumeSafeWalk")));
++        assertTrue("the gap ahead no longer honours assumeSafeWalk, so the crouch would be held for a user"
++                        + " who turned it off",
++                methodBody(traverse, "protected boolean isAnotherGapAhead()")
++                        .stream().anyMatch(line -> line.contains("assumeSafeWalk")));
++    }
++
++    @Test
++    public void theInputLayerIsWhatPressesTheCrouch() {
++        final List<String> handler = code("src/main/java/baritone/utils/InputOverrideHandler.java");
++        assertTrue("the input layer no longer holds the crouch across the movement seam",
++                handler.stream().anyMatch(line -> line.contains("footing.tick(")));
++        assertTrue("the crouch is no longer forgotten when there is no path, so a crossing that ended while"
++                        + " nobody was asking would leave the bot crouched for good",
++                handler.stream().filter(line -> line.contains("footing.reset()")).count() == 2);
++        final List<String> input = code("src/main/java/baritone/utils/PlayerMovementInput.java");
++        assertTrue("the crouch is no longer what the game sees as the sneak key",
++                input.stream().anyMatch(line -> line.contains("isCrouchingForTheFooting()")));
++    }
++
++    /**
++     * The lines of one method, from its signature to the closing brace at the same indent. Bare enough to
++     * read a guard out of a body without a parser, which is all this file needs.
++     */
++    private static List<String> methodBody(List<String> lines, String signature) {
++        int start = -1;
++        for (int i = 0; i < lines.size(); i++) {
++            if (lines.get(i).startsWith(signature)) {
++                start = i;
++                break;
++            }
++        }
++        // not an assumption: this is the thing being pinned, so its absence has to fail rather than skip
++        assertTrue("the method this file pins is gone: " + signature, start >= 0);
++        final List<String> body = new java.util.ArrayList<>();
++        for (int i = start + 1; i < lines.size(); i++) {
++            if (lines.get(i).equals("}")) {
++                return body;
++            }
++            body.add(lines.get(i));
++        }
++        return body;
++    }
++
++    private static List<String> code(String path) {
++        final Path root = repoRoot();
++        assumeTrue("the sources are not next to this test run", root != null);
++        final Path file = root.resolve(path);
++        assumeTrue(path + " is not next to this test run", Files.isRegularFile(file));
++        try {
++            return Files.readAllLines(file).stream()
++                    .map(String::trim)
++                    .filter(line -> !line.startsWith("//") && !line.startsWith("*") && !line.startsWith("/*"))
++                    .collect(Collectors.toList());
++        } catch (IOException e) {
++            throw new UncheckedIOException(e);
++        }
++    }
++
++    private static Path repoRoot() {
++        Path dir = Path.of("").toAbsolutePath();
++        for (int i = 0; i < 4 && dir != null; i++) {
++            if (Files.isDirectory(dir.resolve("src"))) {
++                return dir;
++            }
++            dir = dir.getParent();
++        }
++        return null;
++    }
++}
+diff --git a/src/test/java/baritone/pathing/movement/CarefulFootingTest.java b/src/test/java/baritone/pathing/movement/CarefulFootingTest.java
+new file mode 100644
+index 00000000..70099232
+--- /dev/null
++++ b/src/test/java/baritone/pathing/movement/CarefulFootingTest.java
+@@ -0,0 +1,136 @@
++/*
++ * This file is part of Baritone.
++ *
++ * Baritone is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU Lesser General Public License as published by
++ * the Free Software Foundation, either version 3 of the License, or
++ * (at your option) any later version.
++ *
++ * Baritone is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public License
++ * along with Baritone.  If not, see <https://www.gnu.org/licenses/>.
++ */
++
++package baritone.pathing.movement;
++
++import org.junit.Test;
++
++import static org.junit.Assert.assertFalse;
++import static org.junit.Assert.assertTrue;
++
++/**
++ * The crouch a person keeps while their footing is not certain, over the two things that decide it.
++ * <p>
++ * The boundaries are the whole test, the way they are for {@code KeyBeatTest}: a crouch that ends a tick
++ * early is the flicker this class exists to remove, a crouch that lingers past the last gap is a bot
++ * walking away from its bridge still crouched, and a crouch that appears on a walk that crosses nothing is
++ * a bot crouching at nothing. None of it is timed and none of it is drawn, so every case here is exact.
++ */
++public class CarefulFootingTest {
++
++    /** a tick of a movement that has to place the block it is stepping onto */
++    private static final boolean ASKED = true;
++    /** a tick of a step whose own block is there and whose next one is not: the middle of a crossing */
++    private static final boolean GAP_AHEAD = true;
++    /** the ground under the step after this one is solid */
++    private static final boolean GROUND_AHEAD = false;
++
++    @Test
++    public void theCrouchGoesDownTheTickAMovementHasToPlaceUnderItself() {
++        final CarefulFooting footing = new CarefulFooting();
++        assertFalse("the crouch is down before anything asked for it", footing.crouched());
++        assertTrue("a movement that has to place the block it is stepping onto got no crouch",
++                footing.tick(ASKED, GROUND_AHEAD));
++        assertTrue("the crouch is not down the tick after it was asked for", footing.crouched());
++    }
++
++    @Test
++    public void anAskIsNeverShortened() {
++        final CarefulFooting footing = new CarefulFooting();
++        for (boolean gapAhead : new boolean[]{GROUND_AHEAD, GAP_AHEAD}) {
++            footing.reset();
++            assertTrue("an ask was answered with an upright walk because of what was ahead of it",
++                    footing.tick(ASKED, gapAhead));
++            assertTrue("an ask was answered with an upright walk on the tick after it", footing.tick(ASKED, gapAhead));
++        }
++    }
++
++    @Test
++    public void theCrouchStaysDownForTheWalkOntoTheBlockJustPlaced() {
++        final CarefulFooting footing = new CarefulFooting();
++        footing.tick(ASKED, GAP_AHEAD);
++        // the block goes in: the movement stops asking, the next gap is still there, and the feet walk onto
++        // the block that was just placed. This is the window the old behaviour stood up in, four or five
++        // ticks at walk speed, once per block.
++        for (int tick = 0; tick < 6; tick++) {
++            assertTrue("the bot stood up in the middle of its own crossing, on tick " + tick,
++                    footing.tick(!ASKED, GAP_AHEAD));
++        }
++        assertFalse("the crouch outlived the crossing: the ground ahead is solid and nothing is asking",
++                footing.tick(!ASKED, GROUND_AHEAD));
++    }
++
++    @Test
++    public void aWalkThatIsNotCrossingAnythingGetsNoCrouch() {
++        final CarefulFooting footing = new CarefulFooting();
++        assertFalse("a plain walk was crouched", footing.tick(!ASKED, GROUND_AHEAD));
++        // a hole beside an ordinary walk is not a crossing: the machine only reads the gap ahead while the
++        // crouch is already down, so a single missing block ahead of a step cannot start one
++        assertFalse("a walk past a hole was crouched", footing.tick(!ASKED, GAP_AHEAD));
++    }
++
++    @Test
++    public void aCrossingOfManyBlocksIsOneCrouch() {
++        final CarefulFooting footing = new CarefulFooting();
++        final boolean[] crossing = {
++                // step one: nothing under it, place it
++                ASKED, ASKED, ASKED,
++                // the walk onto it, with the next gap already there
++                !ASKED, !ASKED, !ASKED, !ASKED,
++                // step two
++                ASKED, ASKED,
++                !ASKED, !ASKED, !ASKED, !ASKED,
++                // step three
++                ASKED, ASKED,
++                !ASKED, !ASKED, !ASKED, !ASKED,
++                // step four, and the far side: solid ground under and beyond
++                ASKED, !ASKED, !ASKED,
++        };
++        for (int tick = 0; tick < crossing.length; tick++) {
++            assertTrue("the crouch came up in the middle of the crossing, on tick " + tick,
++                    footing.tick(crossing[tick], GAP_AHEAD));
++        }
++        assertFalse("the crossing is over and the bot is still crouched", footing.tick(!ASKED, GROUND_AHEAD));
++    }
++
++    @Test
++    public void theGroundComingBackStandsTheBotUpOnTheTick() {
++        final CarefulFooting footing = new CarefulFooting();
++        footing.tick(ASKED, GAP_AHEAD);
++        assertFalse("the crouch took a tick longer than the ground did", footing.tick(!ASKED, GROUND_AHEAD));
++        assertFalse("the bot crouched again with nothing asking and nothing ahead", footing.tick(!ASKED, GROUND_AHEAD));
++    }
++
++    @Test
++    public void resetForgetsACrossing() {
++        final CarefulFooting footing = new CarefulFooting();
++        footing.tick(ASKED, GAP_AHEAD);
++        footing.reset();
++        assertFalse("a crossing that was forgotten is still being walked", footing.crouched());
++        assertFalse("a crossing that was forgotten started up again by itself", footing.tick(!ASKED, GAP_AHEAD));
++    }
++
++    @Test
++    public void whetherTheCrouchIsDownCanBeAskedWithoutTicking() {
++        final CarefulFooting footing = new CarefulFooting();
++        assertFalse(footing.crouched());
++        footing.tick(ASKED, GAP_AHEAD);
++        assertTrue("asking whether the crouch is down ticked it or lost it", footing.crouched());
++        footing.tick(!ASKED, GROUND_AHEAD);
++        assertFalse("asking whether the crouch is down kept a crouch that had ended", footing.crouched());
++    }
++}
+-- 
+2.47.3
+
