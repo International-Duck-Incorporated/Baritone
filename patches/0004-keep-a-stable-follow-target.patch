@@ -1,0 +1,82 @@
+From d3ee6fc35273a00f445ec7f9981a4bf53fb850a9 Mon Sep 17 00:00:00 2001
+From: 0xFFshell <0xffshell@users.noreply.gitlab.com>
+Date: Thu, 8 Oct 2026 11:07:06 +0000
+Subject: [PATCH] Keep a stable target while following
+
+---
+ .../java/baritone/process/FollowProcess.java  | 33 +++++++++++++------
+ 1 file changed, 23 insertions(+), 10 deletions(-)
+
+diff --git a/src/main/java/baritone/process/FollowProcess.java b/src/main/java/baritone/process/FollowProcess.java
+index 113700a4..e3fd2c88 100644
+--- a/src/main/java/baritone/process/FollowProcess.java
++++ b/src/main/java/baritone/process/FollowProcess.java
+@@ -48,6 +48,8 @@ public final class FollowProcess extends BaritoneProcessHelper implements IFollo
+ 
+     private Predicate<Entity> filter;
+     private List<Entity> cache;
++    /** The person currently being regarded while the feet are waiting; retained across scans. */
++    private Entity standingTarget;
+     private boolean into; // walk straight into the target, regardless of settings
+ 
+     public FollowProcess(Baritone baritone) {
+@@ -80,18 +82,26 @@ public final class FollowProcess extends BaritoneProcessHelper implements IFollo
+         if (cache.isEmpty() || baritone.getPathingBehavior().isPathing()) {
+             return;
+         }
+-        Entity nearest = null;
+-        double closest = Double.MAX_VALUE;
+-        for (Entity entity : cache) {
+-            final double distance = entity.distanceToSqr(ctx.player());
+-            if (distance < closest) {
+-                closest = distance;
+-                nearest = entity;
++        // Keep looking at the same person while they remain a valid follow target. Choosing the nearest
++        // entity from scratch every tick makes two nearby matching entities trade the camera whenever their
++        // distances cross by a fraction of a block; a person does not flick between both faces like that.
++        if (this.standingTarget == null || !cache.contains(this.standingTarget)) {
++            Entity nearest = null;
++            double closest = Double.MAX_VALUE;
++            for (Entity entity : cache) {
++                final double distance = entity.distanceToSqr(ctx.player());
++                if (distance < closest) {
++                    closest = distance;
++                    nearest = entity;
++                }
+             }
++            this.standingTarget = nearest;
++        }
++        if (this.standingTarget != null) {
++            baritone.getLookBehavior().updateTarget(
++                    RotationUtils.calcRotationFromVec3d(ctx.playerHead(), this.standingTarget.getEyePosition(), ctx.playerRotations()),
++                    false);
+         }
+-        baritone.getLookBehavior().updateTarget(
+-                RotationUtils.calcRotationFromVec3d(ctx.playerHead(), nearest.getEyePosition(), ctx.playerRotations()),
+-                false);
+     }
+ 
+     /**
+@@ -178,6 +188,7 @@ public final class FollowProcess extends BaritoneProcessHelper implements IFollo
+     public void onLostControl() {
+         filter = null;
+         cache = null;
++        standingTarget = null;
+     }
+ 
+     @Override
+@@ -188,12 +199,14 @@ public final class FollowProcess extends BaritoneProcessHelper implements IFollo
+     @Override
+     public void follow(Predicate<Entity> filter) {
+         this.filter = filter;
++        this.standingTarget = null;
+         this.into = false;
+     }
+ 
+     @Override
+     public void pickup(Predicate<ItemStack> filter) {
+         this.filter = e -> e instanceof ItemEntity && filter.test(((ItemEntity) e).getItem());
++        this.standingTarget = null;
+         this.into = true;
+     }
+ 
