@@ -929,9 +929,10 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
     /**
      * Whether the head is ours to move, for the walk.
      * <p>
-     * Three conditions and all three are load bearing. The player has to be moving along - on foot or
-     * swimming, which are the same deal as far as the head is concerned (see {@link #isSwimming}) - because
-     * this is the stride, and standing still is a different gate and a quieter sway. Baritone has to be the one driving,
+     * Three conditions and all three are load bearing. The player has to be moving along - on foot, in
+     * water or in the air, which are the same deal as far as the head is concerned (see {@link
+     * #isSwimming} and {@link #isInTheAir}) - because this is the stride, and standing still is a
+     * different gate and a quieter sway. Baritone has to be the one driving,
      * because a head that moves on its own while a person is walking somewhere is not human, it is broken.
      * And nothing may be being clicked this tick, for the reason given on {@link #interacting()}: the trace
      * Baritone aims its own pickaxe and blocks along follows the rotation it last told the server, and a
@@ -945,7 +946,7 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
      */
     private boolean canWander() {
         return this.target != null
-                && (this.isWalking() || this.isSwimming())
+                && (this.isWalking() || this.isSwimming() || this.isInTheAir())
                 && baritone.getPathingBehavior().isPathing()
                 && !this.interacting();
     }
@@ -989,6 +990,34 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
         final double dz = ctx.player().getDeltaMovement().z;
         return dx * dx + dz * dz > IDLE_SPEED_SQ;
     }
+
+    /**
+     * Whether the player is off the ground and not being steered by the look: a fall, a jump, a climb,
+     * anything between the ground and the ground.
+     * <p>
+     * The feet leaving the ground used to switch the stride off - {@link #isWalking()} is dry land with the
+     * feet down, and {@link #isSwimming()} is water - so every drop of a block or two took the sway out of
+     * the head for the length of the fall and then faded the last of it out over the twenty ticks after
+     * that ({@link HeadWander#recentre} is five percent a tick). On rolling ground, where a path of any
+     * length is a run of little descents, that is most of a walk spent with a head that is not moving at
+     * all: the statue this sway exists to avoid, switched by the shape of the terrain rather than by
+     * anything the head was doing.
+     * <p>
+     * Nothing about the air argues for it. The game turns a fall by the yaw exactly as it turns a walk, so a
+     * degree of drift in the yaw is a degree of drift in the heading - the same sentence the swim gate makes
+     * - and the pitch steers nothing at all up there, which is the one place this gate is simpler than that
+     * one: there is no axis to leave alone. The two states that do steer the body by the look are water,
+     * where the pitch is the depth, and an elytra, which is a control loop; both are excluded here, and the
+     * elytra is excused from everything in this file for that reason.
+     * <p>
+     * Deliberately without the speed test the other two carry. A walk stops when the player does, and the
+     * quieter sway takes over; there is no standing still in the air, and a straight drop with no speed to
+     * measure on either horizontal axis is still the body moving under the head.
+     */
+    private boolean isInTheAir() {
+        return !ctx.player().onGround() && !ctx.player().isInWater() && !ctx.player().isFallFlying();
+    }
+
 
     /**
      * Whether an idle glance is appropriate right now.

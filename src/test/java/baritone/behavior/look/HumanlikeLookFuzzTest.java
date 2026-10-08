@@ -165,6 +165,12 @@ public class HumanlikeLookFuzzTest {
         // about under Baritone's control with nothing clicked, runs it at half under the glance. Nothing
         // being clicked is the gate they all share, because the rotation they are adding to is the one
         // Baritone traces its own pickaxe and blocks along.
+        //
+        // The body's half of the stride gate is modelled here as speed alone, which is what the two flags
+        // below can express: the caller (LookBehavior#canWander) counts a player who is off the ground as
+        // moving whatever their speed - a fall, a jump, a climb, where the yaw steers a heading just as it
+        // does on foot - and this harness has no ground to stand on. So its walking ticks model the caller's
+        // ground and water halves, and the airborne half is pinned by reading rather than by these runs.
         final boolean walkingSway = wanted != null && walking && pathing && !interacting;
         final boolean waitingSway = wanted != null && standingStill && inControl && !interacting;
         final boolean idleSway = wanted == null && inControl && standingStill && !interacting;
