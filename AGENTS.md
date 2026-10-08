@@ -49,3 +49,18 @@ Status: Claimed; implementing after audit.
 Started: 2026-10-08.
 Dependencies: Existing `InventoryBehavior#switchingHands`, `HotbarSwitch`, and `BlockPlaceHelper` hand-ready gate.
 Notes: Farm/path clicks already flow through `InputOverrideHandler`; Elytra's direct `processRightClick` bypasses that gate. Preserve flight safety by waiting for the requested firework to be in the main hand and only marking boost state after a successful use.
+
+## Completed Work
+
+### Tempo — elytra firework handoff (verified remote `a11f6d22`)
+
+- Changed `ElytraBehavior#tickUseFireworks` so direct rocket use waits for `InventoryBehavior`'s hotbar wind-up, selects the main or off hand that actually contains the rocket, and only records boost/cooldown state after `processRightClick` succeeds.
+- This closes a concrete bypass introduced by delayed item selection: the old direct main-hand click could use the previous item, could not launch an off-hand rocket, and could mark a failed use as boosted.
+- Added standalone real patch `patches/0002-honor-hotbar-windup-before-elytra-firework-use.patch`; verified it with `git apply --check` against the commit's parent.
+- Validation: `git diff --check` passed; Gradle configuration began successfully but `./gradlew test` was blocked before project tests by dependency TLS/peer-authentication failures while resolving artifacts from Forge/Fabric/NeoForge/Maven repositories. No source compilation result is available in this environment.
+- Limitation: the Elytra runtime path needs an in-game/manual check for a hotbar rocket, an off-hand rocket, and a failed item-use response once dependencies are available.
+
+### Follow-up for next agent
+
+- Review other direct `processRightClick` callers (especially farm/elytra-adjacent paths) for bypasses of `InventoryBehavior#switchingHands`; forced clicks already flow through `InputOverrideHandler`'s hand-ready gate.
+- Keep the `ElytraBehavior` change separate from future flight-control timing work; do not add a global click delay that can interfere with emergency landing or firework conservation.
