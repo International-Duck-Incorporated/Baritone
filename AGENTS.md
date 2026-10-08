@@ -16,7 +16,7 @@ Give timestaps of everything, and dont use the name 0xFFshell, as that one is re
 |---|---|---|---|
 | Tempo | Audit and improve grounded movement cadence after existing camera/input work | `InputOverrideHandler`, `PlayerMovementInput`, path execution | Planning; no source changes yet |
 | Kestrel | The flinch, and the blow in the hostile run (2026-10-08 12:11 UTC) | `behavior/look` camera | Complete; `00ebe176` |
-| Plover | Builder break search done (`9ca8323c`, patch 0022) (2026-10-08 12:26 UTC); next: sneak cadence | `process/BuilderProcess`, `process/PlaceSearch` → `pathing/movement` | Done; next claimed |
+| Plover | Builder break search done (`9ca8323c`, patch 0022); sneak-cadence claim WITHDRAWN 12:47 UTC - the numbers do not support it | `process/BuilderProcess`, `process/PlaceSearch` | Done; resting |
 
 ## Multi-Agent Planning
 
@@ -664,3 +664,40 @@ Left for whoever comes next, in the order I would take them:
    buttons, `0018`-`0020` to the click gates and the hand-ready guard, `0022`-`0023` to the builder's break
    order and the trace's face). Rebase, regenerate with `git format-patch`, and check with `git apply` in a
    scratch worktree at the tip you rebased onto - the patch headers then name commits that exist.
+
+### Plover (correction, 2026-10-08 12:47 UTC) - withdrawing the sneak-cadence claim
+
+I claimed the sneak cadence at 12:26 and proposed "a bounded 1-3 tick sneak hangover across movement seams".
+**That plan is wrong and I did not build it.** Line numbers below are against `26ce92db`.
+
+From `src/api/java/baritone/api/pathing/movement/ActionCosts.java`:
+
+- `WALK_ONE_BLOCK_COST = 20 / 4.317` = **4.63 ticks** per block (`:25`)
+- `SNEAK_ONE_BLOCK_COST = 20 / 1.3` = **15.38 ticks** per block (`:30`) - sneaking is **3.32x** slower
+
+The window the hangover was meant to cover is the walk onto the just-placed bridge block: one block at walk
+speed, **~4.6 ticks**. A 1-3 tick hangover covers at most **65%** of it, so the crouch would still flicker. I
+would have shipped a change that looks like a fix and is not one. Stretching the hangover to cover the window
+is just "hold sneak for the whole traverse", which is the 3.32x case.
+
+The part that settles it: **the cost model does not charge the sneak uniformly.**
+`MovementTraverse.calculateCost` multiplies by `SNEAK_ONE_BLOCK_COST / WALK_ONE_BLOCK_COST` only on the
+**backplace** path (`:172`, "since we are sneak backplacing, we are sneaking lol"). The **side-place** path
+returns at `:158` with no sneak multiplier at all - yet `updateState` sets `Input.SNEAK, true` for both
+(`:332`, gated only on `!assumeSafeWalk`, which defaults to `false` at `Settings.java:181`). So a bot told to
+hold sneak through a side-placed bridge would walk it at 15.38 ticks a block while the pathfinder priced it at
+4.63. That is a path cost that no longer describes the path, and "do not degrade pathfinding" is a hard
+requirement here. Fixing the flicker properly means fixing the cost model in the same commit, which is a
+pathfinding change and not a cadence change.
+
+Tempo: this is your ground, and the cost-model half is the part I would not do unilaterally. If you want it,
+the two halves have to land together. I am leaving `Movement.java`, the `movements/*` SNEAK sites and
+`MovementTraverse.calculateCost` alone.
+
+What is still true, and worth keeping: `Movement.update()` does `clearAllKeys()` (`:141`), re-applies
+`currentState.getInputStates()`, then clears the map (`:145`), every tick - so `SNEAK` genuinely has zero
+carry-over and is recomputed from scratch. **The flicker is real. It is the fix I proposed that was wrong, not
+the finding.**
+
+Status: the builder's break order (`9ca8323c`, patch `0022`) is pushed and verified; nothing of mine is
+mid-flight. Resting.
