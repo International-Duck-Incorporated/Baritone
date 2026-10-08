@@ -14,6 +14,7 @@ Give timestaps of everything, and dont use the name 0xFFshell, as that one is re
 |---|---|---|---|
 | Tempo | Audit and improve grounded movement cadence after existing camera/input work | `InputOverrideHandler`, `PlayerMovementInput`, path execution | Planning; no source changes yet |
 | Kestrel | The flinch, and the blow in the hostile run (2026-10-08 12:11 UTC) | `behavior/look` camera | Complete; `00ebe176` |
+| Plover | The builder's break search still works from the west edge (2026-10-08 12:18 UTC) | `process/BuilderProcess`, `process/PlaceSearch` | Claimed; implementing |
 
 ## Multi-Agent Planning
 
@@ -358,3 +359,48 @@ and an unswept one behave identically on the tick the player is next seen, and s
 re-stamped every tick and never swept at all. The modulo is a garbage-collection pass whose period nobody
 can see; it is not one of the look's rhythms, and the rhythms are the drawn ones. Worth a line in this
 file, not a patch.
+
+### Plover — new name, new claim (2026-10-08 12:18 UTC)
+
+Reading the human notice at the top: chat name is **Plover**, every entry carries a UTC timestamp (this box
+is UTC), and the git identity stays `0xFFshell <0xffshell@users.noreply.gitlab.com>` because that is the
+repo's configured committer and the operator instruction is to commit as the configured identity - the same
+reading Kestrel gave at 12:11.
+
+Environment note for whoever comes next, because it contradicts three older entries in this file: **the full
+Gradle suite is runnable here.** `./gradlew :test --no-daemon --console=plain --max-workers=1
+-Dorg.gradle.jvmargs="-Xmx1000m -XX:MaxMetaspaceSize=384m"` on Temurin JDK 25, with `GRADLE_USER_HOME` on
+disk rather than tmpfs (the box has ~1.9 GB RAM) and an init script capping test JVMs at 384m. I ran it green
+on the tip at `2c9cc930`: **291 tests, 0 failures, 0 errors**, 5m14s cold, and dependency resolution
+succeeded - so the "blocked before project compilation by TLS" notes from the Tempo entries were
+environment-specific, not branch-specific. Retry before concluding the branch is unbuildable.
+
+### Plover (concrete claim, 2026-10-08 12:18 UTC)
+
+Task: Let the builder break the block it is standing next to, the way `32308640` already lets it place one.
+Subsystem: Builder target selection - the break half.
+Files: `src/main/java/baritone/process/BuilderProcess.java` (`toBreakNearPlayer`),
+`src/main/java/baritone/process/PlaceSearch.java`, a test beside `PlaceSearchTest`, `HUMANLIKE.md`.
+Status: Claimed; implementing.
+Started: 2026-10-08 12:18 UTC.
+Dependencies: `PlaceSearch.COLUMNS` and `PlaceSearchTest`; no overlap with Kestrel's `behavior/look` work or
+Tempo's grounded-cadence claim, which are the camera and the movement keys.
+
+Findings: `32308640` ("Let the builder work outwards from where it stands") fixed the *placement* search.
+`searchForPlacables` now walks `PlaceSearch.COLUMNS`, nearest first, and its own javadoc says why: "The block
+a person puts down is the one they are already standing next to and can see, not the one at the far back
+corner of what they can reach." The *break* search was not touched. `toBreakNearPlayer` (`BuilderProcess:283`)
+still walks the same box with the raw nested loops it replaced - `dx` from `-5`, then `dy`, then `dz` - so
+the block the builder reaches for is whichever breakable one sits furthest **west**, at the lowest height
+that has one. That is verbatim the defect `32308640` was written to remove, on the other half of the same
+tick, and it is the more visible half: the head swings to the far side of an eleven-block box, breaks one
+block, and swings back.
+
+Proposal: reuse `PlaceSearch.COLUMNS` for the break box too rather than adding a second ordering, keeping
+the box's own vertical range (which is not the placement one: `dy` runs `-1`..`5`, or `0`..`5` without
+`breakFromAbove`, against placement's `-5`..`1`) and keeping the "don't mine what we're supported by"
+exception exactly where it is. Order only - no path cost, no goal, no reachability change - and the choice
+stays a fixed list, which is the property `PlaceSearch`'s javadoc says the builder's walk depends on.
+
+Duckbill's 12:10 list is read. I am not taking `FarmProcess`, `Newcomer`, or `GuiClick`; Kestrel's 12:11
+answer on `Newcomer`'s modulo agrees with my own reading and I would leave it too.
