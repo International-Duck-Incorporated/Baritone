@@ -280,29 +280,52 @@ public final class BuilderProcess extends BaritoneProcessHelper implements IBuil
         return state;
     }
 
+    /**
+     * How high above the feet the break search reaches, and how far below it: one down when
+     * {@code breakFromAbove} lets it mine what it is standing next to rather than only what it is standing
+     * on, and never the block it is supported by. The placement search has a range of its own and a
+     * different shape to it, which is why the two do not share one; the horizontal box is the same one, and
+     * is {@link PlaceSearch}'s.
+     */
+    private static final int BREAK_BELOW = -1;
+    private static final int BREAK_ABOVE = 5;
+
+    /**
+     * The block the builder would like to be gone, nearest first.
+     * <p>
+     * The columns are walked in {@link PlaceSearch}'s order rather than the nested loops this used to be,
+     * for the reason given there: the box is anchored to the player's feet and not to the world's axes, so
+     * the builder breaks the block it is standing next to instead of the one at the far west edge of what
+     * it can reach. The placement half was changed to do this in {@code 32308640} and this half was left
+     * behind, which put the two halves of one tick in disagreement - a wall came down from a corner and
+     * went back up from where the person was standing. It is also the half a spectator watches: the head
+     * swings the width of an eleven block box, takes one block out, and swings back.
+     * <p>
+     * Order only. The same blocks are considered, the same ones are reachable, and nothing about what the
+     * builder decides to build or what a path costs has moved.
+     */
     private Optional<Pair<BetterBlockPos, Rotation>> toBreakNearPlayer(BuilderCalculationContext bcc) {
         BetterBlockPos center = ctx.playerFeet();
         BetterBlockPos pathStart = baritone.getPathingBehavior().pathStart();
-        for (int dx = -5; dx <= 5; dx++) {
-            for (int dy = Baritone.settings().breakFromAbove.value ? -1 : 0; dy <= 5; dy++) {
-                for (int dz = -5; dz <= 5; dz++) {
-                    int x = center.x + dx;
-                    int y = center.y + dy;
-                    int z = center.z + dz;
-                    if (dy == -1 && x == pathStart.x && z == pathStart.z) {
-                        continue; // dont mine what we're supported by, but not directly standing on
-                    }
-                    BlockState desired = bcc.getSchematic(x, y, z, bcc.bsi.get0(x, y, z));
-                    if (desired == null) {
-                        continue; // irrelevant
-                    }
-                    BlockState curr = bcc.bsi.get0(x, y, z);
-                    if (!(curr.getBlock() instanceof AirBlock) && !(curr.getBlock() == Blocks.WATER || curr.getBlock() == Blocks.LAVA) && !valid(curr, desired, false)) {
-                        BetterBlockPos pos = new BetterBlockPos(x, y, z);
-                        Optional<Rotation> rot = RotationUtils.reachable(ctx, pos, ctx.playerController().getBlockReachDistance());
-                        if (rot.isPresent()) {
-                            return Optional.of(new Pair<>(pos, rot.get()));
-                        }
+        final int below = Baritone.settings().breakFromAbove.value ? BREAK_BELOW : 0;
+        for (int[] column : PlaceSearch.COLUMNS) {
+            int x = center.x + column[0];
+            int z = center.z + column[1];
+            for (int dy = below; dy <= BREAK_ABOVE; dy++) {
+                int y = center.y + dy;
+                if (dy == BREAK_BELOW && x == pathStart.x && z == pathStart.z) {
+                    continue; // dont mine what we're supported by, but not directly standing on
+                }
+                BlockState desired = bcc.getSchematic(x, y, z, bcc.bsi.get0(x, y, z));
+                if (desired == null) {
+                    continue; // irrelevant
+                }
+                BlockState curr = bcc.bsi.get0(x, y, z);
+                if (!(curr.getBlock() instanceof AirBlock) && !(curr.getBlock() == Blocks.WATER || curr.getBlock() == Blocks.LAVA) && !valid(curr, desired, false)) {
+                    BetterBlockPos pos = new BetterBlockPos(x, y, z);
+                    Optional<Rotation> rot = RotationUtils.reachable(ctx, pos, ctx.playerController().getBlockReachDistance());
+                    if (rot.isPresent()) {
+                        return Optional.of(new Pair<>(pos, rot.get()));
                     }
                 }
             }

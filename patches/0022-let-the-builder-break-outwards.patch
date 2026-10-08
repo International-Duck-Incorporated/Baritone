@@ -1,0 +1,229 @@
+diff --git a/HUMANLIKE.md b/HUMANLIKE.md
+index ce4a998e..ba503fb6 100644
+--- a/HUMANLIKE.md
++++ b/HUMANLIKE.md
+@@ -87,6 +87,12 @@ interval rather than a fixed one.
+ | A moving target does not take the walk apart | `process/FollowProgress.java`, `FollowProcess#walkOrTurnAround` | Following used to cancel the path every time the goal stepped clear of where it ended - a stop every second or two at the target's own walking pace. The walk under way now keeps going while its end is still a step toward the thing being followed (closer to it than the player is), and the plan-ahead chains the next stretch to wherever the goal has wandered by then. Only somebody who has actually gone somewhere else - doubled back, run off sideways - makes the bot stop, turn around, and path from where it stands. |
+ | Somebody being followed is faced | `FollowProcess#regardWhileStanding` | While the feet have nowhere to go - close enough already, or waiting on a way - the head is turned to the nearest of whoever is being followed, as a standing target: the turn at the hand's own speed with its beat before it, the sway at half, the idle glance off it and home again, and a slow track as they move about. The regarded entity stays selected across scans until it leaves the valid follow set, so two nearby matches do not make the head flick between faces when their distances cross. A walking tick's movement sets its own target afterwards and wins. A person following somebody who stops turns to them; one who goes on facing the last way they walked is a dog on a lead. |
+ 
++## Working a job
++
++| what | where | the rule |
++| --- | --- | --- |
++| The builder works outwards from where it stands | `process/PlaceSearch.java`, `BuilderProcess#searchForPlacables`, `BuilderProcess#toBreakNearPlayer` | Both halves of the builder's tick look for their block in the same order: the columns of an eleven-by-eleven box around the player's feet, nearest first, so the block picked is the one the person is standing next to and can see rather than the one at the far corner of what they can reach. It used to be walked `x` from the west edge inwards, then `y`, then `z`, which anchored the order to the world's axes instead of to where the person was standing - a wall came down from a corner and went back up from wherever the player happened to be, in the same tick, and the head swung the width of the box and back for every block. Placement was changed to work outwards in `32308640`; breaking was left on the old loops until now. The two ranges are the search's own and are not shared: the break box reaches one block below the feet (only with `breakFromAbove`) to five above, the placement box five below to one above, and the block the player is supported by is never mined. The order is a fixed list rather than anything measured from the player's exact position, because the builder walks towards the block it picked and a choice that shifts under it would be reversed half way there - columns equally far away keep the order the loops used to produce them in, which is what a stable sort leaves them in. Order only: the same blocks are considered, the same ones turn out to be reachable, and nothing about what gets built or what a path costs has moved. |
++
+ ## Deliberate exceptions
+ 
+ - **Elytra flight** sets the aim straight to its target. It is a control loop: the flight solver
+diff --git a/src/main/java/baritone/process/BuilderProcess.java b/src/main/java/baritone/process/BuilderProcess.java
+index ebbf7381..181b46fb 100644
+--- a/src/main/java/baritone/process/BuilderProcess.java
++++ b/src/main/java/baritone/process/BuilderProcess.java
+@@ -280,29 +280,52 @@ public final class BuilderProcess extends BaritoneProcessHelper implements IBuil
+         return state;
+     }
+ 
++    /**
++     * How high above the feet the break search reaches, and how far below it: one down when
++     * {@code breakFromAbove} lets it mine what it is standing next to rather than only what it is standing
++     * on, and never the block it is supported by. The placement search has a range of its own and a
++     * different shape to it, which is why the two do not share one; the horizontal box is the same one, and
++     * is {@link PlaceSearch}'s.
++     */
++    private static final int BREAK_BELOW = -1;
++    private static final int BREAK_ABOVE = 5;
++
++    /**
++     * The block the builder would like to be gone, nearest first.
++     * <p>
++     * The columns are walked in {@link PlaceSearch}'s order rather than the nested loops this used to be,
++     * for the reason given there: the box is anchored to the player's feet and not to the world's axes, so
++     * the builder breaks the block it is standing next to instead of the one at the far west edge of what
++     * it can reach. The placement half was changed to do this in {@code 32308640} and this half was left
++     * behind, which put the two halves of one tick in disagreement - a wall came down from a corner and
++     * went back up from where the person was standing. It is also the half a spectator watches: the head
++     * swings the width of an eleven block box, takes one block out, and swings back.
++     * <p>
++     * Order only. The same blocks are considered, the same ones are reachable, and nothing about what the
++     * builder decides to build or what a path costs has moved.
++     */
+     private Optional<Pair<BetterBlockPos, Rotation>> toBreakNearPlayer(BuilderCalculationContext bcc) {
+         BetterBlockPos center = ctx.playerFeet();
+         BetterBlockPos pathStart = baritone.getPathingBehavior().pathStart();
+-        for (int dx = -5; dx <= 5; dx++) {
+-            for (int dy = Baritone.settings().breakFromAbove.value ? -1 : 0; dy <= 5; dy++) {
+-                for (int dz = -5; dz <= 5; dz++) {
+-                    int x = center.x + dx;
+-                    int y = center.y + dy;
+-                    int z = center.z + dz;
+-                    if (dy == -1 && x == pathStart.x && z == pathStart.z) {
+-                        continue; // dont mine what we're supported by, but not directly standing on
+-                    }
+-                    BlockState desired = bcc.getSchematic(x, y, z, bcc.bsi.get0(x, y, z));
+-                    if (desired == null) {
+-                        continue; // irrelevant
+-                    }
+-                    BlockState curr = bcc.bsi.get0(x, y, z);
+-                    if (!(curr.getBlock() instanceof AirBlock) && !(curr.getBlock() == Blocks.WATER || curr.getBlock() == Blocks.LAVA) && !valid(curr, desired, false)) {
+-                        BetterBlockPos pos = new BetterBlockPos(x, y, z);
+-                        Optional<Rotation> rot = RotationUtils.reachable(ctx, pos, ctx.playerController().getBlockReachDistance());
+-                        if (rot.isPresent()) {
+-                            return Optional.of(new Pair<>(pos, rot.get()));
+-                        }
++        final int below = Baritone.settings().breakFromAbove.value ? BREAK_BELOW : 0;
++        for (int[] column : PlaceSearch.COLUMNS) {
++            int x = center.x + column[0];
++            int z = center.z + column[1];
++            for (int dy = below; dy <= BREAK_ABOVE; dy++) {
++                int y = center.y + dy;
++                if (dy == BREAK_BELOW && x == pathStart.x && z == pathStart.z) {
++                    continue; // dont mine what we're supported by, but not directly standing on
++                }
++                BlockState desired = bcc.getSchematic(x, y, z, bcc.bsi.get0(x, y, z));
++                if (desired == null) {
++                    continue; // irrelevant
++                }
++                BlockState curr = bcc.bsi.get0(x, y, z);
++                if (!(curr.getBlock() instanceof AirBlock) && !(curr.getBlock() == Blocks.WATER || curr.getBlock() == Blocks.LAVA) && !valid(curr, desired, false)) {
++                    BetterBlockPos pos = new BetterBlockPos(x, y, z);
++                    Optional<Rotation> rot = RotationUtils.reachable(ctx, pos, ctx.playerController().getBlockReachDistance());
++                    if (rot.isPresent()) {
++                        return Optional.of(new Pair<>(pos, rot.get()));
+                     }
+                 }
+             }
+diff --git a/src/test/java/baritone/process/PlaceSearchTest.java b/src/test/java/baritone/process/PlaceSearchTest.java
+index d0912181..6e9bcaab 100644
+--- a/src/test/java/baritone/process/PlaceSearchTest.java
++++ b/src/test/java/baritone/process/PlaceSearchTest.java
+@@ -19,21 +19,32 @@ package baritone.process;
+ 
+ import org.junit.Test;
+ 
++import java.io.IOException;
++import java.io.UncheckedIOException;
++import java.nio.file.Files;
++import java.nio.file.Path;
++import java.util.ArrayList;
+ import java.util.Arrays;
+ import java.util.HashSet;
++import java.util.List;
+ import java.util.Set;
+ 
+ import static org.junit.Assert.assertEquals;
+ import static org.junit.Assert.assertTrue;
++import static org.junit.Assume.assumeTrue;
+ 
+ /**
+- * The order the builder looks for somewhere to put the next block.
++ * The order the builder looks for somewhere to put the next block, and for a block to take out.
+  * <p>
+  * Two things have to hold at once and this is the only place they can be checked without a world: the search
+  * has to consider exactly the same blocks it always did, and it has to consider the near ones first - a
+  * person puts down the block they are standing next to, not the one at the far corner of what they can
+  * reach. The order also has to be the same from one tick to the next, or the builder changes its mind about
+  * which block it is about to place while it is walking up to it.
++ * <p>
++ * The break search walks the same columns and is pinned to them here, because it was left on the old nested
++ * loops when the placement half moved to this order in {@code 32308640} - a wall came down from the west
++ * edge of the box and went back up from where the person was standing, in the same tick.
+  */
+ public class PlaceSearchTest {
+ 
+@@ -86,4 +97,96 @@ public class PlaceSearchTest {
+         }
+         assertEquals("the shared list is not the one the builder searches", first, Arrays.deepToString(PlaceSearch.COLUMNS));
+     }
++
++    /**
++     * The break search walks the shared column order too.
++     * <p>
++     * This is the assertion that was missing when the placement half moved to this order and the break half
++     * did not: nothing failed, because both orders consider the same blocks, and the only thing that changed
++     * was which of them the builder reached for first. Counted from the source, the way
++     * {@code CameraWritesTest} counts camera writes, because the property is about the code as written and
++     * there is no world to break a block in here.
++     */
++    @Test
++    public void theBreakSearchWalksTheSameColumnsAsThePlaceSearch() {
++        final Path root = repoRoot();
++        assumeTrue("the sources are not next to this test run", root != null);
++        final Path builder = root.resolve("src/main/java/baritone/process/BuilderProcess.java");
++        assumeTrue("the builder is not next to this test run", Files.isRegularFile(builder));
++        final List<String> lines = read(builder);
++
++        final List<String> breakSearch = new ArrayList<>();
++        final List<String> placeSearch = new ArrayList<>();
++        for (int i = 0; i < lines.size(); i++) {
++            final String trimmed = lines.get(i).trim();
++            if (trimmed.startsWith("//") || trimmed.startsWith("*") || trimmed.startsWith("/*")) {
++                continue;
++            }
++            if (trimmed.contains("toBreakNearPlayer(")) {
++                breakSearch.add(trimmed);
++            }
++            if (trimmed.contains("searchForPlacables(")) {
++                placeSearch.add(trimmed);
++            }
++        }
++        // each is declared once and called once: both halves of the builder's tick are still there to check
++        assertEquals("the break search is not declared once and called once: " + breakSearch, 2, breakSearch.size());
++        assertEquals("the place search is not declared once and called once: " + placeSearch, 2, placeSearch.size());
++
++        // the box the break search walks is the shared one, and the loops it replaced are gone
++        assertTrue("the break search has stopped walking the shared column order: a builder that reaches for"
++                        + " the far west edge of what it can reach is the thing this order exists to stop",
++                lines.stream().anyMatch(line -> line.contains("for (int[] column : PlaceSearch.COLUMNS)")));
++        assertEquals("a raw west-edge-first loop is back in the builder: the box has to be anchored to the"
++                        + " player's feet, not to the world's axes",
++                0, lines.stream().filter(line -> !line.trim().startsWith("//")).filter(line -> line.contains("for (int dx = -5")).count());
++    }
++
++    /**
++     * The break search considers exactly the blocks it always did.
++     * <p>
++     * The order moved; the box did not. Five blocks each way horizontally, as {@link PlaceSearch} covers, and
++     * the vertical range the break search has always had - which is not the placement one, so it is checked
++     * here rather than shared.
++     */
++    @Test
++    public void theBreakSearchCoversTheSameBoxItAlwaysDid() {
++        final Path root = repoRoot();
++        assumeTrue("the sources are not next to this test run", root != null);
++        final List<String> lines = read(root.resolve("src/main/java/baritone/process/BuilderProcess.java"));
++        final String source = String.join("\n", lines);
++        assertTrue("the break search no longer reaches one block below the feet, which is what"
++                        + " breakFromAbove is for",
++                source.contains("BREAK_BELOW = -1"));
++        assertTrue("the break search no longer reaches five blocks above the feet",
++                source.contains("BREAK_ABOVE = 5"));
++        assertTrue("the block the player is supported by is no longer left alone",
++                source.contains("dont mine what we're supported by"));
++        // eleven by eleven columns, the box PlaceSearch covers and the one the break loops covered
++        final int width = PlaceSearch.RADIUS * 2 + 1;
++        assertEquals(width * width, PlaceSearch.COLUMNS.length);
++    }
++
++    private static List<String> read(Path path) {
++        try {
++            return Files.readAllLines(path);
++        } catch (IOException e) {
++            throw new UncheckedIOException(e);
++        }
++    }
++
++    /**
++     * The checkout, found by walking up from wherever this test was started: Gradle runs from the project
++     * directory and so does the test runner beside the build scripts, but nothing guarantees either.
++     */
++    private static Path repoRoot() {
++        Path dir = Path.of("").toAbsolutePath();
++        for (int i = 0; i < 4 && dir != null; i++) {
++            if (Files.isDirectory(dir.resolve("src"))) {
++                return dir;
++            }
++            dir = dir.getParent();
++        }
++        return null;
++    }
+ }
