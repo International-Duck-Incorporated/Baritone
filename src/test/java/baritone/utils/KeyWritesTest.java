@@ -190,6 +190,39 @@ public class KeyWritesTest {
                             + " the fork, both of which the count above would find if either became a write",
                     read(root.resolve(reader[0])).stream().anyMatch(line -> line.contains(reader[1])));
         }
+        // and the other half of the name above: a file that names the player's own key state is a reader
+        // whatever it does with it, so a reader the list does not name fails here. Pinned as the same text
+        // the count reads, and generous about where a known file puts it - the mixin names the record as an
+        // argument rather than through the player, so only the player-side shape is asked for.
+        final TreeSet<String> unknown = new TreeSet<>();
+        for (String sourceRoot : SOURCE_ROOTS) {
+            final Path dir = root.resolve(sourceRoot);
+            if (!Files.isDirectory(dir)) {
+                continue;
+            }
+            for (Path source : javaFiles(dir)) {
+                final String relative = root.relativize(source).toString().replace('\\', '/');
+                boolean known = false;
+                for (String[] reader : READERS) {
+                    if (reader[0].equals(relative)) {
+                        known = true;
+                        break;
+                    }
+                }
+                if (known) {
+                    continue;
+                }
+                for (String line : read(source)) {
+                    if (line.contains("input.keyPresses")) {
+                        unknown.add(relative);
+                        break;
+                    }
+                }
+            }
+        }
+        assertEquals("the player's own key state is read in a file the readers list does not name: a reader"
+                + " is a decision about the key stream like any other, and it belongs on READERS with its"
+                + " reason", new TreeSet<>(), unknown);
     }
 
     @Test
