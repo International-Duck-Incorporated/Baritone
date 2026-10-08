@@ -1,0 +1,54 @@
+From ca71860e67ae155ad9eff59119c335d8357f21d1 Mon Sep 17 00:00:00 2001
+From: 0xFFshell <0xffshell@users.noreply.gitlab.com>
+Date: Thu, 8 Oct 2026 11:23:42 +0000
+Subject: [PATCH] Document the bucket beat
+
+The timing table said the water bucket under a fall is the one item still
+grabbed on the tick. It is now asked for on the first tick of a fall that
+will need it; the grab survives as the fall's landing guarantee, which is
+the only way the beat can be paid out of the tick that needs the water.
+
+Also adds HandWritesTest to the list of tests that cover the rules, and
+repairs a literal backslash-n in the table that had glued the landing-rest
+row onto the sprint-windup row.
+---
+ HUMANLIKE.md | 9 ++++++---
+ 1 file changed, 6 insertions(+), 3 deletions(-)
+
+diff --git a/HUMANLIKE.md b/HUMANLIKE.md
+index 9cc94e22..5f0c81e2 100644
+--- a/HUMANLIKE.md
++++ b/HUMANLIKE.md
+@@ -59,8 +59,9 @@ Nothing repeats on an interval that is always the same length. `utils/Cadence.ja
+ | `Cadence.Run` | the builder's hold-off after breaking | A rest timed from the thing that just happened; four to six ticks. |
+ | `Cadence.Repeat` | the three goal rescans (mining, getting to a block, farming) | The setting, drawn afresh each time, first scan immediate. |
+ | `Cadence.keyBeat` | the walking keys | One to two ticks of no keys between one direction and its opposite. |
+-| `Cadence.hotbarSwitch` | every change of the held item (`utils/HotbarSwitch.java`, `InventoryBehavior#hold`) | Two to five ticks between deciding on a slot - the best tool for a block, a block to throw down, the builder's next material - and pressing its key, during which neither mouse button is pressed: the click comes after the item is in the hand, never before, and a right click with the wrong item in hand is a bucket emptied. The beat before the click runs underneath, so a switch costs its own beat and no more. A mind changed while the beat runs presses the last key decided on when it is up, rather than starting over, so two callers taking turns cannot stop the hand. The water bucket under a fall is the one item still grabbed on the tick: it is a reflex with a deadline. |
+-| `Cadence.sprintWindup` | a new run on the flat (`SprintWindup`, `PathExecutor`) | Two to four ticks of walking before control goes down. Parkour and climbs skip it. |\n| `Cadence.landingRest` | a fall that lands | A jittered beat of standing after the feet touch down, longer for a longer drop. A fall is the one moment stopping is free, and a path that runs straight on the landing tick is the one thing a person never does. Skipped for drops under three blocks - steps and hops - and for a landing in water, where standing is swimming. |
++| `Cadence.hotbarSwitch` | every change of the held item (`utils/HotbarSwitch.java`, `InventoryBehavior#hold`) | Two to five ticks between deciding on a slot - the best tool for a block, a block to throw down, the builder's next material - and pressing its key, during which neither mouse button is pressed: the click comes after the item is in the hand, never before, and a right click with the wrong item in hand is a bucket emptied. The beat before the click runs underneath, so a switch costs its own beat and no more. A mind changed while the beat runs presses the last key decided on when it is up, rather than starting over, so two callers taking turns cannot stop the hand. The water bucket under a fall used to be the one item still grabbed on the tick, as a reflex with a deadline; it is now asked for on the first tick of a fall that will need it, so the beat is spent on the way down, and the direct grab survives only as the landing guarantee - if the crosshair reaches the spot before the hand gets there, the bucket goes into the hand on that tick rather than the water being missed. What a person does with a bucket on the way down to a spot they mean to catch, the bot now does. |
++| `Cadence.sprintWindup` | a new run on the flat (`SprintWindup`, `PathExecutor`) | Two to four ticks of walking before control goes down. Parkour and climbs skip it. |
++| `Cadence.landingRest` | a fall that lands | A jittered beat of standing after the feet touch down, longer for a longer drop. A fall is the one moment stopping is free, and a path that runs straight on the landing tick is the one thing a person never does. Skipped for drops under three blocks - steps and hops - and for a landing in water, where standing is swimming. |
+ 
+ Other things that were on a grid and are not any more: the sprint key trails off over one to three
+ ticks instead of stopping on the tick the movement stops asking (`Cadence.sprintHangover`,
+@@ -119,6 +120,8 @@ given back inside the same tick so the game can be asked which way round a block
+ two mixin bridges that carry the aim and the elytra solver, each of which puts the player's own angles back in
+ POST. `CameraWritesTest` counts them, so a fifth file fails the build with this list beside it.
+ 
++The item in the hand has the same rule, and it is counted the same way. It is written in two files: `InventoryBehavior` (the beat, pressing the key that was asked for) and `MovementFall` (the fall's landing guarantee underneath it, written when the crosshair reaches the spot before the hand does, because the tick that needs the water is not a tick to wait a beat out). `HandWritesTest` counts them, so a third file fails the build with the reason beside it - and it has already been forgotten twice, which is why it is a test now rather than a note: the elytra firework and the bucket fall both clicked on the tick they asked for an item.
++
+ ## What is not smoothed
+ 
+ - **Handing the camera back.** Under free look the head Baritone drives and the head the person is looking
+@@ -151,7 +154,7 @@ POST. `CameraWritesTest` counts them, so a fifth file fails the build with this
+   through twenty thousand hostile ticks and asserts that the aim never moves more than its tick limit,
+   that a settled hand is always arrived, and that the sway never escapes its band. `AimDynamicsTest`,
+   `IdleGlanceTest`, `WalkGlanceTest`, `NewcomerTest`, `PitchWanderTest`, `IdleFidgetTest`, `GazeAheadTest`, `KeyBeatTest`, `HeadFirstTest`,
+-  `StraightRunTest`, `SprintWindupTest`, `FollowProgressTest`, `HotbarSwitchTest`, `UnattendedTest`, `TurnPaceTest` and `CadenceTest` cover the rules themselves.
++  `StraightRunTest`, `SprintWindupTest`, `FollowProgressTest`, `HotbarSwitchTest`, `UnattendedTest`, `TurnPaceTest`, `HandWritesTest` and `CadenceTest` cover the rules themselves.
+ - Behaviour that already exists as a setting - `randomLooking`, `randomLooking113`, `smoothLook`,
+   `smoothLookTicks`, `blockBreakSpeed`, `mineGoalUpdateInterval`, `ticksBetweenInventoryMoves`,
+   `autoTool` - keeps its meaning. Where a setting names an interval, the interval is now what the
+-- 
+2.47.3
+
