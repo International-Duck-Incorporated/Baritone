@@ -224,8 +224,11 @@ The item in the hand has the same rule, and it is counted the same way. It is wr
   `StraightRunTest`, `CarefulFootingTest`, `SprintWindupTest`, `FollowProgressTest`, `HotbarSwitchTest`, `InventorySwapTest`,
   `UnattendedTest`, `TurnPaceTest`, `HandWritesTest` and `CadenceTest` cover the rules themselves, and
   `CameraWritesTest`, `HandWritesTest`, `ButtonWritesTest` and `ClickGatesTest` guard the camera, the hand,
-  the buttons and where a click may go, and `BridgeCrossingTest` guards the two ends of the crossing - the ask
-  on every tick of every movement, and both bridge paths charging the crouch they are walked with.
+  the buttons and where a click may go, `KeyWritesTest` guards the keys - the four walking keys, the jump, the
+  crouch and the sprint all reach the game through `PlayerMovementInput` and `InputOverrideHandler`, and a
+  write to them from anywhere else skips the beat, the stance and the wind-up - and `BridgeCrossingTest`
+  guards the two ends of the crossing - the ask on every tick of every movement, and both bridge paths
+  charging the crouch they are walked with.
 - Behaviour that already exists as a setting - `randomLooking`, `randomLooking113`, `smoothLook`,
   `smoothLookTicks`, `blockBreakSpeed`, `mineGoalUpdateInterval`, `ticksBetweenInventoryMoves`,
   `autoTool` - keeps its meaning. Where a setting names an interval, the interval is now what the
