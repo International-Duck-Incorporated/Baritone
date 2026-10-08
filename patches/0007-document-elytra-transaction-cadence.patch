@@ -1,0 +1,23 @@
+From c69a88ae3459a43fc8e48909d26a318bd52e802c Mon Sep 17 00:00:00 2001
+From: 0xFFshell <0xffshell@users.noreply.gitlab.com>
+Date: Thu, 8 Oct 2026 11:13:06 +0000
+Subject: [PATCH] Document Elytra transaction cadence
+
+---
+ HUMANLIKE.md | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/HUMANLIKE.md b/HUMANLIKE.md
+index c3d85f76..b57d775f 100644
+--- a/HUMANLIKE.md
++++ b/HUMANLIKE.md
+@@ -64,7 +64,8 @@ Nothing repeats on an interval that is always the same length. `utils/Cadence.ja
+ Other things that were on a grid and are not any more: the sprint key trails off over one to three
+ ticks instead of stopping on the tick the movement stops asking (`Cadence.sprintHangover`,
+ `PathExecutor`); the tool in hand is kept unless the next tool is properly faster (`ToolSet.SWITCH_GAIN`,
+-a quarter faster); inventory moves are spaced by a redrawn interval rather than a fixed one.
++a quarter faster); inventory moves, including the queued Elytra auto-swap clicks, are spaced by a redrawn
++interval rather than a fixed one.
+ 
+ ## Steering
+ 
