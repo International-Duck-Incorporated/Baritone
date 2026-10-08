@@ -1,0 +1,412 @@
+From 27adae538ab45b15523c809fcccba548c02fbc94 Mon Sep 17 00:00:00 2001
+From: 0xFFshell <0xffshell@users.noreply.gitlab.com>
+Date: Thu, 8 Oct 2026 12:32:32 +0000
+Subject: [PATCH] Ask the trace for the face the item acts on
+
+A click that acts on one face of a block was asked its question in two spellings: a placement named the side it goes against (the builder spelled the pair out by hand, once for the candidate it was considering at BuilderProcess:385 and once for the click at :603), and everything else asked only for the block. The farmer's two plantings are the second kind and are the ones it matters for: a seed goes into the top of a farmland and a cocoa bean onto the side of a log, so a click sent while the crosshair is on the side of the right block sends the item into a face that does not take it - a packet, an arm swung at nothing, and the tick spent standing there for it, with the process trying again next tick.
+
+The question has a name now, RayTraceUtils#hitsFace, with IPlayerContext#isLookingAt(block, face) for the trace the crosshair is really on and RayTraceUtils#hitsFaceTowards for a caller that knows where the item is going rather than which way the face is called. Five sites adopt it: the farmer's two plantings and the two traces it takes before aiming at them, the builder's candidate and its click, and the movement layer's own placement search, which had the same shape by hand. The farmer's harvest and bone meal keep the block question with the reason written down - a block is broken from whichever side the crosshair is on, and bone meal acts on the block it is used on - so the difference is on the page. Every farmer click also gains the arrival fallback the mining and builder clicks have (isLookingAt or hasArrivedAt of the point the hand was sent to).
+
+The bridge's step-back (MovementTraverse, the sneak-place over air) is the sixth: the block it places goes into dest.below(), which is the position the face of goalLook the bot looks back at points at, so asking for the block alone let a click go out on another side of it and put a block behind the bot, on the bridge it had just left; it asks hitsFaceTowards(goalLook, dest.below()) now.
+
+Validation: the standalone source-scanning run of ClickGatesTest is OK (3 tests), and the full suite is 37 classes / 306 tests / 0 failures / 0 errors / 0 skipped in 33s. ClickGatesTest's new pass pins who asks a face - the six sites above, per file and per shape of the call - and it has teeth: putting the farmland planting back to the block question alone fails it with both maps printed, then the file was restored (checked by hand).
+---
+ HUMANLIKE.md                                  |  17 +++
+ .../baritone/api/utils/IPlayerContext.java    |  11 ++
+ .../baritone/api/utils/RayTraceUtils.java     |  36 ++++++
+ .../pathing/movement/MovementHelper.java      |   2 +-
+ .../movement/movements/MovementTraverse.java  |   6 +-
+ .../java/baritone/process/BuilderProcess.java |   7 +-
+ .../java/baritone/process/FarmProcess.java    |  23 ++--
+ .../pathing/movement/ClickGatesTest.java      | 112 +++++++++++++++++-
+ 8 files changed, 199 insertions(+), 15 deletions(-)
+
+diff --git a/HUMANLIKE.md b/HUMANLIKE.md
+index ba503fb6..74b7811a 100644
+--- a/HUMANLIKE.md
++++ b/HUMANLIKE.md
+@@ -143,6 +143,23 @@ can be seen from anywhere, and the water bucket taken out of the block the playe
+ be added without saying so - and both things it now counts were real: a door put its button down the tick
+ it was noticed, with the hand still turning, and the pillar did the same to the block in its feet.
+ 
++Where the item acts on one face, the block is not the whole question and the trace is asked for the face as
++well: `RayTraceUtils#hitsFace` (through `ctx.isLookingAt(block, face)` when the question is about the trace
++under the crosshair) and, where the face is the one pointing at a position the caller means,
++`RayTraceUtils#hitsFaceTowards`. A seed goes into the top of a farmland and a cocoa bean onto the side of a
++log, so a click sent while the crosshair is on the side of the right block plants nothing: a packet, an arm
++swung at nothing, and the tick spent standing there for it. The farmer's two plantings ask the face now, and
++so do the two traces it takes before it aims at them; the builder has always named the side its placement
++goes against, and the two hand-rolled spellings it did that in - one for the candidate it is considering,
++one for the click - are one question with a name. The movement layer's own placement search asked the same
++shape by hand and now calls it, and the bridge's step-back in `MovementTraverse` asks it too: the block it
++places goes into the position the traced face points at, so a click that went out on another side of the
++same block put a block somewhere else - behind the bot, on the bridge it had just left. Breaking and bone
++meal keep the block question, and say why: neither has a face to need, since a block is broken from whichever
++side the crosshair is on and bone meal acts on the block it is used on. `ClickGatesTest` asks who asks a face
++as well as who asks a question, so a site that goes back to the block alone fails with the file and the call
++it lost.
++
+ The item in the hand has the same rule, and it is counted the same way. It is written in two files: `InventoryBehavior` (the beat, pressing the key that was asked for) and `MovementFall` (the fall's landing guarantee underneath it, written when the crosshair reaches the spot before the hand does, because the tick that needs the water is not a tick to wait a beat out). `HandWritesTest` counts them, so a third file fails the build with the reason beside it - and it has already been forgotten twice, which is why it is a test now rather than a note: the elytra firework and the bucket fall both clicked on the tick they asked for an item.
+ 
+ ## What is not smoothed
+diff --git a/src/api/java/baritone/api/utils/IPlayerContext.java b/src/api/java/baritone/api/utils/IPlayerContext.java
+index de6d7cd5..a70b367d 100644
+--- a/src/api/java/baritone/api/utils/IPlayerContext.java
++++ b/src/api/java/baritone/api/utils/IPlayerContext.java
+@@ -22,6 +22,7 @@ import net.minecraft.client.Minecraft;
+ import net.minecraft.client.multiplayer.ClientLevel;
+ import net.minecraft.client.player.LocalPlayer;
+ import net.minecraft.core.BlockPos;
++import net.minecraft.core.Direction;
+ import net.minecraft.world.entity.Entity;
+ import net.minecraft.world.level.Level;
+ import net.minecraft.world.level.block.SlabBlock;
+@@ -127,4 +128,14 @@ public interface IPlayerContext {
+     default boolean isLookingAt(BlockPos pos) {
+         return getSelectedBlock().equals(Optional.of(pos));
+     }
++
++    /**
++     * Whether the crosshair is on the given block and on the given face of it: the same question as
++     * {@link #isLookingAt(BlockPos)}, asked by a click that acts on one face - see
++     * {@link RayTraceUtils#hitsFace}. Asked of the trace the crosshair is really on, so a click gated on
++     * it lands on the face the item needs and not on whichever side of the right block it crossed first.
++     */
++    default boolean isLookingAt(BlockPos pos, Direction face) {
++        return RayTraceUtils.hitsFace(objectMouseOver(), pos, face);
++    }
+ }
+diff --git a/src/api/java/baritone/api/utils/RayTraceUtils.java b/src/api/java/baritone/api/utils/RayTraceUtils.java
+index 354f9c87..750369f9 100644
+--- a/src/api/java/baritone/api/utils/RayTraceUtils.java
++++ b/src/api/java/baritone/api/utils/RayTraceUtils.java
+@@ -17,9 +17,12 @@
+ 
+ package baritone.api.utils;
+ 
++import net.minecraft.core.BlockPos;
++import net.minecraft.core.Direction;
+ import net.minecraft.world.entity.Entity;
+ import net.minecraft.world.entity.Pose;
+ import net.minecraft.world.level.ClipContext;
++import net.minecraft.world.phys.BlockHitResult;
+ import net.minecraft.world.phys.HitResult;
+ import net.minecraft.world.phys.Vec3;
+ 
+@@ -65,4 +68,37 @@ public final class RayTraceUtils {
+     public static Vec3 inferSneakingEyePosition(Entity entity) {
+         return new Vec3(entity.getX(), entity.getY() + entity.getEyeHeight(Pose.CROUCHING), entity.getZ());
+     }
++
++    /**
++     * Whether a trace landed on the given block and on the given face of it.
++     * <p>
++     * The question a click that acts on one face of a block has to ask. A block being broken has no face -
++     * the game breaks the block the crosshair is on, from whichever side it is on - so breaking and
++     * anything else that acts on the block itself ask {@link IPlayerContext#isLookingAt(BlockPos)} and are
++     * right to. But an item that is used *on* a face: a seed goes into the top of a farmland, a block goes
++     * against the side the trace is on, and the trace the click is sent along is the one the game uses.
++     * A click asked for while the crosshair is on the right block but the wrong face of it is a packet
++     * that lands on a face that does not take the item, an arm that swings for nothing, and the tick spent
++     * standing there for it.
++     */
++    public static boolean hitsFace(HitResult result, BlockPos pos, Direction face) {
++        return result != null
++                && result.getType() == HitResult.Type.BLOCK
++                && ((BlockHitResult) result).getBlockPos().equals(pos)
++                && ((BlockHitResult) result).getDirection() == face;
++    }
++
++    /**
++     * Whether a trace landed on the given block and on the face of it that points at {@code placeAt} - the
++     * same question as {@link #hitsFace}, for a caller that knows where the item is going rather than which
++     * way the face is called. A placement is this exactly: the block is put into the position the traced
++     * face points at, so a click sent with the crosshair on another side of the right block puts it
++     * somewhere else - behind the player, on the bridge they just left.
++     */
++    public static boolean hitsFaceTowards(HitResult result, BlockPos against, BlockPos placeAt) {
++        return result != null
++                && result.getType() == HitResult.Type.BLOCK
++                && ((BlockHitResult) result).getBlockPos().equals(against)
++                && against.relative(((BlockHitResult) result).getDirection()).equals(placeAt);
++    }
+ }
+diff --git a/src/main/java/baritone/pathing/movement/MovementHelper.java b/src/main/java/baritone/pathing/movement/MovementHelper.java
+index 34880603..69431466 100644
+--- a/src/main/java/baritone/pathing/movement/MovementHelper.java
++++ b/src/main/java/baritone/pathing/movement/MovementHelper.java
+@@ -843,7 +843,7 @@ public interface MovementHelper extends ActionCosts, Helper {
+                     Rotation place = RotationUtils.calcRotationFromVec3d(eyes, aimAt, ctx.playerRotations());
+                     Rotation actual = baritone.getLookBehavior().getAimProcessor().peekRotation(place);
+                     HitResult res = RayTraceUtils.rayTraceTowards(ctx.player(), actual, ctx.playerController().getBlockReachDistance(), wouldSneak);
+-                    if (res != null && res.getType() == HitResult.Type.BLOCK && ((BlockHitResult) res).getBlockPos().equals(against1) && ((BlockHitResult) res).getBlockPos().relative(((BlockHitResult) res).getDirection()).equals(placeAt)) {
++                    if (RayTraceUtils.hitsFaceTowards(res, against1, placeAt)) {
+                         state.setTarget(new MovementTarget(place, true));
+                         found = true;
+                         placed = true;
+diff --git a/src/main/java/baritone/pathing/movement/movements/MovementTraverse.java b/src/main/java/baritone/pathing/movement/movements/MovementTraverse.java
+index cf40f05c..67ffe529 100644
+--- a/src/main/java/baritone/pathing/movement/movements/MovementTraverse.java
++++ b/src/main/java/baritone/pathing/movement/movements/MovementTraverse.java
+@@ -22,6 +22,7 @@ import baritone.api.IBaritone;
+ import baritone.api.pathing.movement.MovementStatus;
+ import baritone.api.utils.AimScatter;
+ import baritone.api.utils.BetterBlockPos;
++import baritone.api.utils.RayTraceUtils;
+ import baritone.api.utils.Rotation;
+ import baritone.api.utils.RotationUtils;
+ import baritone.api.utils.VecUtils;
+@@ -381,7 +382,10 @@ public class MovementTraverse extends Movement {
+                 } else {
+                     state.setTarget(new MovementState.MovementTarget(backToFace, true));
+                 }
+-                if (ctx.isLookingAt(goalLook)) {
++                // The block goes into dest.below(), which is what the face of goalLook the bot is looking
++                // back at points at: the trace has to be on that face, not merely on the block, or the click
++                // puts the block somewhere else - behind the bot, on the bridge it has just left.
++                if (RayTraceUtils.hitsFaceTowards(ctx.objectMouseOver(), goalLook, dest.below())) {
+                     return state.setInput(Input.CLICK_RIGHT, true); // wait to right click until we are able to place
+                 }
+                 // Out.log("Trying to look at " + goalLook + ", actually looking at" + Baritone.whatAreYouLookingAt());
+diff --git a/src/main/java/baritone/process/BuilderProcess.java b/src/main/java/baritone/process/BuilderProcess.java
+index 181b46fb..464de95e 100644
+--- a/src/main/java/baritone/process/BuilderProcess.java
++++ b/src/main/java/baritone/process/BuilderProcess.java
+@@ -405,7 +405,7 @@ public final class BuilderProcess extends BaritoneProcessHelper implements IBuil
+                 Rotation rot = RotationUtils.calcRotationFromVec3d(RayTraceUtils.inferSneakingEyePosition(ctx.player()), new Vec3(placeX, placeY, placeZ), ctx.playerRotations());
+                 Rotation actualRot = baritone.getLookBehavior().getAimProcessor().peekRotation(rot);
+                 HitResult result = RayTraceUtils.rayTraceTowards(ctx.player(), actualRot, ctx.playerController().getBlockReachDistance(), true);
+-                if (result != null && result.getType() == HitResult.Type.BLOCK && ((BlockHitResult) result).getBlockPos().equals(placeAgainstPos) && ((BlockHitResult) result).getDirection() == against.getOpposite()) {
++                if (RayTraceUtils.hitsFace(result, placeAgainstPos, against.getOpposite())) {
+                     OptionalInt hotbar = hasAnyItemThatWouldPlace(toPlace, result, actualRot);
+                     if (hotbar.isPresent()) {
+                         return Optional.of(new Placement(hotbar.getAsInt(), placeAgainstPos, against.getOpposite(), rot));
+@@ -623,7 +623,10 @@ public final class BuilderProcess extends BaritoneProcessHelper implements IBuil
+             baritone.getLookBehavior().updateTarget(rot, true);
+             baritone.getInventoryBehavior().hold(toPlace.get().hotbarSelection);
+             baritone.getInputOverrideHandler().setInputForceState(Input.SNEAK, true);
+-            if ((ctx.isLookingAt(toPlace.get().placeAgainst) && ((BlockHitResult) ctx.objectMouseOver()).getDirection().equals(toPlace.get().side)) || baritone.getLookBehavior().hasArrivedAt(rot)) {
++            // The block goes against the side the trace is on, so the side is half the question: see
++            // RayTraceUtils#hitsFace. The hand having arrived at the point it was sent to answers the
++            // other half on the tick the trace does not.
++            if (ctx.isLookingAt(toPlace.get().placeAgainst, toPlace.get().side) || baritone.getLookBehavior().hasArrivedAt(rot)) {
+                 baritone.getInputOverrideHandler().setInputForceState(Input.CLICK_RIGHT, true);
+             }
+             return new PathingCommand(null, PathingCommandType.CANCEL_AND_SET_GOAL);
+diff --git a/src/main/java/baritone/process/FarmProcess.java b/src/main/java/baritone/process/FarmProcess.java
+index e8b24f22..3abef9e7 100644
+--- a/src/main/java/baritone/process/FarmProcess.java
++++ b/src/main/java/baritone/process/FarmProcess.java
+@@ -45,7 +45,6 @@ import net.minecraft.world.item.Items;
+ import net.minecraft.world.level.Level;
+ import net.minecraft.world.level.block.*;
+ import net.minecraft.world.level.block.state.BlockState;
+-import net.minecraft.world.phys.BlockHitResult;
+ import net.minecraft.world.phys.HitResult;
+ import net.minecraft.world.phys.Vec3;
+ 
+@@ -281,7 +280,9 @@ public final class FarmProcess extends BaritoneProcessHelper implements IFarmPro
+             if (rot.isPresent() && isSafeToCancel) {
+                 baritone.getLookBehavior().updateTarget(rot.get(), true);
+                 MovementHelper.switchToBestToolFor(ctx, ctx.world().getBlockState(pos));
+-                if (ctx.isLookingAt(pos)) {
++                // A block is broken from whichever side the crosshair is on, so no face is asked for
++                // here: the hand has either landed on the block or settled at the point it was sent to.
++                if (ctx.isLookingAt(pos) || baritone.getLookBehavior().hasArrivedAt(rot.get())) {
+                     baritone.getInputOverrideHandler().setInputForceState(Input.CLICK_LEFT, true);
+                 }
+                 return new PathingCommand(null, PathingCommandType.REQUEST_PAUSE);
+@@ -299,7 +300,9 @@ public final class FarmProcess extends BaritoneProcessHelper implements IFarmPro
+                 continue;
+             }
+             HitResult result = RayTraceUtils.rayTraceTowards(ctx.player(), rot.get(), blockReachDistance);
+-            if (!(result instanceof BlockHitResult) || ((BlockHitResult) result).getDirection() != Direction.UP) {
++            // The point the hand is being sent to is on the top of the block and the trace is run on
++            // that point, so this is the face question with the block it belongs to.
++            if (!RayTraceUtils.hitsFace(result, pos, Direction.UP)) {
+                 continue;
+             }
+             // Ask for the seed only now that this planting is one that is going to happen. Selecting an item
+@@ -310,7 +313,9 @@ public final class FarmProcess extends BaritoneProcessHelper implements IFarmPro
+                 continue;
+             }
+             baritone.getLookBehavior().updateTarget(rot.get(), true);
+-            if (ctx.isLookingAt(pos)) {
++            // A seed goes into the top of the block: the side of the right block takes nothing, so a
++            // click sent there is a packet and an arm swing for it. See RayTraceUtils#hitsFace.
++            if (ctx.isLookingAt(pos, Direction.UP) || baritone.getLookBehavior().hasArrivedAt(rot.get())) {
+                 baritone.getInputOverrideHandler().setInputForceState(Input.CLICK_RIGHT, true);
+             }
+             return new PathingCommand(null, PathingCommandType.REQUEST_PAUSE);
+@@ -329,7 +334,7 @@ public final class FarmProcess extends BaritoneProcessHelper implements IFarmPro
+                     continue;
+                 }
+                 HitResult result = RayTraceUtils.rayTraceTowards(ctx.player(), rot.get(), blockReachDistance);
+-                if (!(result instanceof BlockHitResult) || ((BlockHitResult) result).getDirection() != dir) {
++                if (!RayTraceUtils.hitsFace(result, pos, dir)) {
+                     continue;
+                 }
+                 // As above: the bean goes in the hand when the face is one that is about to be clicked, not
+@@ -338,7 +343,9 @@ public final class FarmProcess extends BaritoneProcessHelper implements IFarmPro
+                     continue;
+                 }
+                 baritone.getLookBehavior().updateTarget(rot.get(), true);
+-                if (ctx.isLookingAt(pos)) {
++                // Cocoa goes onto the side of the log - the side the air the bean hangs in is beside -
++                // so that side is the face the bean is used on, not the block in general.
++                if (ctx.isLookingAt(pos, dir) || baritone.getLookBehavior().hasArrivedAt(rot.get())) {
+                     baritone.getInputOverrideHandler().setInputForceState(Input.CLICK_RIGHT, true);
+                 }
+                 return new PathingCommand(null, PathingCommandType.REQUEST_PAUSE);
+@@ -351,7 +358,9 @@ public final class FarmProcess extends BaritoneProcessHelper implements IFarmPro
+             Optional<Rotation> rot = RotationUtils.reachable(ctx, pos);
+             if (rot.isPresent() && isSafeToCancel && baritone.getInventoryBehavior().throwaway(true, this::isBoneMeal)) {
+                 baritone.getLookBehavior().updateTarget(rot.get(), true);
+-                if (ctx.isLookingAt(pos)) {
++                // Bone meal acts on the block it is used on whichever side it is used from, so the
++                // block question is the right one here and a face would be a tick of standing for nothing.
++                if (ctx.isLookingAt(pos) || baritone.getLookBehavior().hasArrivedAt(rot.get())) {
+                     baritone.getInputOverrideHandler().setInputForceState(Input.CLICK_RIGHT, true);
+                 }
+                 return new PathingCommand(null, PathingCommandType.REQUEST_PAUSE);
+diff --git a/src/test/java/baritone/pathing/movement/ClickGatesTest.java b/src/test/java/baritone/pathing/movement/ClickGatesTest.java
+index 47f44555..a38c1816 100644
+--- a/src/test/java/baritone/pathing/movement/ClickGatesTest.java
++++ b/src/test/java/baritone/pathing/movement/ClickGatesTest.java
+@@ -50,11 +50,12 @@ import static org.junit.Assume.assumeTrue;
+  * <p>
+  * So the rule this test counts is: a click is asked for with the crosshair already on the block it is for,
+  * or with the hand arrived at the point it was sent to, or it says in the code why neither question was
+- * asked. The gates are the four the mod actually uses - {@code ctx.isLookingAt(block)},
++ * asked. The gates are the ones the mod actually uses - {@code ctx.isLookingAt(block)},
+  * {@code LookBehavior#hasArrivedAt(rotation)}, {@code PlaceResult.READY_TO_PLACE} (which is the ray trace
+- * landing on the right block or its attachment), {@code ctx.getSelectedBlock()} - plus the two clicks that
+- * are not acts on a block at all: breaking out of a wall the body is stuck inside, and opening a block the
+- * process has already picked out by ray.
++ * landing on the right block or its attachment), {@code ctx.getSelectedBlock()}, and, for an item that only
++ * acts on one face of the block, the trace's face ({@code ctx.isLookingAt(block, face)},
++ * {@code RayTraceUtils#hitsFaceTowards}) - plus the two clicks that are not acts on a block at all: breaking
++ * out of a wall the body is stuck inside, and opening a block the process has already picked out by ray.
+  * <p>
+  * The count is taken from the source because that is where it lives: the property being asserted is about
+  * the code as written, and none of it can be run without a game. A statement that has no gate carries the
+@@ -95,6 +96,8 @@ public class ClickGatesTest {
+             "ctx.getSelectedBlock(",
+             "knownLocations.contains(",
+             "isInWall(",
++            "hitsFace(",
++            "hitsFaceTowards(",
+     };
+ 
+     /**
+@@ -160,6 +163,107 @@ public class ClickGatesTest {
+                 + "about what a button is for, so it has a count beside it and a gate in front of it", expected, found);
+     }
+ 
++    /**
++     * Where a block is asked for *and* a face of it, per file and per shape of the question: the calls that
++     * name a face, asked either of the trace under the crosshair ({@code isLookingAt-face}, an
++     * {@code isLookingAt} with a second argument) or of a trace the caller took itself ({@code hitsFace},
++     * {@code hitsFaceTowards}). Where an item only acts on one face of a block, the block is not the whole
++     * question: a seed goes into the top of a farmland and a cocoa bean onto the side of a log, a block
++     * goes against the side the trace is on, and a click asked for on the wrong face of the right block is
++     * a packet that lands on a face that does not take the item - an arm swinging at nothing, and the tick
++     * spent standing there for it. That is what these sites are, and why they are pinned: the builder's
++     * candidate and its placement click, the farmer's two plantings and the two traces it takes before
++     * aiming at them, the movement layer's own placement search, and the bridge's step-back. The breaking
++     * clicks and the bone meal are deliberately not here - neither has a face to need, and both say so -
++     * and a site that goes back to the block question alone fails with the file and the call it lost.
++     * Paths are relative to {@code src/main/java/baritone/}.
++     */
++    private static final String[] FACE_QUESTIONS = {
++            "pathing/movement/MovementHelper.java hitsFaceTowards 1",
++            "pathing/movement/movements/MovementTraverse.java hitsFaceTowards 1",
++            "process/BuilderProcess.java hitsFace 1",
++            "process/BuilderProcess.java isLookingAt-face 1",
++            "process/FarmProcess.java hitsFace 2",
++            "process/FarmProcess.java isLookingAt-face 2",
++    };
++
++    @Test
++    public void theFaceQuestionIsAskedWhereItMatters() {
++        final Path root = repoRoot();
++        assumeTrue("the sources are not next to this test run", root != null);
++        final TreeMap<String, Integer> expected = new TreeMap<>();
++        final List<String> files = new ArrayList<>();
++        for (String row : FACE_QUESTIONS) {
++            final String[] parts = row.split(" ");
++            expected.put(parts[0] + " " + parts[1], Integer.parseInt(parts[2]));
++            if (!files.contains(parts[0])) {
++                files.add(parts[0]);
++            }
++        }
++        final TreeMap<String, Integer> found = new TreeMap<>();
++        for (String file : files) {
++            final Path source = root.resolve("src/main/java/baritone").resolve(file);
++            final String text;
++            try {
++                text = Files.readString(source);
++            } catch (IOException e) {
++                throw new UncheckedIOException("could not read " + source, e);
++            }
++            for (String question : List.of("isLookingAt-face", "hitsFace", "hitsFaceTowards")) {
++                final int count = questionsIn(text, question);
++                if (count > 0) {
++                    found.put(file + " " + question, count);
++                }
++            }
++        }
++        assertEquals("the face questions have moved: asking a trace for the block of a click that acts on "
++                + "one face of it is not asking the whole question, and the sites that ask it are pinned here",
++                expected, found);
++    }
++
++    /**
++     * How many times a file asks one shape of the question. The two-argument form is told from the
++     * one-argument one by parens rather than by a regular expression: the first argument nests
++     * ({@code toPlace.get().placeAgainst}), and the comma that matters is the one at the call's own depth.
++     */
++    private static int questionsIn(String source, String question) {
++        if (!"isLookingAt-face".equals(question)) {
++            return occurrences(source, question + "(");
++        }
++        int found = 0;
++        final String call = "isLookingAt(";
++        int at = source.indexOf(call);
++        while (at >= 0) {
++            int depth = 1;
++            boolean comma = false;
++            for (int i = at + call.length(); i < source.length() && depth > 0; i++) {
++                final char c = source.charAt(i);
++                if (c == '(') {
++                    depth++;
++                } else if (c == ')') {
++                    depth--;
++                } else if (c == ',' && depth == 1) {
++                    comma = true;
++                }
++            }
++            if (comma) {
++                found++;
++            }
++            at = source.indexOf(call, at + call.length());
++        }
++        return found;
++    }
++
++    private static int occurrences(String source, String needle) {
++        int found = 0;
++        int at = source.indexOf(needle);
++        while (at >= 0) {
++            found++;
++            at = source.indexOf(needle, at + needle.length());
++        }
++        return found;
++    }
++
+     /**
+      * One click, with enough of what is around it to be judged: the file it is in and the lines above it.
+      */
+-- 
+2.47.3
+
