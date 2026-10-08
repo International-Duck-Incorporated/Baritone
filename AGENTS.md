@@ -70,7 +70,20 @@ Notes: Farm/path clicks already flow through `InputOverrideHandler`; Elytra's di
 Task: Cancel a pending inventory swap when its execution context disappears instead of executing a stale window click after a process handoff or GUI change.
 Subsystem: Inventory swap state machine.
 Files: `src/main/java/baritone/behavior/InventoryBehavior.java`, `src/main/java/baritone/utils/InventorySwap.java`, `src/test/java/baritone/utils/InventorySwapTest.java`.
-Status: Claimed; implementing after the elytra handoff review.
+Status: Complete; pushed in `0c503c74` and patch in `cfebf6a6`.
 Started: 2026-10-08.
 Dependencies: Existing `InventorySwap` wind-up and inventory-menu/allow-inventory guards.
 Notes: The current `onTick` executes `pendingSwap` before checking `allowInventory` or whether the player is still in the player inventory menu. A handoff during the one-to-two-tick wind-up can therefore produce an old slot swap in a newly opened context.
+
+### Tempo — stale inventory swap cancellation (verified remote `cfebf6a6`)
+
+- `InventoryBehavior` now tracks whether the live path/process requested a pending swap in the current tick. A process handoff, GUI change, disabled inventory setting, or lost stationary safety gate cancels the wind-up rather than issuing a stale window click.
+- If a live request changes its destination while the wind-up is in progress, the reaction beat is preserved but the latest destination replaces the old one.
+- Added `InventorySwapTest.cancellingAWindowClickClearsItsWindup` and standalone real patch `patches/0003-cancel-stale-inventory-swap-windups.patch`; the patch applies cleanly against its parent with `git apply --check`.
+- Validation: `javac` compilation of the dependency-free `Cadence`/`InventorySwap` utilities passed; a smoke test covered cancellation. `git diff --check` passed for source changes. `./gradlew test` again stopped before project compilation because Maven/Forge/Fabric/NeoForge artifact resolution hits TLS handshake failures and a NeoForge peer-authentication failure.
+- Limitation: behavior-listener ordering is intentionally relied on (`PathingBehavior` asks before `InventoryBehavior` executes); if that registration order changes, update the current-tick request tracking together with it.
+
+### Remaining review targets
+
+- Verify the new inventory cancellation state with an in-game process handoff and an opened container while a swap is winding up.
+- Continue the grounded movement acceleration/deceleration audit without delaying parkour, airborne, water, or emergency controls.
