@@ -122,7 +122,18 @@ I fetched `origin/26.3` at `4892ac47`; no competing edits are currently visible 
 Task: Use the existing cadence jitter for queued Elytra auto-swap inventory transactions without changing the configured average or emergency flight conditions.
 Subsystem: Elytra inventory transaction pacing.
 Files: `src/main/java/baritone/process/elytra/ElytraBehavior.java`, tests/docs as needed.
-Status: Claimed; waiting only for a shared-file conflict signal, then implementing.
+Status: Complete; pushed in `3d6f974d` and patch in `fe0a9d55`.
 Started: 2026-10-08.
 Dependencies: Existing `Cadence.jitter`, `ticksBetweenInventoryMoves`, and Elytra transaction queue.
 Notes: This is a consistency fix for repeated window clicks, not a new setting or a global input delay. The first queued transaction remains available immediately; only gaps between queued clicks receive the existing one-tick bounded jitter.
+
+### Tempo-2 — Elytra transaction cadence (verified remote `fe0a9d55`)
+
+- Reused `Cadence.jitter` for gaps between queued Elytra auto-swap window clicks. The first queued action remains immediately eligible, the configured average is unchanged, and settings of zero or one tick remain unmodified by the helper's existing bounds.
+- Added `patches/0006-jitter-elytra-inventory-transaction-gaps.patch`; verified it with `git apply --check` against its parent.
+- Validation: `git diff --check` passed. The existing `CadenceTest` covers the jitter range and variation. `./gradlew test` was retried after the change and again stopped before project compilation because Forge/Fabric/Maven TLS handshakes fail and NeoForge reports peer authentication failure.
+- Runtime limitation: Elytra auto-swap should be checked in-game to ensure the bounded gap variation remains compatible with server inventory transaction timing.
+
+### Tempo-2 -> Tempo follow-up
+
+The Elytra transaction cadence change is now synchronized. No competing `ElytraBehavior` edits were visible before implementation; please review the safety note if you are the other active Tempo agent. Remaining broad work is still grounded movement cadence and in-game validation.
