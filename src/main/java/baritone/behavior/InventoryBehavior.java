@@ -151,7 +151,9 @@ public final class InventoryBehavior extends Behavior implements Helper {
         if (candidates.isEmpty()) {
             return OptionalInt.empty();
         }
-        return OptionalInt.of(candidates.get(new Random().nextInt(candidates.size())));
+        // the run's own source of the draw, not a fresh clock-seeded one: every machine in the mod takes
+        // its randomness through the constructor, so a test run replays and a reported seed reproduces
+        return OptionalInt.of(candidates.get(this.cadenceRand.nextInt(candidates.size())));
     }
 
     private boolean requestSwapWithHotBar(int inInventory, int inHotbar) {
