@@ -74,9 +74,12 @@ public class ButtonWritesTest {
             // the idle fidget and the arm that swings while the aim holds still: animation packets with no
             // click behind them, which is what makes them safe to send on somebody else's behalf
             "src/main/java/baritone/behavior/LookBehavior.java",
-            // elytra flight: the one click here is the firework, an item use on a control loop with a
-            // deadline, and it is gated on the hand being out of its own wind-up; the rest of the file is
-            // flight control, which HUMANLIKE.md excuses from the other rules
+            // elytra flight, and neither of its two clicks is a click on a block. The firework is an item
+            // use on a control loop with a deadline, gated on the hand being out of its own wind-up; the
+            // auto-swap's window clicks are the queued sequence in InventoryTransaction, which waits for
+            // the player's own inventory to be the menu in front, gives up a sequence that has not begun
+            // with the window it was written for, and finishes one that has. The rest of the file is flight
+            // control, which HUMANLIKE.md excuses from the other rules
             "src/main/java/baritone/process/elytra/ElytraBehavior.java",
     };
 
@@ -94,6 +97,10 @@ public class ButtonWritesTest {
             {"src/main/java/baritone/behavior/LookBehavior.java", "ServerboundPunchPacket.INSTANCE"},
             // the firework is not clicked until the hand has finished changing
             {"src/main/java/baritone/process/elytra/ElytraBehavior.java", "getInventoryBehavior().switchingHands()"},
+            // the auto-swap's clicks wait for the player's own inventory: the window they were written for
+            // is the question, and the transaction that does the waiting is asked whether it is still there
+            {"src/main/java/baritone/process/elytra/ElytraBehavior.java", "ctx.player().containerMenu == ctx.player().inventoryMenu"},
+            {"src/main/java/baritone/process/elytra/ElytraBehavior.java", "invTransaction.tick("},
             // the one place that talks to the game's controller rather than to the mod's own wrapper
             {"src/main/java/baritone/utils/player/BaritonePlayerController.java", "mc.gameMode."},
     };

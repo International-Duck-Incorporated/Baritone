@@ -28,8 +28,8 @@ import baritone.api.utils.input.Input;
 import baritone.pathing.movement.MovementHelper;
 import baritone.process.ElytraProcess;
 import baritone.utils.BlockStateInterface;
-import baritone.utils.Cadence;
 import baritone.utils.IRenderer;
+import baritone.utils.InventoryTransaction;
 import baritone.utils.PathRenderer;
 import baritone.utils.accessor.IFireworkRocketEntity;
 import com.mojang.blaze3d.vertex.BufferBuilder;
@@ -63,7 +63,6 @@ import net.minecraft.world.phys.Vec3;
 import java.awt.*;
 import java.util.*;
 import java.util.List;
-import java.util.Queue;
 import java.util.concurrent.*;
 import java.util.function.UnaryOperator;
 
@@ -122,10 +121,8 @@ public final class ElytraBehavior implements Helper {
     private long timeLastCacheCull = 0L;
 
     // auto swap
-    private int invTickCountdown = 0;
-    private final Queue<Runnable> invTransactionQueue = new LinkedList<>();
-    /** One run-local source for the small gap variation between queued inventory clicks. */
-    private final Random inventoryCadenceRand = new Random();
+    /** The three window clicks of a swap, and the rule about the window they belong to. */
+    private final InventoryTransaction invTransaction = new InventoryTransaction();
 
     public ElytraBehavior(Baritone baritone, ElytraProcess process, NetherPathfinderContext npf, BlockPos destination, boolean appendDestination) {
         this.baritone = baritone;
@@ -1320,21 +1317,19 @@ public final class ElytraBehavior implements Helper {
      * only the gaps after a click are varied, using the same bounded jitter as normal inventory moves. A
      * person who swaps an elytra still takes the configured average time, but does not hit the same window
      * slot at an exact metronome interval.
+     * <p>
+     * The window they land in is the transaction's own rule ({@link InventoryTransaction}): the player's own
+     * inventory is the only menu these clicks were written for - with a container open the game drops a
+     * click whose window id is not the open menu's, so a swap fired there stalls half applied instead of
+     * failing loudly - and a sequence that has begun is finished even if the window goes away under it.
      */
     private void tickInventoryTransactions() {
-        if (invTickCountdown <= 0) {
-            Runnable r = invTransactionQueue.poll();
-            if (r != null) {
-                r.run();
-                invTickCountdown = Cadence.jitter(this.inventoryCadenceRand,
-                        Baritone.settings().ticksBetweenInventoryMoves.value);
-            }
-        }
-        if (invTickCountdown > 0) invTickCountdown--;
+        invTransaction.tick(ctx.player().containerMenu == ctx.player().inventoryMenu,
+                Baritone.settings().ticksBetweenInventoryMoves.value);
     }
 
     private void queueWindowClick(int windowId, int slotId, int button, ContainerInput type) {
-        invTransactionQueue.add(() -> ctx.playerController().windowClick(windowId, slotId, button, type, ctx.player()));
+        invTransaction.click(() -> ctx.playerController().windowClick(windowId, slotId, button, type, ctx.player()));
     }
 
     private int findGoodElytra() {
@@ -1349,7 +1344,7 @@ public final class ElytraBehavior implements Helper {
     }
 
     private void trySwapElytra() {
-        if (!Baritone.settings().elytraAutoSwap.value || !invTransactionQueue.isEmpty()) {
+        if (!Baritone.settings().elytraAutoSwap.value || invTransaction.waiting()) {
             return;
         }
 
