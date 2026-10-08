@@ -26,6 +26,7 @@ import baritone.api.pathing.path.IPathExecutor;
 import baritone.api.utils.*;
 import baritone.api.utils.input.Input;
 import baritone.behavior.PathingBehavior;
+import baritone.behavior.look.ApproachLook;
 import baritone.behavior.look.GazeAhead;
 import baritone.pathing.calc.AbstractNodeCostSearch;
 import baritone.pathing.movement.CalculationContext;
@@ -108,11 +109,26 @@ public class PathExecutor implements IPathExecutor, Helper {
      */
     private static final double STANDING_SPEED_SQ = 0.02 * 0.02;
 
+    /**
+     * The block this walk is for - the chest, the door, the crop, the block to be mined - or null when the
+     * goal is not about one. Resolved once per path, because the answer cannot change while this walk is
+     * the walk under way, and because asking every tick would walk a composite of every matching block in
+     * the loaded chunks on every tick of every path. See {@link ApproachLook}.
+     * <p>
+     * From the executing goal rather than the path's own: when {@code simplifyUnloadedYCoord} is on and the
+     * goal's chunk is not loaded, the pathfinder is handed - and the path keeps - a {@code GoalXZ} in place
+     * of the goal that named a block, and a walk to a chest calculated from far away would arrive having
+     * forgotten what it was for.
+     */
+    private final BlockPos theJob;
+
     public PathExecutor(PathingBehavior behavior, IPath path) {
         this.behavior = behavior;
         this.ctx = behavior.ctx;
         this.path = path;
         this.pathPosition = 0;
+        final List<BetterBlockPos> positions = path.positions();
+        this.theJob = ApproachLook.theBlock(behavior.getGoal(), positions.isEmpty() ? null : positions.get(positions.size() - 1));
     }
 
     /**
@@ -313,6 +329,58 @@ public class PathExecutor implements IPathExecutor, Helper {
     private static final double SLOPE_UP_SHARE = 0.33;
 
     /**
+     * Offers the gaze the block the walk is for, when this is a tick the eyes can be on it: the chest, the
+     * door, the crop or the table comes onto the head on the approach rather than after the feet have
+     * stopped. See {@link ApproachLook} for the rule and {@code HUMANLIKE.md} for the behaviour.
+     * <p>
+     * Asked before {@link #leanGazeAhead} and takes its place when it has an answer: there is one lean on
+     * a walking target, and on the stretch of walk that ends at a block the thing the walk is for is the
+     * more useful thing to have the eyes on than the corner of it. When it has no answer - the goal is not
+     * about a block, the block is still too far, or it sits beside the walk rather than on it - the line
+     * ahead is offered as before.
+     * <p>
+     * The same states that take the line ahead away take this away, and for the same reasons: a fall, a
+     * climb and a jump steer on the angles they are given, water and a glide solve for their own, and a
+     * target that is about to be clicked is aimed at exactly, which
+     * {@link baritone.behavior.look.GazeAhead#lean} does regardless of what is offered here.
+     *
+     * @return whether the eyes have somewhere better to be than the line ahead, so that the caller can
+     *         leave the line alone
+     */
+    private boolean lookAtTheJob(Movement movement) {
+        if (this.theJob == null
+                || !ctx.player().onGround()
+                || ctx.player().isInWater()
+                || movement instanceof MovementParkour
+                || movement.getDirection().getY() != 0) {
+            return false;
+        }
+        final BlockPos step = movement.getDirection();
+        if (step.getX() == 0 && step.getZ() == 0) {
+            return false;
+        }
+        if (this.theJob.equals(ctx.playerFeet())) {
+            // the block the walk is to be standing in, which the player is already standing in: the walk is
+            // there, and there is no direction to it to look along
+            return false;
+        }
+        final Vec3 centre = VecUtils.getBlockPosCenter(this.theJob);
+        final Vec3 feet = ctx.player().position();
+        final double distance = centre.distanceTo(feet);
+        final float offTheWalk = ApproachLook.angleOffTheWalk(
+                step.getX(), step.getZ(),
+                centre.x - feet.x, centre.z - feet.z);
+        final double weight = ApproachLook.weight(distance, offTheWalk);
+        if (weight <= 0) {
+            return false;
+        }
+        behavior.baritone.getLookBehavior().gazeAhead().offer(
+                RotationUtils.calcRotationFromVec3d(ctx.playerHead(), centre, ctx.playerRotations()),
+                weight);
+        return true;
+    }
+
+    /**
      * Offers the gaze the line the path takes next, so the head leads the body around corners instead
      * of whipping around at every movement boundary.
      * <p>
@@ -323,6 +391,9 @@ public class PathExecutor implements IPathExecutor, Helper {
      */
     private void leanGazeAhead(Movement movement) {
         final GazeAhead gaze = behavior.baritone.getLookBehavior().gazeAhead();
+        if (lookAtTheJob(movement)) {
+            return;
+        }
         if (movement.getDirection().getY() != 0
                 || movement instanceof MovementParkour
                 || pathPosition + 1 >= path.length()
