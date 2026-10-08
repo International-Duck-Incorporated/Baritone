@@ -1,0 +1,623 @@
+From a7209a2e7e6e36412a011b2e45eb138930ad8fa9 Mon Sep 17 00:00:00 2001
+From: 0xFFshell <0xffshell@users.noreply.gitlab.com>
+Date: Thu, 8 Oct 2026 13:11:10 +0000
+Subject: [PATCH] Put the eyes on the block a walk is for, on the approach
+
+A walk to a chest, a door, a crop or a block to be mined arrives with the
+head still on the line the path takes - the movement's own target, leaned
+onto where the path goes next - and the process that wanted the block
+turns it at the last moment: the bot walks up to a chest facing the wall
+beside it and turns once the feet have stopped. That turn is the tell.
+
+Over the last six blocks of a walk whose goal names a block the gaze is
+now offered that block in place of the line ahead, into the same lean,
+easing in over four blocks so nothing appears at a distance, at most half
+of the way to it, fading out between forty and sixty degrees off the walk,
+and nothing at all when the goal names no block, when the block is the one
+the player already stands in, or when the walk is a fall, a climb, a jump,
+a parkour run-up or in water. A target about to be clicked is still aimed
+at exactly, and the lean is on the gaze only - the movement's own rotation
+is untouched.
+
+The rule is behavior/look/ApproachLook.java, free of Minecraft and driven
+directly by ApproachLookTest (13 tests; the suite is 320 in 38 classes,
+0 failures). Which block a goal is about is asked of the goal and not
+guessed: only the goals that render as a position name one, a composite
+answers with the part of itself nearest the end of the walk, and
+PathExecutor resolves the answer once per path from the executing goal -
+which, unlike the path's own goal, has not been simplified to a GoalXZ by
+simplifyUnloadedYCoord, so a walk to a chest calculated from far off no
+longer arrives having forgotten what it was for.
+
+HUMANLIKE.md gains the row beside the lean it shares its slot with.
+---
+ HUMANLIKE.md                                  |   1 +
+ .../baritone/behavior/look/ApproachLook.java  | 182 ++++++++++++
+ .../baritone/pathing/path/PathExecutor.java   |  71 +++++
+ .../behavior/look/ApproachLookTest.java       | 265 ++++++++++++++++++
+ 4 files changed, 519 insertions(+)
+ create mode 100644 src/main/java/baritone/behavior/look/ApproachLook.java
+ create mode 100644 src/test/java/baritone/behavior/look/ApproachLookTest.java
+
+diff --git a/HUMANLIKE.md b/HUMANLIKE.md
+index 16546ff9..577cf818 100644
+--- a/HUMANLIKE.md
++++ b/HUMANLIKE.md
+@@ -19,6 +19,7 @@ opt-in: a bot that has to be told to look alive is a bot that looks dead by defa
+ | The hand shakes in two directions, not one | `behavior/look/AimDynamics.java`, `LookBehavior.tick` | The aim adds a wander of `randomLooking113` degrees either side of where it is aiming, a fresh draw each tick smoothed so it drifts rather than shivers. Both angles draw it, which is what upstream's own note ("How many degrees to randomize the yaw") left to the yaw alone: the pitch took only the hundredth of a degree `randomLooking` adds, which the mouse grid swallows whole, so a bot breaking a block moved its head by a degree or two sideways and by nothing at all vertically - measured on a settled aim at the default sensitivity, the pitch wandered two hundredths of a degree, below a single mouse pixel at every sensitivity there is, and now wanders a third of a degree either side with three and a half degrees peak to peak, as the yaw always did. The two angles are drawn separately - a hand that moved along a line would be a hand that is being moved - and the pitch is left alone in water and in a glide, where it is a control and not a decoration. |
+ | The hand calls itself arrived | `behavior/look/AimDynamics.java`, `ILookBehavior#hasArrivedAt` | "Is the aim here yet" is asked of the aim, not of a hundredth-of-a-degree comparison against the target: a settled hand sits a fraction of a degree off, because it is easing and the tremor is still shaking it. |
+ | The hand lands on the block, not on its centre | `api/utils/AimScatter.java`, `RotationUtils#reachable` | Upstream aimed every block it broke, opened or used at the exact centre of its box. The hand now goes to a point of the block's own, inside the middle two thirds of its box on each axis, the same point for that block for the whole run (a hash of its position and a salt drawn once, never a draw per tick under a hand that is holding) and somewhere else next run. Where the point cannot be seen from where the player stands, the centre and the face centres are tried as before, and a block with no collision box - a crop, a torch, a fire - keeps the centre. `remainWithExistingLookDirection` used to freeze the hand the moment the crosshair touched the block, which with a hand that eases was always just inside the edge it came from; it now freezes it once the hand has got to its point, mining on the way. A face a throwaway block is placed against - under a bridge, a pillar, a step up, a jump - takes a point of its own too (`AimScatter#facePoint`, `MovementHelper#attemptToPlaceABlock`, `MovementTraverse`, `MovementPillar`): on the face and in the middle two thirds of it, keyed on where the block is going, with the trace that confirms the face run on the point actually aimed at and the exact centre tried when the point cannot be seen. Where the crosshair lands on a face only decides anything for a block that takes its shape from the landing, a slab or a stair, and dirt and cobble do not; the builder tries a point of the face's own first for a block that is a full cube whatever is clicked where (`BuilderProcess#placementMultipliers`) and only its fixed points, well clear of the halfway line, for a slab, a stair or a trapdoor, with what would actually be placed from the point checked as it always was. A door or a gate in the way takes the same treatment on the block itself (`MovementTraverse`): the half of the door that is actually blocking is the half aimed at - upstream aimed at `positionsToBreak[0]` whether or not that was the door - and through `RotationUtils#reachable`, so the point is one of the door's own and one that can be seen from where the player stands, the centre being aimed at blind only when nothing on the door can be reached. Its click is held back until the crosshair is on the door, which it was not: the button used to go down the tick the door was noticed, while the hand was still turning, and a click sent on its way to a door lands on whatever the crosshair crosses in the meantime - the frame, the wall beside the doorway - which with a throwaway block in hand is a block placed against that wall. |
++| The eyes are on the job before the feet get there | `behavior/look/ApproachLook.java`, `PathExecutor#lookAtTheJob` | A person who has decided to open a chest, mine an ore, use a table or work a field is looking at it while they walk the last steps to it: the eyes arrive with the feet and the only thing left to do is reach. A walk's own look is the walk - the movement's target for the tick, leaned onto the line the path takes after it (the row above) - so on a walk whose goal named a block the head stayed on the line until the feet had stopped and the process that wanted the block turned it at the last moment: the bot walked up to a chest facing the wall beside it and turned. Over the last six blocks of such a walk the gaze is now offered that block in place of the line ahead, easing in over four blocks so nothing appears at a distance, at most half of the way to it, and nothing at all once it sits more than forty degrees off the walk - fading out by sixty, the over-the-shoulder bound the row above already holds itself to - or when it is the block the feet are standing in, which is where every ordinary `goto` ends and is what keeps this from changing a walk that is not walking *to* something. The block is the goal's own, asked for and not guessed: only the goals that name one render as a position (`GoalBlock`, `GoalTwoBlocks`, `GoalGetToBlock`, `GoalNear`), a composite - what mining and exploring walk on - answers with the part of itself nearest the end of the walk, and the answer is resolved once per path from the executing goal rather than every tick, because `simplifyUnloadedYCoord` can hand the pathfinder a `GoalXZ` in place of the goal that named the block and a walk to a chest calculated from far off would otherwise arrive having forgotten what it was for. Offered into the same lean, so every rule of the row above holds unchanged: the lean is on the gaze only and the movement's own rotation is untouched, a fall, a climb, a jump, a parkour run-up or water gets nothing, and a target about to be clicked is still aimed at exactly. Nothing when the goal names no block, which is most walks. |
+ | The gaze leans onto the line ahead | `behavior/look/GazeAhead.java`, `PathExecutor#leanGazeAhead` | A person walking a route has their head around the corner before their feet are: in the last two blocks of a walk the aim leans up to halfway toward where the path goes next, more the closer it gets. On a straight line the two directions are the same and the lean is nothing. Never off the walking direction by more than 60° - a path that doubles back gets an over-the-shoulder glance, not a head facing backwards while the feet walk forwards - and never onto a target about to be clicked, which every rule in this fork aims at exactly. Falls, climbs, jumps and parkour run-ups steer on the angles they are given and take no lean at all. The lean is on the *gaze* only: the movement's own rotation is what the game turns the pressed keys by (`LookBehavior#onPlayerRotationMove`), and it is kept exactly as asked for, so the head leads the body round the corner and never drags it there. |
+ | A target with no opinion about the pitch | `behavior/look/PitchWander.java`, `LookBehavior#settledGaze` | The gaze settles a few degrees this way and that every few seconds - triangular around level, a degree a tick, ten degrees out at the extremes - instead of holding one angle for a whole journey, and it settles *on the aim*, which is the angle the server is told and the one the arm is traced along. Only where the pitch is decoration: a swim travels by the pitch it is looking along and a glide solves for it, so in water and in the air the pitch stays where the movement put it, and a target that holds an opinion about the pitch - a block to break, a face to place against - is aimed at exactly. The ground ahead pulls on where the gaze settles (`PitchWander#lean`, `PathExecutor#leanOntoTheSlope`): the rise over the run of the next five blocks of path, as the angle a person would look along it, and then part of that - six tenths of a way down, a third of a way up, never more than thirty-five degrees - offered every tick and gone the tick it is not, so a stair down is watched for its footing, a drop at the end of a corridor is looked down into as it comes, and a climb is glanced up; nothing on the flat, in water, in the air or on the run-up to a jump. |
+ | The eyes go to the side of the road | `behavior/look/WalkGlance.java`, `PathExecutor#welcomeGlance` | Every five to fifteen seconds of plain walking the head turns twelve to forty degrees to one side - more, at something actually there: the nearest animal or player in view, up to seventy degrees off the way - eases there over half a second, holds for anything from a flick to a second, and eases back to exactly nothing, at the speed of a look (`AimDynamics.IDLE_YAW_STEP`) and never faster. It is an offset on the aim rather than an angle of its own, so it rides round a corner with the head under it and cannot leave the head somewhere stale when it ends. Welcome only on a plain walk along the flat with two more plain ones to come - nothing to break, place or open, no jump, drop, water or parkour - and the moment the walk stops being plain, or anything is about to be clicked, it comes back at the full looking speed and the count starts over; a walk that is all corners and jumps never glances at all. The keys are chosen against the aim and not against the sent rotation (`ILookBehavior#headRotation`), so a look to the side is not read as a change of heading. Now and then the feet stop for the look (`WalkGlance#stopped`, `PathExecutor#standForTheLook`): once in ten glances at nothing and once in three at something, the walking keys come off halfway out, the body stands while the head is held there, and it sets off again as the head comes back - a pause of under a second once every couple of minutes of open walking, taken only on a walk the executor has already welcomed the glance on, so there is nothing under the feet it could cost. The idle glance keeps off the head while the walking one is out on a stopped foot. A blow that is still owed a look stands it down for that whole episode, and the idle glance with it: a person staring at whoever just hit them is not also looking at the cow, and the stare is measured against the head this one is on, so one of them has to give way - see the flinch row below. |
+diff --git a/src/main/java/baritone/behavior/look/ApproachLook.java b/src/main/java/baritone/behavior/look/ApproachLook.java
+new file mode 100644
+index 00000000..c33be34a
+--- /dev/null
++++ b/src/main/java/baritone/behavior/look/ApproachLook.java
+@@ -0,0 +1,182 @@
++/*
++ * This file is part of Baritone.
++ *
++ * Baritone is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU Lesser General Public License as published by
++ * the Free Software Foundation, either version 3 of the License, or
++ * (at your option) any later version.
++ *
++ * Baritone is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public License
++ * along with Baritone.  If not, see <https://www.gnu.org/licenses/>.
++ */
++
++package baritone.behavior.look;
++
++import baritone.api.pathing.goals.Goal;
++import baritone.api.pathing.goals.GoalComposite;
++import baritone.api.utils.interfaces.IGoalRenderPos;
++import net.minecraft.core.BlockPos;
++
++/**
++ * The look onto the block a job is about, for the walk that ends at it.
++ * <p>
++ * A person who has decided to open a chest, mine an ore, use a table or plant a field is looking at it
++ * before they get there: the eyes arrive with the feet and the last thing left to do is reach. The walk
++ * has eyes of its own - the movement's own target says where the feet are going this tick, and
++ * {@link GazeAhead} leads them onto the line the path takes after it - but the walk's target is the
++ * <i>walk</i>. On the last stretch into something, the head is still on the line the path takes and only
++ * comes onto the job once the feet have stopped, when the process that wanted it asks for it: the bot
++ * walks up to a chest facing the wall beside it and turns at the last moment. That turn is the tell.
++ * <p>
++ * So the gaze is offered the block the job is about, on the approach, and this class is the rule for
++ * which block that is and how much of the way to it the eyes may come. The offer goes into the same lean
++ * the path already uses ({@link GazeAhead#offer}), which is where the rest of the rules live: it is still
++ * only ever the gaze and never the movement's own rotation - the keys are turned by the movement's target
++ * and chosen against the aim, see {@code MovementHelper#moveTowardsWithSlightRotation} - it is still
++ * nothing at all on a target that is about to be clicked, and a lean not taken is still gone on the next
++ * tick.
++ * <p>
++ * Nothing here knows where the player is: the caller measures the distance and the angle off the walk and
++ * asks {@link #weight} what to do about them, so the rules can be tested without a world.
++ * {@code ApproachLookTest} covers them.
++ */
++public final class ApproachLook {
++
++    /**
++     * How close the block has to be, in blocks, before the eyes come onto it: the last few steps of the
++     * walk. Further off than this and they belong on the way - a head fixed on something six blocks away
++     * while the feet are walking a path is a head that has stopped reading the path.
++     */
++    public static final double RANGE = 6.0;
++
++    /**
++     * The stretch of the approach the lean comes on over: nothing at {@link #RANGE}, its full share with
++     * two blocks to go. A weight that stepped from nothing to everything at a distance would flicker at
++     * that distance every time a walk crossed it, and a walk on a path does cross it.
++     */
++    public static final double RAMP = 4.0;
++
++    /**
++     * The share of the way to the block the eyes come at their strongest: half, as
++     * {@link GazeAhead#LEAN}. What is deliberately left undone is the last half. The aim that has to land
++     * on a block is the thing a click's own arrival question is asked about, and the lean is not what puts
++     * the crosshair on anything; stopping short also keeps the walk visibly the subject of the look, which
++     * is what the lean onto the line ahead holds itself to for the same reason.
++     */
++    public static final double LEAN = GazeAhead.LEAN;
++
++    /**
++     * How far off the walk the block may be, in degrees, before it stops being something on the way and
++     * becomes something to the side: sixty, the over-the-shoulder glance the lean onto the line ahead
++     * already holds itself to. Past that, a head turned onto it is a head that is not reading where the
++     * feet are going.
++     */
++    public static final float MAX_OFF_THE_WALK = 60f;
++
++    /**
++     * The band before that bound over which the lean fades out, in degrees: full strength up to forty off
++     * the walk, nothing at sixty. Same reason as the ramp - a look that ends at one angle and begins again
++     * at the next is a flicker at the angle between them.
++     */
++    public static final float OFF_THE_WALK_FADE = 20f;
++
++    /**
++     * Below this many blocks the block is the one the player is standing in - the goal of a plain
++     * {@code goto} is the block the walk ends in - and there is no direction to it to look along.
++     */
++    public static final double UNDERFOOT = 0.75;
++
++    private ApproachLook() {
++    }
++
++    /**
++     * The one block a goal is about, or null when it is not about one.
++     * <p>
++     * The goals that name a block are exactly the ones that implement {@link IGoalRenderPos} - a position
++     * to stand in ({@code GoalBlock}), a position to stand next to ({@code GoalGetToBlock}), a block two
++     * perches tall ({@code GoalTwoBlocks}), the point a range is measured from ({@code GoalNear}) - and it
++     * is answered by asking for it rather than by guessing: a goal that is <i>away</i> from positions
++     * ({@code GoalXZ}, {@code GoalYLevel}, {@code GoalAxis}, {@code GoalInverted}, {@code GoalRunAway})
++     * has no block to look at, and no heuristic can be turned back into one without inventing it.
++     * <p>
++     * A composite - what mining and exploring path on - is answered with the block of whichever part of it
++     * sits nearest to {@code theWalkEndsAt}, which is the one the path is actually walking to. Choosing by
++     * the player's own position instead would move the answer between two equally good blocks as the walk
++     * wandered, and the head would swing between them; the end of the walk does not move under the walk.
++     *
++     * @param goal          the goal the walk was calculated towards, or null
++     * @param theWalkEndsAt where the walk ends, for choosing between a composite's blocks, or null
++     * @return the block the goal is about, or null when it is not about one
++     */
++    public static BlockPos theBlock(Goal goal, BlockPos theWalkEndsAt) {
++        if (goal == null) {
++            return null;
++        }
++        if (goal instanceof IGoalRenderPos named) {
++            return named.getGoalPos();
++        }
++        if (goal instanceof GoalComposite composite) {
++            BlockPos nearest = null;
++            double closest = Double.MAX_VALUE;
++            for (Goal part : composite.goals()) {
++                final BlockPos block = theBlock(part, theWalkEndsAt);
++                if (block == null) {
++                    continue;
++                }
++                final double distance = theWalkEndsAt == null ? 0.0 : block.distSqr(theWalkEndsAt);
++                if (distance < closest) {
++                    closest = distance;
++                    nearest = block;
++                }
++            }
++            return nearest;
++        }
++        return null;
++    }
++
++    /**
++     * How much of the way to the block the gaze may come this tick: {@link #LEAN} at the strongest, 0 for
++     * not at all.
++     * <p>
++     * Three things take it away, all of them over a distance rather than at a cutoff, because a look that
++     * appears is a snap however small the angle it appears at: the block being far ({@link #RANGE},
++     * {@link #RAMP}), the block being off the walk rather than on it ({@link #MAX_OFF_THE_WALK},
++     * {@link #OFF_THE_WALK_FADE}), and the block being the one the player is standing in
++     * ({@link #UNDERFOOT}).
++     *
++     * @param distance         how far the block is from the player's feet, in blocks
++     * @param angleOffTheWalk  how far off the direction the feet are going it is, in degrees, from
++     *                         {@link #angleOffTheWalk}
++     * @return the weight to offer, between 0 and {@link #LEAN}
++     */
++    public static double weight(double distance, float angleOffTheWalk) {
++        if (distance >= RANGE || distance <= UNDERFOOT || angleOffTheWalk >= MAX_OFF_THE_WALK) {
++            return 0.0;
++        }
++        final double closedIn = Math.min(1.0, (RANGE - distance) / RAMP);
++        final double onTheWalk = Math.min(1.0, (MAX_OFF_THE_WALK - angleOffTheWalk) / OFF_THE_WALK_FADE);
++        return LEAN * closedIn * onTheWalk;
++    }
++
++    /**
++     * The angle between where the feet are going and where the block is, both as horizontal directions from
++     * the player, in degrees: 0 straight ahead, 90 to the side, 180 behind.
++     * <p>
++     * A direction of no length - no walk at all, or a block on top of the player - is answered as 180,
++     * which is the answer that asks for no lean.
++     */
++    public static float angleOffTheWalk(double walkX, double walkZ, double toItX, double toItZ) {
++        final double walkLength = Math.sqrt(walkX * walkX + walkZ * walkZ);
++        final double toItLength = Math.sqrt(toItX * toItX + toItZ * toItZ);
++        if (walkLength <= 0.0 || toItLength <= 0.0) {
++            return 180f;
++        }
++        final double cosine = (walkX * toItX + walkZ * toItZ) / (walkLength * toItLength);
++        return (float) Math.toDegrees(Math.acos(Math.max(-1.0, Math.min(1.0, cosine))));
++    }
++}
+diff --git a/src/main/java/baritone/pathing/path/PathExecutor.java b/src/main/java/baritone/pathing/path/PathExecutor.java
+index 169da566..99b1bfb4 100644
+--- a/src/main/java/baritone/pathing/path/PathExecutor.java
++++ b/src/main/java/baritone/pathing/path/PathExecutor.java
+@@ -26,6 +26,7 @@ import baritone.api.pathing.path.IPathExecutor;
+ import baritone.api.utils.*;
+ import baritone.api.utils.input.Input;
+ import baritone.behavior.PathingBehavior;
++import baritone.behavior.look.ApproachLook;
+ import baritone.behavior.look.GazeAhead;
+ import baritone.pathing.calc.AbstractNodeCostSearch;
+ import baritone.pathing.movement.CalculationContext;
+@@ -108,11 +109,26 @@ public class PathExecutor implements IPathExecutor, Helper {
+      */
+     private static final double STANDING_SPEED_SQ = 0.02 * 0.02;
+ 
++    /**
++     * The block this walk is for - the chest, the door, the crop, the block to be mined - or null when the
++     * goal is not about one. Resolved once per path, because the answer cannot change while this walk is
++     * the walk under way, and because asking every tick would walk a composite of every matching block in
++     * the loaded chunks on every tick of every path. See {@link ApproachLook}.
++     * <p>
++     * From the executing goal rather than the path's own: when {@code simplifyUnloadedYCoord} is on and the
++     * goal's chunk is not loaded, the pathfinder is handed - and the path keeps - a {@code GoalXZ} in place
++     * of the goal that named a block, and a walk to a chest calculated from far away would arrive having
++     * forgotten what it was for.
++     */
++    private final BlockPos theJob;
++
+     public PathExecutor(PathingBehavior behavior, IPath path) {
+         this.behavior = behavior;
+         this.ctx = behavior.ctx;
+         this.path = path;
+         this.pathPosition = 0;
++        final List<BetterBlockPos> positions = path.positions();
++        this.theJob = ApproachLook.theBlock(behavior.getGoal(), positions.isEmpty() ? null : positions.get(positions.size() - 1));
+     }
+ 
+     /**
+@@ -312,6 +328,58 @@ public class PathExecutor implements IPathExecutor, Helper {
+     private static final double SLOPE_DOWN_SHARE = 0.6;
+     private static final double SLOPE_UP_SHARE = 0.33;
+ 
++    /**
++     * Offers the gaze the block the walk is for, when this is a tick the eyes can be on it: the chest, the
++     * door, the crop or the table comes onto the head on the approach rather than after the feet have
++     * stopped. See {@link ApproachLook} for the rule and {@code HUMANLIKE.md} for the behaviour.
++     * <p>
++     * Asked before {@link #leanGazeAhead} and takes its place when it has an answer: there is one lean on
++     * a walking target, and on the stretch of walk that ends at a block the thing the walk is for is the
++     * more useful thing to have the eyes on than the corner of it. When it has no answer - the goal is not
++     * about a block, the block is still too far, or it sits beside the walk rather than on it - the line
++     * ahead is offered as before.
++     * <p>
++     * The same states that take the line ahead away take this away, and for the same reasons: a fall, a
++     * climb and a jump steer on the angles they are given, water and a glide solve for their own, and a
++     * target that is about to be clicked is aimed at exactly, which
++     * {@link baritone.behavior.look.GazeAhead#lean} does regardless of what is offered here.
++     *
++     * @return whether the eyes have somewhere better to be than the line ahead, so that the caller can
++     *         leave the line alone
++     */
++    private boolean lookAtTheJob(Movement movement) {
++        if (this.theJob == null
++                || !ctx.player().onGround()
++                || ctx.player().isInWater()
++                || movement instanceof MovementParkour
++                || movement.getDirection().getY() != 0) {
++            return false;
++        }
++        final BlockPos step = movement.getDirection();
++        if (step.getX() == 0 && step.getZ() == 0) {
++            return false;
++        }
++        if (this.theJob.equals(ctx.playerFeet())) {
++            // the block the walk is to be standing in, which the player is already standing in: the walk is
++            // there, and there is no direction to it to look along
++            return false;
++        }
++        final Vec3 centre = VecUtils.getBlockPosCenter(this.theJob);
++        final Vec3 feet = ctx.player().position();
++        final double distance = centre.distanceTo(feet);
++        final float offTheWalk = ApproachLook.angleOffTheWalk(
++                step.getX(), step.getZ(),
++                centre.x - feet.x, centre.z - feet.z);
++        final double weight = ApproachLook.weight(distance, offTheWalk);
++        if (weight <= 0) {
++            return false;
++        }
++        behavior.baritone.getLookBehavior().gazeAhead().offer(
++                RotationUtils.calcRotationFromVec3d(ctx.playerHead(), centre, ctx.playerRotations()),
++                weight);
++        return true;
++    }
++
+     /**
+      * Offers the gaze the line the path takes next, so the head leads the body around corners instead
+      * of whipping around at every movement boundary.
+@@ -323,6 +391,9 @@ public class PathExecutor implements IPathExecutor, Helper {
+      */
+     private void leanGazeAhead(Movement movement) {
+         final GazeAhead gaze = behavior.baritone.getLookBehavior().gazeAhead();
++        if (lookAtTheJob(movement)) {
++            return;
++        }
+         if (movement.getDirection().getY() != 0
+                 || movement instanceof MovementParkour
+                 || pathPosition + 1 >= path.length()
+diff --git a/src/test/java/baritone/behavior/look/ApproachLookTest.java b/src/test/java/baritone/behavior/look/ApproachLookTest.java
+new file mode 100644
+index 00000000..eb962746
+--- /dev/null
++++ b/src/test/java/baritone/behavior/look/ApproachLookTest.java
+@@ -0,0 +1,265 @@
++/*
++ * This file is part of Baritone.
++ *
++ * Baritone is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU Lesser General Public License as published by
++ * the Free Software Foundation, either version 3 of the License, or
++ * (at your option) any later version.
++ *
++ * Baritone is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public License
++ * along with Baritone.  If not, see <https://www.gnu.org/licenses/>.
++ */
++
++package baritone.behavior.look;
++
++import baritone.api.pathing.goals.Goal;
++import baritone.api.pathing.goals.GoalBlock;
++import baritone.api.pathing.goals.GoalComposite;
++import baritone.api.pathing.goals.GoalGetToBlock;
++import baritone.api.pathing.goals.GoalInverted;
++import baritone.api.pathing.goals.GoalNear;
++import baritone.api.pathing.goals.GoalRunAway;
++import baritone.api.pathing.goals.GoalTwoBlocks;
++import baritone.api.pathing.goals.GoalXZ;
++import baritone.api.pathing.goals.GoalYLevel;
++import baritone.api.utils.Rotation;
++import net.minecraft.core.BlockPos;
++import org.junit.Test;
++
++import java.io.IOException;
++import java.nio.file.Files;
++import java.nio.file.Path;
++import java.util.List;
++
++import static org.junit.Assert.assertEquals;
++import static org.junit.Assert.assertNull;
++import static org.junit.Assert.assertTrue;
++
++/**
++ * The look onto the block a job is about has two halves and both are here: which block a goal is about,
++ * and how much of the way to it the eyes may come. What is deliberately not here is the wiring - whether
++ * the walk asks - because that needs a player and a world; it is read from the source, the way the other
++ * counted edges are.
++ * <p>
++ * The properties that matter, and the reason each test exists:
++ * <ul>
++ *     <li>a goal that names a block is asked for it, one that does not names nothing, and a composite
++ *     answers with the part of itself the walk is actually for - a head that swung between two equally
++ *     good blocks as a walk wandered would be worse than no look at all;</li>
++ *     <li>the weight is continuous at every boundary it has, because a look that appears at a distance is
++ *     a snap however small it is when it appears;</li>
++ *     <li>it never exceeds {@link ApproachLook#LEAN}, never points further off the walk than
++ *     {@link ApproachLook#MAX_OFF_THE_WALK}, and is nothing at all for a block the player is standing
++ *     in or one behind them - the three shapes of "this would be a stare, not an arrival";</li>
++ *     <li>a walk that is not a walk <i>to</i> anything - the end of a plain {@code goto}, which is the
++ *     block under the player's own last step - produces no lean, which is what keeps this from being a
++ *     rule that changes every walk on the branch;</li>
++ *     <li>a target about to be clicked is still returned exactly.</li>
++ * </ul>
++ */
++public class ApproachLookTest {
++
++    /** The walk is due east in the test's own plane, and every block in it is placed at an angle off it. */
++    private static final double WALK_X = 1.0;
++    private static final double WALK_Z = 0.0;
++
++    /** A block {@code degrees} round the walk, {@code distance} blocks away, as the caller would see it. */
++    private static float leanOf(double degrees, double distance, boolean blockInteract) {
++        final float off = ApproachLook.angleOffTheWalk(
++                WALK_X, WALK_Z,
++                Math.cos(Math.toRadians(degrees)), Math.sin(Math.toRadians(degrees)));
++        assertEquals("the angle to the block is not the angle it was put at",
++                (float) Math.abs(degrees), off, 0.01f);
++        final double weight = ApproachLook.weight(distance, off);
++        final GazeAhead gaze = new GazeAhead();
++        gaze.offer(new Rotation((float) degrees, 0f), weight);
++        return gaze.lean(new Rotation(0f, 0f), blockInteract).getYaw();
++    }
++
++    // --- which block a goal is about ---------------------------------------------------------------
++
++    @Test
++    public void aGoalThatNamesABlockIsAsked() {
++        final BlockPos at = new BlockPos(11, 63, -4);
++        assertEquals(at, ApproachLook.theBlock(new GoalBlock(at), null));
++        assertEquals(at, ApproachLook.theBlock(new GoalTwoBlocks(at), null));
++        assertEquals(at, ApproachLook.theBlock(new GoalGetToBlock(at), null));
++        assertEquals(at, ApproachLook.theBlock(new GoalNear(at, 3), null));
++    }
++
++    @Test
++    public void aGoalThatNamesNoBlockHasNone() {
++        assertNull(ApproachLook.theBlock(null, null));
++        assertNull(ApproachLook.theBlock(new GoalXZ(11, -4), null));
++        assertNull(ApproachLook.theBlock(new GoalYLevel(63), null));
++        assertNull(ApproachLook.theBlock(new GoalRunAway(4, new BlockPos(0, 64, 0)), null));
++        assertNull(ApproachLook.theBlock(new GoalInverted(new GoalBlock(1, 64, 1)), null));
++        // and a composite of things that name nothing is nothing, not an empty answer that reads as one
++        assertNull(ApproachLook.theBlock(new GoalComposite(new GoalXZ(1, 1), new GoalYLevel(64)), null));
++    }
++
++    @Test
++    public void aCompositeIsTheBlockNearestTheEndOfTheWalk() {
++        final BlockPos near = new BlockPos(0, 64, 0);
++        final BlockPos far = new BlockPos(40, 64, 40);
++        final BlockPos middling = new BlockPos(10, 64, 10);
++        final Goal composite = new GoalComposite(new GoalXZ(0, 0) /* names nothing */,
++                new GoalBlock(far), new GoalBlock(near), new GoalBlock(middling));
++        // the walk ends here, so the block the walk is for is the one by it - not the first listed, and
++        // not anything to do with where the player is standing
++        assertEquals(near, ApproachLook.theBlock(composite, new BlockPos(1, 64, 1)));
++        assertEquals(middling, ApproachLook.theBlock(composite, new BlockPos(11, 64, 11)));
++        // and a nested composite answers the same way
++        final Goal nested = new GoalComposite(new GoalComposite(new GoalYLevel(64), new GoalBlock(far)),
++                new GoalTwoBlocks(near));
++        assertEquals(near, ApproachLook.theBlock(nested, new BlockPos(0, 64, 1)));
++        // with nowhere named for the walk, the first block that can answer does
++        assertEquals(far, ApproachLook.theBlock(composite, null));
++    }
++
++    // --- how much of the way the eyes may come -----------------------------------------------------
++
++    @Test
++    public void theWeightIsNothingWhenThereIsNothingToLookAt() {
++        // too far: at the range and past it
++        assertEquals(0.0, ApproachLook.weight(ApproachLook.RANGE, 0f), 0.0);
++        assertEquals(0.0, ApproachLook.weight(ApproachLook.RANGE + 4, 0f), 0.0);
++        // beside or behind rather than on the way
++        assertEquals(0.0, ApproachLook.weight(2.0, ApproachLook.MAX_OFF_THE_WALK), 0.0);
++        assertEquals(0.0, ApproachLook.weight(2.0, 180f), 0.0);
++        // the block the player is standing in, which has no direction to it
++        assertEquals(0.0, ApproachLook.weight(ApproachLook.UNDERFOOT, 0f), 0.0);
++        assertEquals(0.0, ApproachLook.weight(0.0, 0f), 0.0);
++    }
++
++    @Test
++    public void theWeightComesOnOverTheRampAsTheWalkClosesIn() {
++        double last = 0.0;
++        for (double distance = ApproachLook.RANGE; distance >= ApproachLook.UNDERFOOT + 0.01; distance -= 0.01) {
++            final double weight = ApproachLook.weight(distance, 0f);
++            assertTrue("the weight went down as the walk closed in, at " + distance, weight >= last - 1e-12);
++            assertTrue("the weight passed its share, at " + distance, weight <= ApproachLook.LEAN + 1e-12);
++            last = weight;
++        }
++        // full share by the time there are RAMP blocks to go, and no earlier
++        assertEquals(ApproachLook.LEAN, ApproachLook.weight(ApproachLook.RANGE - ApproachLook.RAMP, 0f), 1e-9);
++        assertEquals(ApproachLook.LEAN, ApproachLook.weight(2.0, 0f), 1e-9);
++    }
++
++    @Test
++    public void theWeightFadesOutBeforeTheBlockIsBesideTheWalk() {
++        // full strength up to the fade band, nothing at the bound, and no step in between
++        assertEquals(ApproachLook.LEAN, ApproachLook.weight(2.0, ApproachLook.MAX_OFF_THE_WALK - ApproachLook.OFF_THE_WALK_FADE), 1e-9);
++        assertEquals(0.0, ApproachLook.weight(2.0, ApproachLook.MAX_OFF_THE_WALK), 1e-9);
++        double last = ApproachLook.LEAN;
++        for (float angle = ApproachLook.MAX_OFF_THE_WALK - ApproachLook.OFF_THE_WALK_FADE;
++                angle <= ApproachLook.MAX_OFF_THE_WALK; angle += 0.05f) {
++            final double weight = ApproachLook.weight(2.0, angle);
++            assertTrue("the weight went up as the block moved off the walk, at " + angle, weight <= last + 1e-12);
++            last = weight;
++        }
++    }
++
++    @Test
++    public void theWeightIsContinuousAtBothOfItsEdges() {
++        // a look that appears at a distance is a snap however small the angle it appears at, so neither
++        // edge may step: the weight has to go to nothing as the distance and the angle approach theirs
++        assertTrue("the weight appeared at the range", ApproachLook.weight(ApproachLook.RANGE - 1e-6, 0f) < 1e-6);
++        assertTrue("the weight appeared at the bound",
++                ApproachLook.weight(2.0, ApproachLook.MAX_OFF_THE_WALK - 0.01f) < 0.001);
++    }
++
++    @Test
++    public void theAngleIsTheAngleBetweenTheTwoDirections() {
++        assertEquals(0f, ApproachLook.angleOffTheWalk(1, 0, 1, 0), 1e-4f);
++        assertEquals(90f, ApproachLook.angleOffTheWalk(1, 0, 0, 1), 1e-4f);
++        assertEquals(180f, ApproachLook.angleOffTheWalk(1, 0, -1, 0), 1e-4f);
++        assertEquals(45f, ApproachLook.angleOffTheWalk(1, 0, 1, 1), 1e-3f);
++        // no walk, or a block on the player: the answer that asks for no lean at all
++        assertEquals(180f, ApproachLook.angleOffTheWalk(0, 0, 1, 0), 0f);
++        assertEquals(180f, ApproachLook.angleOffTheWalk(1, 0, 0, 0), 0f);
++    }
++
++    // --- the whole offer, through the lean the path already uses -----------------------------------
++
++    @Test
++    public void theEyesComeMostOfTheWayOntoABlockOnTheApproach() {
++        // three blocks out and forty degrees off the walk: a person is already looking at it
++        final float lean = leanOf(40, 3.0, false);
++        assertTrue("the walk was not looked at at all: " + lean, lean > 8f);
++        assertTrue("the lean took the head off the job: " + lean, lean < 20f);
++        // and by the last block it is most of the way there
++        final float arriving = leanOf(40, 1.5, false);
++        assertTrue("the eyes were still on the path at the last block: " + arriving, arriving > lean);
++        assertTrue("the lean came all the way onto the job: " + arriving, arriving < 40f);
++    }
++
++    @Test
++    public void theLeanNeverLeavesTheWalk() {
++        for (double distance = ApproachLook.RANGE; distance > ApproachLook.UNDERFOOT; distance -= 0.25) {
++            for (double degrees = -180; degrees <= 180; degrees += 5) {
++                final float lean = leanOf(degrees, distance, false);
++                assertTrue("the lean pointed past its own bound: " + lean,
++                        Math.abs(lean) <= GazeAhead.MAX_LEAN_DEGREES + 1e-3f);
++                assertTrue("the lean went further off the walk than the block is: " + lean
++                                + " for a block at " + degrees,
++                        Math.abs(lean) <= Math.abs(degrees) + 1e-3f);
++                assertTrue("the lean was stronger than the share: " + lean,
++                        Math.abs(lean) <= Math.abs(degrees) * ApproachLook.LEAN + 1e-3f);
++            }
++        }
++    }
++
++    @Test
++    public void aBlockAboutToBeClickedIsAimedAtExactly() {
++        // whatever the offer says, the lean stands aside for a target that is about to be clicked - the
++        // rule every click in the mod is aimed under, and the one this must not be able to bend
++        for (double degrees = -180; degrees <= 180; degrees += 5) {
++            assertEquals("a click target was leaned off", 0f, leanOf(degrees, 1.0, true), 0f);
++        }
++    }
++
++    @Test
++    public void aStraightApproachToTheEndOfTheWalkIsNoLean() {
++        // the end of a plain goto is the block the walk ends in, dead ahead: nothing to add to a walk that
++        // is already looking at it, which is what keeps this from changing every walk on the branch
++        assertEquals(0f, leanOf(0, 1.0, false), 1e-4f);
++        assertEquals(0f, leanOf(0, 5.0, false), 1e-4f);
++    }
++
++    // --- the wiring, which needs a player and is read rather than run ------------------------------
++
++    @Test
++    public void theWalkAsksBeforeItOffersTheLineAhead() throws IOException {
++        final Path root = repoRoot();
++        org.junit.Assume.assumeTrue("the sources are not next to this test run", root != null);
++        final List<String> executor = Files.readAllLines(
++                root.resolve("src/main/java/baritone/pathing/path/PathExecutor.java"));
++        final String source = String.join("\n", executor);
++        assertTrue("the block the walk is for is no longer resolved once per path",
++                source.contains("ApproachLook.theBlock(behavior.getGoal(),"));
++        assertTrue("the eyes are no longer offered to the block the walk is for",
++                source.contains("if (lookAtTheJob(movement)) {"));
++        assertTrue("the offer is no longer made into the lean the path already uses",
++                source.contains("getLookBehavior().gazeAhead().offer("));
++        assertTrue("the resolved block has to be kept for the path, not re-asked every tick",
++                source.contains("private final BlockPos theJob;"));
++    }
++
++    /** The checkout, found the way the other counted tests find it. */
++    private static Path repoRoot() {
++        Path dir = Path.of("").toAbsolutePath();
++        for (int i = 0; i < 4 && dir != null; i++) {
++            if (Files.isDirectory(dir.resolve("src"))) {
++                return dir;
++            }
++            dir = dir.getParent();
++        }
++        return null;
++    }
++}
+-- 
+2.47.3
+
