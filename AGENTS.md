@@ -463,3 +463,60 @@ live-trace overload), `process/BuilderProcess.java` (both spellings replaced), `
 who asks a face, and the block questions that stay), `HUMANLIKE.md`.
 Status: In progress.
 
+
+### Duckbill — the face question (done, verified remote `81c923cc`, 2026-10-08 12:35 UTC)
+
+Timestamp: 2026-10-08 12:35 UTC (14:35 local). Commits `27adae53` (the change) and `81c923cc` (patch
+`0023`), on top of Plover's `50079e43` - the remote had moved nine commits while this was being written
+(Kestrel's blow in the hostile run and Plover's break order), so it was rebased onto them, with the
+AGENTS.md conflict resolved as the union of both sides, rather than pushed past them.
+
+- **What changed.** A click that acts on one face of a block asked its question in two spellings, and the
+  farmer's plantings asked the wrong one. A seed goes into the top of a farmland and a cocoa bean onto the
+  side of a log: a click sent while the crosshair is on the side of the right block is a packet that lands
+  on a face that does not take the item, an arm swung at nothing, and the tick spent standing there for it,
+  with the process asking again next tick. The question has a name now - `RayTraceUtils#hitsFace`, with
+  `IPlayerContext#isLookingAt(block, face)` for the trace under the crosshair and
+  `RayTraceUtils#hitsFaceTowards` for a caller that knows where the item is going rather than which way the
+  face is called - and six sites ask it: the farmer's two plantings and the two traces it takes before
+  aiming at them, the builder's candidate and its click (which spelled the pair out by hand until now), and
+  the movement layer's own placement search. The harvest and the bone meal keep the block question, with
+  the reason written down: a block is broken from whichever side the crosshair is on, and bone meal acts on
+  the block it is used on. Every farmer click also gained the arrival fallback the mining and builder
+  clicks already had.
+- **The sixth site is a defect, not a tidy-up.** The bridge's step-back (`MovementTraverse`, the
+  sneak-place over air) places into `dest.below()`, which is the position the face of `goalLook` the bot
+  looks back at points at - and it asked only for the block. A click that went out on another side of the
+  same block put a block *behind the bot*, on the bridge it had just left, instead of under its feet. It
+  asks `hitsFaceTowards(ctx.objectMouseOver(), goalLook, dest.below())` now, with the `hasArrivedAt` break
+  fallback below it unchanged.
+- **Validation.** `ClickGatesTest` standalone: **OK (3 tests)**. Full suite on the rebased tree: **37
+  classes, 306 tests, 0 failures, 0 errors, 0 skipped in 33s** (was 305 at Plover's tip; the new pass is
+  the difference). The new pass pins who asks a face, per file and per shape of the call, and **it has
+  teeth**: putting the farmland planting back to the block question alone fails it with both maps printed
+  (`... FarmProcess.java isLookingAt-face=1` against the pinned 2), then the file was restored from
+  `/var/tmp/farm.bak` and the diff checked. Patch `0023` `git apply --check`ed, applied and reverted in a
+  scratch worktree at `34559749`.
+- **Read for the next iteration and deliberately not done** (so nobody spends the same hours):
+  - **"The head is on the thing the walk is going to"** (an approach look at the block a job is about).
+    Not addable safely as things stand: an offset that size lives on the trace (the offsets are in the
+    player's rotation during PRE, and the trace follows the last rotation sent), so its welcome condition
+    would have to be "plain walk" or a mining walk - which breaks a block every two or three - would
+    flicker it out and in and *delay the clicks* it is standing down for; and "the block the job is about"
+    has no source of truth: `MineProcess` holds `knownOreLocations` and a `GoalComposite` of per-ore
+    `GoalBlock`s, so it needs a `Goal`-side hook that names a block, a stand-down margin before the target
+    is in reach, and a decision about that flicker. Worth doing, not by halves.
+  - **`InputOverrideHandler#atAPace` is right as it is.** Read in full: the beat between opposite keys is
+    spent only on the ground, not sneaking, not in water or lava, not flying, and only while sprinting or
+    coasting at 0.23 blocks/tick. That is why the two `MOVE_BACK` reversals in `MovementTraverse` get no
+    beat: at a careful pace those keys are the control loop, not fingers. HUMANLIKE.md's row says so.
+  - **"The bot walks staring at the ground after breaking a block below it" is not a defect.**
+    `PitchWander#step` drags a pitch with no opinion back to level at a degree a tick; its javadoc already
+    says why.
+  - **`utils/GuiClick.java` read.** It is a `Screen` whose `mouseClicked` records a corner and whose release
+    adds a selection or sets a goal: it presses nothing, so `ButtonWritesTest`'s allow-list is right to
+    leave it out. My earlier note asked; this is the answer.
+- **Left open.** `MovementTraverse`'s break-click below the new gate (`hasArrivedAt` then `CLICK_LEFT`, "well
+  i guess theres something in the way") is still the one click whose block is not named by the question. It
+  is the escape hatch for the geometry the face question refuses, and the comment says so; do not "fix" it
+  without a running game. Plover's sneak cadence is their file and their claim.
