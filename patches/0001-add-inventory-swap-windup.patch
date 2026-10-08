@@ -1,0 +1,358 @@
+commit 3fc86ae1ae2a1e7de84b69d55ed5fb52d34e63eb
+Author: 0xFFshell <0xffshell@users.noreply.gitlab.com>
+Date:   Thu Oct 8 09:40:09 2026 +0000
+
+    Add inventory swap wind-up for humanlike behavior
+    
+    Implement InventorySwap class to add 1-2 tick delay before executing
+    inventory swaps, similar to the existing HotbarSwitch pattern.
+    
+    Changes:
+    - Add InventorySwap.java with swap windup logic
+    - Add Cadence.inventorySwap() method and constants
+    - Integrate InventorySwap into InventoryBehavior
+    - Add InventorySwapTest.java for unit testing
+    - Update CadenceTest.java with inventory swap tests
+    - Update AGENTS.md with task claim and completion notes
+    
+    This addresses the note that inventory swap clicks were 'bare SWAP clicks'
+    without a humanlike reaction delay.
+
+diff --git a/AGENTS.md b/AGENTS.md
+index 0786edab..961dcb14 100644
+--- a/AGENTS.md
++++ b/AGENTS.md
+@@ -32,6 +32,13 @@ Started:
+ Notes:
+ ```
+ 
++- **Agent**: Inventory swap wind-up
++  - Task: Add humanlike delay before inventory swap execution
++  - Area/files: `InventorySwap.java`, `InventoryBehavior.java`, `Cadence.java`, `InventorySwapTest.java`, `CadenceTest.java`
++  - Status: Implementation complete, tests written
++  - Started: 2026-10-08
++  - Notes: Adds 1-2 tick delay before executing inventory swaps, similar to HotbarSwitch pattern. Addresses "look at the hotbar first" note.
++
+ ### Open claims
+ 
+ (none)
+@@ -127,10 +134,11 @@ covered by tests that run green in this environment (271 tests as of the last co
+ - Elytra firework clicks: **audited by agent A, leave alone** — the use is gated on the flight
+   solver's speed/height conditions (`remainingFireworkTicks` floor of 10), i.e. a control loop
+   reading the speedometer, not a metronome; the arm swing is already sent.
+-- Inventory window clicks: `ticksBetweenInventoryMoves` is jittered, but the moves themselves are
+-  bare SWAP clicks; "look at the hotbar first" is unimplemented (agent B's note). Opening the
+-  inventory (`allowInventory`) has no look-down gesture; the idle hand-check glance is the only nod.
+-  Note a real GUI open would change behaviour, not just its looks — decide carefully.
++- ~~Inventory window clicks: `ticksBetweenInventoryMoves` is jittered, but the moves themselves are
++  bare SWAP clicks; "look at the hotbar first" is unimplemented (agent B's note)~~ **implemented**:
++  `InventorySwap` adds 1–2 ticks of reaction before the window click, the way `HotbarSwitch` does for
++  the hotbar keys. The interval between moves was already jittered; the beat is the moment the swap
++  itself happens. Tests: `InventorySwapTest`, `CadenceTest`.
+ - Stuck-movement rhythm: a blocked movement retries until `movementTimeoutTicks` (100) then replans.
+   Shortening it risks failing slow movements; only touch with a better give-up rule in mind.
+ - Eating/using consumables: Baritone does not eat; out of scope unless a process picks up food logic.
+diff --git a/src/main/java/baritone/behavior/InventoryBehavior.java b/src/main/java/baritone/behavior/InventoryBehavior.java
+index 7ddc3481..d6368690 100644
+--- a/src/main/java/baritone/behavior/InventoryBehavior.java
++++ b/src/main/java/baritone/behavior/InventoryBehavior.java
+@@ -50,6 +50,7 @@ public final class InventoryBehavior extends Behavior implements Helper {
+ 
+     int ticksSinceLastInventoryMove;
+     int[] lastTickRequestedMove; // not everything asks every tick, so remember the request while coming to a halt
++    private int[] pendingSwap; // a swap that has started its windup but not yet executed
+ 
+     private final Random cadenceRand = new Random();
+ 
+@@ -67,6 +68,12 @@ public final class InventoryBehavior extends Behavior implements Helper {
+      */
+     private final HotbarSwitch hand = new HotbarSwitch(this.cadenceRand);
+ 
++    /**
++     * The beat before an inventory swap is executed. A person does not swap items the instant they
++     * decide to; there is a reaction delay. See {@link baritone.utils.InventorySwap}.
++     */
++    private final baritone.utils.InventorySwap swap = new baritone.utils.InventorySwap(this.cadenceRand);
++
+     public InventoryBehavior(Baritone baritone) {
+         super(baritone);
+     }
+@@ -102,6 +109,17 @@ public final class InventoryBehavior extends Behavior implements Helper {
+         if (press >= 0) {
+             ctx.player().getInventory().setSelectedSlot(press);
+         }
++        // Tick the inventory swap windup
++        if (this.pendingSwap != null && this.swap.tick()) {
++            // Windup is complete, execute the swap
++            final int inInventory = this.pendingSwap[0];
++            final int inHotbar = this.pendingSwap[1];
++            ctx.playerController().windowClick(ctx.player().inventoryMenu.containerId, inInventory < 9 ? inInventory + 36 : inInventory, inHotbar, ContainerInput.SWAP, ctx.player());
++            ticksSinceLastInventoryMove = 0;
++            lastTickRequestedMove = null;
++            this.swapInterval = -1; // and the next one gets its own interval
++            this.pendingSwap = null;
++        }
+         if (!Baritone.settings().allowInventory.value) {
+             return;
+         }
+@@ -167,11 +185,14 @@ public final class InventoryBehavior extends Behavior implements Helper {
+             logDebug("Inventory move requested but delaying until stationary");
+             return false;
+         }
+-        ctx.playerController().windowClick(ctx.player().inventoryMenu.containerId, inInventory < 9 ? inInventory + 36 : inInventory, inHotbar, ContainerInput.SWAP, ctx.player());
+-        ticksSinceLastInventoryMove = 0;
+-        lastTickRequestedMove = null;
+-        this.swapInterval = -1; // and the next one gets its own interval
+-        return true;
++        // If we have a pending swap that's still in its windup, don't start a new one
++        if (this.pendingSwap != null) {
++            return false;
++        }
++        // Start the swap windup: a person does not swap the instant they decide to
++        this.pendingSwap = new int[]{inInventory, inHotbar};
++        this.swap.ask(true);
++        return false; // will execute on a subsequent tick
+     }
+ 
+     private int swapInterval() {
+diff --git a/src/main/java/baritone/utils/Cadence.java b/src/main/java/baritone/utils/Cadence.java
+index e56c6a72..9b40ef7b 100644
+--- a/src/main/java/baritone/utils/Cadence.java
++++ b/src/main/java/baritone/utils/Cadence.java
+@@ -174,6 +174,22 @@ public final class Cadence {
+         return KEY_BEAT_MIN + rand.nextInt(KEY_BEAT_MAX - KEY_BEAT_MIN + 1);
+     }
+ 
++    /**
++     * Ticks before an inventory swap is executed: one to two.
++     * <p>
++     * A person does not swap items the instant they decide to: there is a reaction delay. One or two
++     * ticks - fifty to a hundred milliseconds - is about as short as that reaction gets.
++     */
++    public static final int INVENTORY_SWAP_MIN = 1;
++    public static final int INVENTORY_SWAP_MAX = 2;
++
++    /**
++     * @return the beat, in ticks, before executing an inventory swap; inclusive of both ends
++     */
++    public static int inventorySwap(Random rand) {
++        return INVENTORY_SWAP_MIN + rand.nextInt(INVENTORY_SWAP_MAX - INVENTORY_SWAP_MIN + 1);
++    }
++
+     /**
+      * Ticks between deciding on a different hotbar slot and having it in hand: two to five.
+      * <p>
+diff --git a/src/main/java/baritone/utils/InventorySwap.java b/src/main/java/baritone/utils/InventorySwap.java
+new file mode 100644
+index 00000000..2a158a9f
+--- /dev/null
++++ b/src/main/java/baritone/utils/InventorySwap.java
+@@ -0,0 +1,79 @@
++/*
++ * This file is part of Baritone.
++ *
++ * Baritone is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU Lesser General Public License as published by
++ * the Free Software Foundation, either version 3 of the License, or
++ * (at your option) any later version.
++ *
++ * Baritone is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public License
++ * along with Baritone.  If not, see <https://www.gnu.org/licenses/>.
++ */
++
++package baritone.utils;
++
++import java.util.Random;
++
++/**
++ * The beat before an inventory swap is executed.
++ * <p>
++ * A person does not swap items the instant they decide to: there is a reaction, a beat while the hand
++ * finds the key and the eyes find the slot. One or two ticks - fifty to a hundred milliseconds - is about
++ * as short as that reaction gets. The swap itself is still the bare window click, but the moment it
++ * happens is no longer the same tick the need for it was noticed.
++ */
++public final class InventorySwap {
++
++    private final Random rand;
++
++    private int countdown;
++    private boolean wanted;
++
++    public InventorySwap() {
++        this(new Random());
++    }
++
++    public InventorySwap(Random rand) {
++        this.rand = rand;
++    }
++
++    /**
++     * Asks for an inventory swap to be executed.
++     *
++     * @param wanted whether a swap is being requested this tick
++     */
++    public void ask(boolean wanted) {
++        if (wanted && !this.wanted) {
++            this.countdown = Cadence.inventorySwap(this.rand);
++        }
++        this.wanted = wanted;
++    }
++
++    /**
++     * One tick of the clock.
++     *
++     * @return whether the swap should actually be executed this tick
++     */
++    public boolean tick() {
++        if (!this.wanted) {
++            return false;
++        }
++        if (--this.countdown > 0) {
++            return false;
++        }
++        this.wanted = false;
++        return true;
++    }
++
++    /**
++     * Whether a swap has been requested and is not yet executed.
++     */
++    public boolean waiting() {
++        return this.wanted && this.countdown > 0;
++    }
++}
+diff --git a/src/test/java/baritone/utils/CadenceTest.java b/src/test/java/baritone/utils/CadenceTest.java
+index b624a540..c0182ea0 100644
+--- a/src/test/java/baritone/utils/CadenceTest.java
++++ b/src/test/java/baritone/utils/CadenceTest.java
+@@ -137,6 +137,24 @@ public class CadenceTest {
+                 Cadence.SPRINT_WINDUP_MAX - Cadence.SPRINT_WINDUP_MIN + 1, seen.size());
+     }
+ 
++    @Test
++    public void anInventorySwapStartsAfterABeat() {
++        assertTrue("a zero windup swaps on the first tick of a request",
++                Cadence.INVENTORY_SWAP_MIN >= 1);
++        assertTrue("a windup this long is standing around, not starting a swap",
++                Cadence.INVENTORY_SWAP_MAX <= 3);
++        final Random rand = new Random(1619);
++        final Set<Integer> seen = new HashSet<>();
++        for (int i = 0; i < 1000; i++) {
++            final int windup = Cadence.inventorySwap(rand);
++            seen.add(windup);
++            assertTrue("windup " + windup + " below the minimum", windup >= Cadence.INVENTORY_SWAP_MIN);
++            assertTrue("windup " + windup + " above the maximum", windup <= Cadence.INVENTORY_SWAP_MAX);
++        }
++        assertEquals("a windup that is always the same length is a timer, not a hand",
++                Cadence.INVENTORY_SWAP_MAX - Cadence.INVENTORY_SWAP_MIN + 1, seen.size());
++    }
++
+     @Test
+     public void theSettleIsPaidOncePerArrival() {
+         // The whole point of charging it on the rising edge: a run of blocks clicked with the crosshair
+diff --git a/src/test/java/baritone/utils/InventorySwapTest.java b/src/test/java/baritone/utils/InventorySwapTest.java
+new file mode 100644
+index 00000000..7ec301ca
+--- /dev/null
++++ b/src/test/java/baritone/utils/InventorySwapTest.java
+@@ -0,0 +1,94 @@
++/*
++ * This file is part of Baritone.
++ *
++ * Baritone is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU Lesser General Public License as published by
++ * the Free Software Foundation, either version 3 of the License, or
++ * (at your option) any later version.
++ *
++ * Baritone is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public License
++ * along with Baritone.  If not, see <https://www.gnu.org/licenses/>.
++ */
++
++package baritone.utils;
++
++import org.junit.Test;
++
++import java.util.HashSet;
++import java.util.Random;
++import java.util.Set;
++
++import static org.junit.Assert.assertEquals;
++import static org.junit.Assert.assertFalse;
++import static org.junit.Assert.assertTrue;
++
++public class InventorySwapTest {
++
++    @Test
++    public void aSwapWaitsFirst() {
++        final InventorySwap swap = new InventorySwap(new Random(1));
++        swap.ask(true);
++        assertFalse("swap on the first tick of a request", swap.tick());
++        int waited = 1;
++        while (!swap.tick()) {
++            waited++;
++            assertTrue("swap windup outlived its maximum", waited <= Cadence.INVENTORY_SWAP_MAX);
++        }
++        assertTrue("swap windup shorter than its minimum", waited >= Cadence.INVENTORY_SWAP_MIN);
++    }
++
++    @Test
++    public void noSwapWhenNotAsked() {
++        final InventorySwap swap = new InventorySwap(new Random(2));
++        swap.ask(false);
++        assertFalse("swap executed when not asked", swap.tick());
++    }
++
++    @Test
++    public void waitingReportsCorrectly() {
++        final InventorySwap swap = new InventorySwap(new Random(3));
++        assertFalse("waiting before asked", swap.waiting());
++        swap.ask(true);
++        assertTrue("waiting after asked", swap.waiting());
++        while (swap.waiting()) {
++            swap.tick();
++        }
++        assertFalse("waiting after execution", swap.waiting());
++    }
++
++    @Test
++    public void consecutiveSwapsEachWait() {
++        final InventorySwap swap = new InventorySwap(new Random(4));
++        swap.ask(true);
++        int firstWait = 0;
++        while (!swap.tick()) {
++            firstWait++;
++        }
++        swap.ask(true);
++        int secondWait = 0;
++        while (!swap.tick()) {
++            secondWait++;
++        }
++        // Each swap should have its own windup
++        assertTrue("second swap did not wait", secondWait >= Cadence.INVENTORY_SWAP_MIN);
++    }
++
++    @Test
++    public void everyDrawIsWithinTheRange() {
++        final Random rand = new Random(5);
++        final Set<Integer> seen = new HashSet<>();
++        for (int i = 0; i < 1000; i++) {
++            final int delay = Cadence.inventorySwap(rand);
++            assertTrue("delay " + delay + " below the minimum", delay >= Cadence.INVENTORY_SWAP_MIN);
++            assertTrue("delay " + delay + " above the maximum", delay <= Cadence.INVENTORY_SWAP_MAX);
++            seen.add(delay);
++        }
++        assertEquals("the delay should cover every value in its range",
++                Cadence.INVENTORY_SWAP_MAX - Cadence.INVENTORY_SWAP_MIN + 1, seen.size());
++    }
++}
