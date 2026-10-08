@@ -32,6 +32,13 @@ Started:
 Notes:
 ```
 
+- **Agent**: Inventory swap wind-up
+  - Task: Add humanlike delay before inventory swap execution
+  - Area/files: `InventorySwap.java`, `InventoryBehavior.java`, `Cadence.java`, `InventorySwapTest.java`, `CadenceTest.java`
+  - Status: Implementation complete, tests written
+  - Started: 2026-10-08
+  - Notes: Adds 1-2 tick delay before executing inventory swaps, similar to HotbarSwitch pattern. Addresses "look at the hotbar first" note.
+
 ### Open claims
 
 (none)
@@ -127,10 +134,11 @@ covered by tests that run green in this environment (271 tests as of the last co
 - Elytra firework clicks: **audited by agent A, leave alone** — the use is gated on the flight
   solver's speed/height conditions (`remainingFireworkTicks` floor of 10), i.e. a control loop
   reading the speedometer, not a metronome; the arm swing is already sent.
-- Inventory window clicks: `ticksBetweenInventoryMoves` is jittered, but the moves themselves are
-  bare SWAP clicks; "look at the hotbar first" is unimplemented (agent B's note). Opening the
-  inventory (`allowInventory`) has no look-down gesture; the idle hand-check glance is the only nod.
-  Note a real GUI open would change behaviour, not just its looks — decide carefully.
+- ~~Inventory window clicks: `ticksBetweenInventoryMoves` is jittered, but the moves themselves are
+  bare SWAP clicks; "look at the hotbar first" is unimplemented (agent B's note)~~ **implemented**:
+  `InventorySwap` adds 1–2 ticks of reaction before the window click, the way `HotbarSwitch` does for
+  the hotbar keys. The interval between moves was already jittered; the beat is the moment the swap
+  itself happens. Tests: `InventorySwapTest`, `CadenceTest`.
 - Stuck-movement rhythm: a blocked movement retries until `movementTimeoutTicks` (100) then replans.
   Shortening it risks failing slow movements; only touch with a better give-up rule in mind.
 - Eating/using consumables: Baritone does not eat; out of scope unless a process picks up food logic.

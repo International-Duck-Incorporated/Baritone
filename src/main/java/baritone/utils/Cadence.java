@@ -175,6 +175,22 @@ public final class Cadence {
     }
 
     /**
+     * Ticks before an inventory swap is executed: one to two.
+     * <p>
+     * A person does not swap items the instant they decide to: there is a reaction delay. One or two
+     * ticks - fifty to a hundred milliseconds - is about as short as that reaction gets.
+     */
+    public static final int INVENTORY_SWAP_MIN = 1;
+    public static final int INVENTORY_SWAP_MAX = 2;
+
+    /**
+     * @return the beat, in ticks, before executing an inventory swap; inclusive of both ends
+     */
+    public static int inventorySwap(Random rand) {
+        return INVENTORY_SWAP_MIN + rand.nextInt(INVENTORY_SWAP_MAX - INVENTORY_SWAP_MIN + 1);
+    }
+
+    /**
      * Ticks between deciding on a different hotbar slot and having it in hand: two to five.
      * <p>
      * The slot used to change on the tick the need for it was noticed - the pickaxe gave way to the shovel

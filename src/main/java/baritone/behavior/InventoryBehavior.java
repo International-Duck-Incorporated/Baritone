@@ -50,6 +50,7 @@ public final class InventoryBehavior extends Behavior implements Helper {
 
     int ticksSinceLastInventoryMove;
     int[] lastTickRequestedMove; // not everything asks every tick, so remember the request while coming to a halt
+    private int[] pendingSwap; // a swap that has started its windup but not yet executed
 
     private final Random cadenceRand = new Random();
 
@@ -66,6 +67,12 @@ public final class InventoryBehavior extends Behavior implements Helper {
      * buttons wait on {@link #switchingHands()} in the meantime.
      */
     private final HotbarSwitch hand = new HotbarSwitch(this.cadenceRand);
+
+    /**
+     * The beat before an inventory swap is executed. A person does not swap items the instant they
+     * decide to; there is a reaction delay. See {@link baritone.utils.InventorySwap}.
+     */
+    private final baritone.utils.InventorySwap swap = new baritone.utils.InventorySwap(this.cadenceRand);
 
     public InventoryBehavior(Baritone baritone) {
         super(baritone);
@@ -101,6 +108,17 @@ public final class InventoryBehavior extends Behavior implements Helper {
         final int press = this.hand.tick(ctx.player().getInventory().getSelectedSlot());
         if (press >= 0) {
             ctx.player().getInventory().setSelectedSlot(press);
+        }
+        // Tick the inventory swap windup
+        if (this.pendingSwap != null && this.swap.tick()) {
+            // Windup is complete, execute the swap
+            final int inInventory = this.pendingSwap[0];
+            final int inHotbar = this.pendingSwap[1];
+            ctx.playerController().windowClick(ctx.player().inventoryMenu.containerId, inInventory < 9 ? inInventory + 36 : inInventory, inHotbar, ContainerInput.SWAP, ctx.player());
+            ticksSinceLastInventoryMove = 0;
+            lastTickRequestedMove = null;
+            this.swapInterval = -1; // and the next one gets its own interval
+            this.pendingSwap = null;
         }
         if (!Baritone.settings().allowInventory.value) {
             return;
@@ -167,11 +185,14 @@ public final class InventoryBehavior extends Behavior implements Helper {
             logDebug("Inventory move requested but delaying until stationary");
             return false;
         }
-        ctx.playerController().windowClick(ctx.player().inventoryMenu.containerId, inInventory < 9 ? inInventory + 36 : inInventory, inHotbar, ContainerInput.SWAP, ctx.player());
-        ticksSinceLastInventoryMove = 0;
-        lastTickRequestedMove = null;
-        this.swapInterval = -1; // and the next one gets its own interval
-        return true;
+        // If we have a pending swap that's still in its windup, don't start a new one
+        if (this.pendingSwap != null) {
+            return false;
+        }
+        // Start the swap windup: a person does not swap the instant they decide to
+        this.pendingSwap = new int[]{inInventory, inHotbar};
+        this.swap.ask(true);
+        return false; // will execute on a subsequent tick
     }
 
     private int swapInterval() {

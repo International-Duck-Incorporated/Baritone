@@ -138,6 +138,24 @@ public class CadenceTest {
     }
 
     @Test
+    public void anInventorySwapStartsAfterABeat() {
+        assertTrue("a zero windup swaps on the first tick of a request",
+                Cadence.INVENTORY_SWAP_MIN >= 1);
+        assertTrue("a windup this long is standing around, not starting a swap",
+                Cadence.INVENTORY_SWAP_MAX <= 3);
+        final Random rand = new Random(1619);
+        final Set<Integer> seen = new HashSet<>();
+        for (int i = 0; i < 1000; i++) {
+            final int windup = Cadence.inventorySwap(rand);
+            seen.add(windup);
+            assertTrue("windup " + windup + " below the minimum", windup >= Cadence.INVENTORY_SWAP_MIN);
+            assertTrue("windup " + windup + " above the maximum", windup <= Cadence.INVENTORY_SWAP_MAX);
+        }
+        assertEquals("a windup that is always the same length is a timer, not a hand",
+                Cadence.INVENTORY_SWAP_MAX - Cadence.INVENTORY_SWAP_MIN + 1, seen.size());
+    }
+
+    @Test
     public void theSettleIsPaidOncePerArrival() {
         // The whole point of charging it on the rising edge: a run of blocks clicked with the crosshair
         // never leaving a face is one arrival and one reaction, not a reaction before every block. A settle
