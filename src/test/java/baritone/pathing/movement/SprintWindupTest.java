@@ -51,9 +51,7 @@ public class SprintWindupTest {
     @Test
     public void hangoverIsTheSameRun() {
         final SprintWindup windup = new SprintWindup(new Random(3));
-        while (!windup.tick(true, true)) {
-            // spend the windup
-        }
+        spendTheWindup(windup);
         windup.keepHeld();
         assertTrue("the movement after a hangover wound up again", windup.tick(true, true));
     }
@@ -61,9 +59,16 @@ public class SprintWindupTest {
     @Test
     public void lettingGoStartsTheNextWindup() {
         final SprintWindup windup = new SprintWindup(new Random(4));
-        while (!windup.tick(true, true)) {
-        }
+        spendTheWindup(windup);
         assertFalse(windup.tick(false, true));
         assertFalse("the second run started sprinting on the tick it was asked", windup.tick(true, true));
+    }
+
+    /** Spend a wind-up the way a walker does, refusing to wait past its own maximum. */
+    private static void spendTheWindup(SprintWindup windup) {
+        int walked = 0;
+        while (!windup.tick(true, true)) {
+            assertTrue("windup outlived its maximum", ++walked <= Cadence.SPRINT_WINDUP_MAX);
+        }
     }
 }

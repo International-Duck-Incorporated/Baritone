@@ -108,6 +108,9 @@ public class FlinchTest {
 
     @Test
     public void aWalkingHeadTurnsAsFarAsANeckGoesAndNoFurther() {
+        // the limit itself, pinned: both bounds below are written against it, so a limit that moved
+        // would move them with it and no test would notice
+        assertEquals("the walking neck's quarter turn", 70f, Flinch.NECK_YAW, 0f);
         for (long seed = 0; seed < SEEDS; seed++) {
             final Flinch flinch = flinch(seed);
             flinch.blow(new Them(BEHIND, 0f));

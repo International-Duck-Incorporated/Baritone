@@ -164,4 +164,16 @@ public class ReactionDelayTest {
             previous = target;
         }
     }
+
+    @Test
+    public void theFloorIsTwoTicks() {
+        // the floor itself, pinned: every bound above is written against it, so a floor that moved
+        // would move them with it and no test would notice
+        assertEquals("the floor of the reaction beat", 2, ReactionDelay.HOLD_MIN);
+        for (int i = 0; i < 200; i++) {
+            final ReactionDelay delay = new ReactionDelay(new Random(i));
+            assertTrue("a fresh target started moving in under two ticks",
+                    holdLength(delay, yaw(90f), 50) >= 2);
+        }
+    }
 }

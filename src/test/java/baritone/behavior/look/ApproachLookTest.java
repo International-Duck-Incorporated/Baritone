@@ -135,6 +135,11 @@ public class ApproachLookTest {
         // the block the player is standing in, which has no direction to it
         assertEquals(0.0, ApproachLook.weight(ApproachLook.UNDERFOOT, 0f), 0.0);
         assertEquals(0.0, ApproachLook.weight(0.0, 0f), 0.0);
+        // and the same rule pinned by distance rather than by its own constant: a block at the feet is
+        // not looked at, and a block just off them is
+        assertEquals("a block under the player's own feet", 0.0, ApproachLook.weight(0.5, 0f), 0.0);
+        assertTrue("a block just off the player's feet was not looked at",
+                ApproachLook.weight(1.5, 0f) > 0.0);
     }
 
     @Test
