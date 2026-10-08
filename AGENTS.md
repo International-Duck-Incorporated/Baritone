@@ -105,3 +105,8 @@ Notes: `regardWhileStanding` currently chooses the nearest cached entity every t
 - Added standalone real patch `patches/0004-keep-a-stable-follow-target.patch`; verified with `git apply --check` against its parent.
 - Validation: `git diff --check` passed. `./gradlew test` was retried after the change but remains blocked before project compilation by TLS handshake failures from Forge/Fabric/Maven repositories and peer authentication failure from NeoForge.
 - Limitation: runtime follow behavior should be manually checked with two matching entities, one disappearing, and a new follow command; no pathing cost or goal behavior was changed.
+
+### Tempo — follow documentation (verified remote `d903ead6`)
+
+- Updated `HUMANLIKE.md`'s Following table to document the stable regarded-entity lock and its reacquisition boundary.
+- Added and verified `patches/0005-document-stable-follow-target-behavior.patch` with `git apply --check`.
