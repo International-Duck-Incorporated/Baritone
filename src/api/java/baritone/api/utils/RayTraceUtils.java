@@ -17,9 +17,12 @@
 
 package baritone.api.utils;
 
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.Pose;
 import net.minecraft.world.level.ClipContext;
+import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 
@@ -64,5 +67,38 @@ public final class RayTraceUtils {
 
     public static Vec3 inferSneakingEyePosition(Entity entity) {
         return new Vec3(entity.getX(), entity.getY() + entity.getEyeHeight(Pose.CROUCHING), entity.getZ());
+    }
+
+    /**
+     * Whether a trace landed on the given block and on the given face of it.
+     * <p>
+     * The question a click that acts on one face of a block has to ask. A block being broken has no face -
+     * the game breaks the block the crosshair is on, from whichever side it is on - so breaking and
+     * anything else that acts on the block itself ask {@link IPlayerContext#isLookingAt(BlockPos)} and are
+     * right to. But an item that is used *on* a face: a seed goes into the top of a farmland, a block goes
+     * against the side the trace is on, and the trace the click is sent along is the one the game uses.
+     * A click asked for while the crosshair is on the right block but the wrong face of it is a packet
+     * that lands on a face that does not take the item, an arm that swings for nothing, and the tick spent
+     * standing there for it.
+     */
+    public static boolean hitsFace(HitResult result, BlockPos pos, Direction face) {
+        return result != null
+                && result.getType() == HitResult.Type.BLOCK
+                && ((BlockHitResult) result).getBlockPos().equals(pos)
+                && ((BlockHitResult) result).getDirection() == face;
+    }
+
+    /**
+     * Whether a trace landed on the given block and on the face of it that points at {@code placeAt} - the
+     * same question as {@link #hitsFace}, for a caller that knows where the item is going rather than which
+     * way the face is called. A placement is this exactly: the block is put into the position the traced
+     * face points at, so a click sent with the crosshair on another side of the right block puts it
+     * somewhere else - behind the player, on the bridge they just left.
+     */
+    public static boolean hitsFaceTowards(HitResult result, BlockPos against, BlockPos placeAt) {
+        return result != null
+                && result.getType() == HitResult.Type.BLOCK
+                && ((BlockHitResult) result).getBlockPos().equals(against)
+                && against.relative(((BlockHitResult) result).getDirection()).equals(placeAt);
     }
 }

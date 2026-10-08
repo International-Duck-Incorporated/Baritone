@@ -843,7 +843,7 @@ public interface MovementHelper extends ActionCosts, Helper {
                     Rotation place = RotationUtils.calcRotationFromVec3d(eyes, aimAt, ctx.playerRotations());
                     Rotation actual = baritone.getLookBehavior().getAimProcessor().peekRotation(place);
                     HitResult res = RayTraceUtils.rayTraceTowards(ctx.player(), actual, ctx.playerController().getBlockReachDistance(), wouldSneak);
-                    if (res != null && res.getType() == HitResult.Type.BLOCK && ((BlockHitResult) res).getBlockPos().equals(against1) && ((BlockHitResult) res).getBlockPos().relative(((BlockHitResult) res).getDirection()).equals(placeAt)) {
+                    if (RayTraceUtils.hitsFaceTowards(res, against1, placeAt)) {
                         state.setTarget(new MovementTarget(place, true));
                         found = true;
                         placed = true;

@@ -143,6 +143,23 @@ can be seen from anywhere, and the water bucket taken out of the block the playe
 be added without saying so - and both things it now counts were real: a door put its button down the tick
 it was noticed, with the hand still turning, and the pillar did the same to the block in its feet.
 
+Where the item acts on one face, the block is not the whole question and the trace is asked for the face as
+well: `RayTraceUtils#hitsFace` (through `ctx.isLookingAt(block, face)` when the question is about the trace
+under the crosshair) and, where the face is the one pointing at a position the caller means,
+`RayTraceUtils#hitsFaceTowards`. A seed goes into the top of a farmland and a cocoa bean onto the side of a
+log, so a click sent while the crosshair is on the side of the right block plants nothing: a packet, an arm
+swung at nothing, and the tick spent standing there for it. The farmer's two plantings ask the face now, and
+so do the two traces it takes before it aims at them; the builder has always named the side its placement
+goes against, and the two hand-rolled spellings it did that in - one for the candidate it is considering,
+one for the click - are one question with a name. The movement layer's own placement search asked the same
+shape by hand and now calls it, and the bridge's step-back in `MovementTraverse` asks it too: the block it
+places goes into the position the traced face points at, so a click that went out on another side of the
+same block put a block somewhere else - behind the bot, on the bridge it had just left. Breaking and bone
+meal keep the block question, and say why: neither has a face to need, since a block is broken from whichever
+side the crosshair is on and bone meal acts on the block it is used on. `ClickGatesTest` asks who asks a face
+as well as who asks a question, so a site that goes back to the block alone fails with the file and the call
+it lost.
+
 The item in the hand has the same rule, and it is counted the same way. It is written in two files: `InventoryBehavior` (the beat, pressing the key that was asked for) and `MovementFall` (the fall's landing guarantee underneath it, written when the crosshair reaches the spot before the hand does, because the tick that needs the water is not a tick to wait a beat out). `HandWritesTest` counts them, so a third file fails the build with the reason beside it - and it has already been forgotten twice, which is why it is a test now rather than a note: the elytra firework and the bucket fall both clicked on the tick they asked for an item.
 
 ## What is not smoothed

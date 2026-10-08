@@ -22,6 +22,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.SlabBlock;
@@ -126,5 +127,15 @@ public interface IPlayerContext {
 
     default boolean isLookingAt(BlockPos pos) {
         return getSelectedBlock().equals(Optional.of(pos));
+    }
+
+    /**
+     * Whether the crosshair is on the given block and on the given face of it: the same question as
+     * {@link #isLookingAt(BlockPos)}, asked by a click that acts on one face - see
+     * {@link RayTraceUtils#hitsFace}. Asked of the trace the crosshair is really on, so a click gated on
+     * it lands on the face the item needs and not on whichever side of the right block it crossed first.
+     */
+    default boolean isLookingAt(BlockPos pos, Direction face) {
+        return RayTraceUtils.hitsFace(objectMouseOver(), pos, face);
     }
 }

@@ -45,7 +45,6 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.*;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 
@@ -281,7 +280,9 @@ public final class FarmProcess extends BaritoneProcessHelper implements IFarmPro
             if (rot.isPresent() && isSafeToCancel) {
                 baritone.getLookBehavior().updateTarget(rot.get(), true);
                 MovementHelper.switchToBestToolFor(ctx, ctx.world().getBlockState(pos));
-                if (ctx.isLookingAt(pos)) {
+                // A block is broken from whichever side the crosshair is on, so no face is asked for
+                // here: the hand has either landed on the block or settled at the point it was sent to.
+                if (ctx.isLookingAt(pos) || baritone.getLookBehavior().hasArrivedAt(rot.get())) {
                     baritone.getInputOverrideHandler().setInputForceState(Input.CLICK_LEFT, true);
                 }
                 return new PathingCommand(null, PathingCommandType.REQUEST_PAUSE);
@@ -299,7 +300,9 @@ public final class FarmProcess extends BaritoneProcessHelper implements IFarmPro
                 continue;
             }
             HitResult result = RayTraceUtils.rayTraceTowards(ctx.player(), rot.get(), blockReachDistance);
-            if (!(result instanceof BlockHitResult) || ((BlockHitResult) result).getDirection() != Direction.UP) {
+            // The point the hand is being sent to is on the top of the block and the trace is run on
+            // that point, so this is the face question with the block it belongs to.
+            if (!RayTraceUtils.hitsFace(result, pos, Direction.UP)) {
                 continue;
             }
             // Ask for the seed only now that this planting is one that is going to happen. Selecting an item
@@ -310,7 +313,9 @@ public final class FarmProcess extends BaritoneProcessHelper implements IFarmPro
                 continue;
             }
             baritone.getLookBehavior().updateTarget(rot.get(), true);
-            if (ctx.isLookingAt(pos)) {
+            // A seed goes into the top of the block: the side of the right block takes nothing, so a
+            // click sent there is a packet and an arm swing for it. See RayTraceUtils#hitsFace.
+            if (ctx.isLookingAt(pos, Direction.UP) || baritone.getLookBehavior().hasArrivedAt(rot.get())) {
                 baritone.getInputOverrideHandler().setInputForceState(Input.CLICK_RIGHT, true);
             }
             return new PathingCommand(null, PathingCommandType.REQUEST_PAUSE);
@@ -329,7 +334,7 @@ public final class FarmProcess extends BaritoneProcessHelper implements IFarmPro
                     continue;
                 }
                 HitResult result = RayTraceUtils.rayTraceTowards(ctx.player(), rot.get(), blockReachDistance);
-                if (!(result instanceof BlockHitResult) || ((BlockHitResult) result).getDirection() != dir) {
+                if (!RayTraceUtils.hitsFace(result, pos, dir)) {
                     continue;
                 }
                 // As above: the bean goes in the hand when the face is one that is about to be clicked, not
@@ -338,7 +343,9 @@ public final class FarmProcess extends BaritoneProcessHelper implements IFarmPro
                     continue;
                 }
                 baritone.getLookBehavior().updateTarget(rot.get(), true);
-                if (ctx.isLookingAt(pos)) {
+                // Cocoa goes onto the side of the log - the side the air the bean hangs in is beside -
+                // so that side is the face the bean is used on, not the block in general.
+                if (ctx.isLookingAt(pos, dir) || baritone.getLookBehavior().hasArrivedAt(rot.get())) {
                     baritone.getInputOverrideHandler().setInputForceState(Input.CLICK_RIGHT, true);
                 }
                 return new PathingCommand(null, PathingCommandType.REQUEST_PAUSE);
@@ -351,7 +358,9 @@ public final class FarmProcess extends BaritoneProcessHelper implements IFarmPro
             Optional<Rotation> rot = RotationUtils.reachable(ctx, pos);
             if (rot.isPresent() && isSafeToCancel && baritone.getInventoryBehavior().throwaway(true, this::isBoneMeal)) {
                 baritone.getLookBehavior().updateTarget(rot.get(), true);
-                if (ctx.isLookingAt(pos)) {
+                // Bone meal acts on the block it is used on whichever side it is used from, so the
+                // block question is the right one here and a face would be a tick of standing for nothing.
+                if (ctx.isLookingAt(pos) || baritone.getLookBehavior().hasArrivedAt(rot.get())) {
                     baritone.getInputOverrideHandler().setInputForceState(Input.CLICK_RIGHT, true);
                 }
                 return new PathingCommand(null, PathingCommandType.REQUEST_PAUSE);

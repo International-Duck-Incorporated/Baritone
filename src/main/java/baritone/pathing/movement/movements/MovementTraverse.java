@@ -22,6 +22,7 @@ import baritone.api.IBaritone;
 import baritone.api.pathing.movement.MovementStatus;
 import baritone.api.utils.AimScatter;
 import baritone.api.utils.BetterBlockPos;
+import baritone.api.utils.RayTraceUtils;
 import baritone.api.utils.Rotation;
 import baritone.api.utils.RotationUtils;
 import baritone.api.utils.VecUtils;
@@ -381,7 +382,10 @@ public class MovementTraverse extends Movement {
                 } else {
                     state.setTarget(new MovementState.MovementTarget(backToFace, true));
                 }
-                if (ctx.isLookingAt(goalLook)) {
+                // The block goes into dest.below(), which is what the face of goalLook the bot is looking
+                // back at points at: the trace has to be on that face, not merely on the block, or the click
+                // puts the block somewhere else - behind the bot, on the bridge it has just left.
+                if (RayTraceUtils.hitsFaceTowards(ctx.objectMouseOver(), goalLook, dest.below())) {
                     return state.setInput(Input.CLICK_RIGHT, true); // wait to right click until we are able to place
                 }
                 // Out.log("Trying to look at " + goalLook + ", actually looking at" + Baritone.whatAreYouLookingAt());
