@@ -1,0 +1,166 @@
+From 29b70536ccd25cb27b984b8cf11ae622648b4ff2 Mon Sep 17 00:00:00 2001
+From: 0xFFshell <>
+Date: Fri, 9 Oct 2026 09:25:38 +0000
+Subject: [PATCH] elytra: do not ask a player who is not there on the way out
+ of a world
+
+The teardown ask added for a begun auto-swap read ctx.player().containerMenu in
+ElytraBehavior#finishTheSwapBeforeGoing. The way out of a world reaches
+ElytraProcess#onLostControl with no player: the first tick without one runs
+PathingControlManager#cancelEverything, and ElytraProcess#onWorldEvent destroys
+the behaviour only on the way into a world (its test is getWorld() != null, not
+the exit the comment said). With the process holding a live behaviour, Save and
+Quit to Title - or a disconnect - threw a NullPointerException from the tick and
+the game crashed. The headless client reproduced it: #elytra, then Save and Quit.
+
+The helper now looks for the player first; with none there is no window and
+nothing to send a click to, and the queue goes with the behaviour. The comments
+and HUMANLIKE.md that carried the wrong premise are corrected, and a pin in
+InventoryTransactionTest fails with the original unguarded body and with a body
+that touches the player before it looks. The in-game check is scripts/headless/
+smoke.sh, which exited 1 on the crash and 0 here.
+---
+ HUMANLIKE.md                                  |  5 +-
+ .../java/baritone/process/ElytraProcess.java  |  4 +-
+ .../process/elytra/ElytraBehavior.java        | 14 +++--
+ .../utils/InventoryTransactionTest.java       | 52 +++++++++++++++++--
+ 4 files changed, 64 insertions(+), 11 deletions(-)
+
+diff --git a/HUMANLIKE.md b/HUMANLIKE.md
+index f8f1d65b..30e8b826 100644
+--- a/HUMANLIKE.md
++++ b/HUMANLIKE.md
+@@ -89,8 +89,9 @@ worn one still on the back, arrived at by a different road than the window going
+ finishes a sequence that has begun (`InventoryTransaction#finishNow`, asked from
+ `ElytraProcess#onLostControl`), spends its remaining gaps doing it, and gives up whole one that has not -
+ nothing happened, so the job asks again. The ask sits in `onLostControl` and not in `destroyBehaviorAsync`
+-on purpose: that runs on the executor, where a window click has no client thread to be sent on, and
+-`onWorldEvent` reaches it on the way out of a world, where there is nothing left to send it to. A begun
++on purpose: that runs on the executor, where a window click has no client thread to be sent on. The way out
++of a world reaches `onLostControl` too, from the first tick with no player, so the ask looks for the player
++first: with none there is no window and nothing to send a click to, and the queue goes with the behaviour. A begun
+ sequence whose window is *not* the player's own is left exactly as it was rather than fired into a menu that
+ would drop it, because clearing a queue that never ran turns "stalled and still retryable" into "stalled and
+ silently abandoned".
+diff --git a/src/main/java/baritone/process/ElytraProcess.java b/src/main/java/baritone/process/ElytraProcess.java
+index a354d7ef..3f28a5a2 100644
+--- a/src/main/java/baritone/process/ElytraProcess.java
++++ b/src/main/java/baritone/process/ElytraProcess.java
+@@ -102,8 +102,8 @@ public class ElytraProcess extends BaritoneProcessHelper implements IBaritonePro
+         this.goal = null;
+         // A swap that has begun is finished rather than dropped: letting go of the behaviour stops the
+         // drain that runs its clicks, and the half-applied state is the one the window rule exists to
+-        // avoid. Asked here rather than in destroyBehaviorAsync, which runs on the executor and is also
+-        // reached on the way out of a world. See InventoryTransaction#finishNow.
++        // avoid. Asked here rather than in destroyBehaviorAsync, which runs on the executor. The way out of
++        // a world reaches this too, with no player to ask: see ElytraBehavior#finishTheSwapBeforeGoing.
+         if (this.behavior != null) {
+             this.behavior.finishTheSwapBeforeGoing();
+         }
+diff --git a/src/main/java/baritone/process/elytra/ElytraBehavior.java b/src/main/java/baritone/process/elytra/ElytraBehavior.java
+index ca5503ee..59d3c440 100644
+--- a/src/main/java/baritone/process/elytra/ElytraBehavior.java
++++ b/src/main/java/baritone/process/elytra/ElytraBehavior.java
+@@ -1333,11 +1333,19 @@ public final class ElytraBehavior implements Helper {
+      * being asked the moment {@code ElytraProcess} drops its reference - see {@link InventoryTransaction#finishNow}.
+      * <p>
+      * Called from {@code ElytraProcess#onLostControl}, which is client-thread like every other caller of it,
+-     * and deliberately not from {@code destroyBehaviorAsync}: that runs on the executor, and it is also
+-     * reached on the way out of a world, where a window click has nothing to be sent to.
++     * and deliberately not from {@code destroyBehaviorAsync}, which runs on the executor.
++     * <p>
++     * The way out of a world reaches {@code onLostControl} too, and with no player: the first tick without
++     * one runs {@code PathingControlManager#cancelEverything}, and {@code ElytraProcess#onWorldEvent}
++     * destroys the behaviour only on the way <em>into</em> a world (its test is {@code getWorld() != null}).
++     * Then there is no window to click in and nothing to send a click to, and the queue goes with the
++     * behaviour: reading the player there was a NullPointerException from the tick, a crash on Save and
++     * Quit with the elytra process active.
+      */
+     public void finishTheSwapBeforeGoing() {
+-        invTransaction.finishNow(ctx.player().containerMenu == ctx.player().inventoryMenu);
++        if (ctx.player() != null) {
++            invTransaction.finishNow(ctx.player().containerMenu == ctx.player().inventoryMenu);
++        }
+     }
+ 
+     private void queueWindowClick(int windowId, int slotId, int button, ContainerInput type) {
+diff --git a/src/test/java/baritone/utils/InventoryTransactionTest.java b/src/test/java/baritone/utils/InventoryTransactionTest.java
+index 6c881c69..1f5d7bcc 100644
+--- a/src/test/java/baritone/utils/InventoryTransactionTest.java
++++ b/src/test/java/baritone/utils/InventoryTransactionTest.java
+@@ -259,9 +259,9 @@ public class InventoryTransactionTest {
+      * <p>
+      * Two things have to hold and both are about <em>where</em> the ask sits. It has to be in
+      * {@code onLostControl}, which every caller reaches on the client thread, and not in
+-     * {@code destroyBehaviorAsync}, which runs on the executor and is also reached by
+-     * {@code onWorldEvent} on the way out of a world - a window click sent into a closing connection is
+-     * worse than the residual this closes. And it has to reach the rule, not a copy of it.
++     * {@code destroyBehaviorAsync}, which runs on the executor, where a window click has no thread to be
++     * sent on. The way out of a world is another matter and is pinned by
++     * {@link #theAskDoesNotReachForAPlayerThatIsNotThere}. And it has to reach the rule, not a copy of it.
+      */
+     @Test
+     public void theSwapIsFinishedOnTheWayOutAndNotOnTheExecutor() {
+@@ -284,7 +284,7 @@ public class InventoryTransactionTest {
+                         + " onLostControl and not on the executor",
+                 destroyAsync > 0);
+         assertTrue("the swap is finished inside destroyBehaviorAsync rather than in onLostControl: that runs"
+-                        + " on the executor, and onWorldEvent reaches it on the way out of a world",
++                        + " on the executor, where a window click has no thread to be sent on",
+                 ask < destroyAsync);
+ 
+         // the behaviour's own teardown does not do it: destroy() runs on the executor and sees no window
+@@ -308,6 +308,50 @@ public class InventoryTransactionTest {
+                         .anyMatch(line -> line.contains("invTransaction.finishNow(")));
+     }
+ 
++    /**
++     * The way out of a world has no player and reaches the ask all the same.
++     * <p>
++     * The first tick without a player runs {@code cancelEverything}, which calls every process's
++     * {@code onLostControl}, and {@code ElytraProcess#onWorldEvent} destroys the behaviour only on the way
++     * <em>into</em> a world: its test is {@code getWorld() != null}. So the ask arrives with the behaviour
++     * alive and {@code mc.player} null, and reading the player there was a NullPointerException from the tick -
++     * the game crashed on Save and Quit with the elytra process active. The headless client found it
++     * (scripts/headless/smoke.sh is the behavioural check); nothing here can leave a world, so the source says
++     * it: the helper looks at the player before it touches it.
++     */
++    @Test
++    public void theAskDoesNotReachForAPlayerThatIsNotThere() {
++        final Path root = repoRoot();
++        assumeTrue("the sources are not next to this test run", root != null);
++        final Path behavior = root.resolve("src/main/java/baritone/process/elytra/ElytraBehavior.java");
++        assumeTrue("the elytra behaviour is not next to this test run", Files.isRegularFile(behavior));
++
++        final List<String> lines = read(behavior);
++        final int helper = lineContaining(lines, "void finishTheSwapBeforeGoing() {");
++        assertTrue("finishTheSwapBeforeGoing is gone from the behaviour", helper >= 0);
++        int ask = -1;
++        for (int i = helper; i < Math.min(lines.size(), helper + 12); i++) {
++            if (lines.get(i).contains("invTransaction.finishNow(")) {
++                ask = i;
++                break;
++            }
++        }
++        assertTrue("finishTheSwapBeforeGoing no longer asks InventoryTransaction#finishNow", ask > helper);
++        int guard = -1;
++        for (int i = helper + 1; i < ask; i++) {
++            if (lines.get(i).contains("ctx.player() != null")) {
++                guard = i;
++                break;
++            }
++        }
++        assertTrue("finishTheSwapBeforeGoing asks without looking for the player first: the way out of a world"
++                + " reaches it with no player, and that is a NullPointerException from the tick", guard > helper);
++        for (int i = helper + 1; i < guard; i++) {
++            assertFalse("the player is used before it is looked for: " + lines.get(i).trim(),
++                    lines.get(i).replaceAll("//.*", "").contains("ctx.player()."));
++        }
++    }
++
+     private static int lineContaining(List<String> lines, String needle) {
+         for (int i = 0; i < lines.size(); i++) {
+             if (lines.get(i).contains(needle)) {
+-- 
+2.47.3
+

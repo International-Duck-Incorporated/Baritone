@@ -1,0 +1,105 @@
+From 14f0995df16606d5b16b31e3758d67b648a3151d Mon Sep 17 00:00:00 2001
+From: 0xFFshell <>
+Date: Fri, 9 Oct 2026 09:25:38 +0000
+Subject: [PATCH] scripts: smoke.sh - a walk to its end and a way out with the
+ elytra process alive
+
+The two crashes the headless client found, kept as a check: against a client
+that is up, it walks a 36-block #goto to its end, leaves the world with the
+elytra process holding a live behaviour, and fails if the log from there on has
+the game's catch-all for an exception thrown from the tick. Exit 2 if the elytra
+process never took control. Run against the build before the elytra fix it
+exited 1 and printed the crash; against the fix it exits 0.
+---
+ scripts/headless/README.md | 10 +++++++
+ scripts/headless/smoke.sh  | 57 ++++++++++++++++++++++++++++++++++++++
+ 2 files changed, 67 insertions(+)
+ create mode 100755 scripts/headless/smoke.sh
+
+diff --git a/scripts/headless/README.md b/scripts/headless/README.md
+index ba9d65ab..84c436a4 100644
+--- a/scripts/headless/README.md
++++ b/scripts/headless/README.md
+@@ -34,6 +34,16 @@ grep CHAT "$BARITONE_HEADLESS/client.log"      # what Baritone and the game said
+ `BARITONE_HEADLESS` is where everything lives (default `~/baritone-headless`). Later starts enter the saved world at
+ once. The default window is 854x480 on a 1024x600 screen; `drive.sh` clicks at coordinates for exactly that.
+ 
++## The smoke test
++
++`smoke.sh` is what this harness found, kept as a check. Against a client that is up it walks a 36-block `#goto` to its
++end, then leaves the world with the elytra process holding a live behaviour, and fails (exit 1) if the log from there on
++holds the game's catch-all for an exception thrown from the tick (`Unreported exception thrown`, `Game crashed`). Exit 2
++means the elytra process never took control, so the way out proved nothing. It takes about a minute; run it before
++landing a change to how the bot walks, looks, or lets go of a process. It found two crashes the unit tests had passed:
++the path executor's look-aheads reading one movement past the end of a path, and the elytra teardown reading a player
++who is not there on the way out of a world.
++
+ ## What cost a run each, so it need not again
+ 
+ - **OpenGL does not come up under Xvfb** ("Couldn't find matching GLX visual"). The client falls back to Vulkan by
+diff --git a/scripts/headless/smoke.sh b/scripts/headless/smoke.sh
+new file mode 100755
+index 00000000..4b4fffe2
+--- /dev/null
++++ b/scripts/headless/smoke.sh
+@@ -0,0 +1,57 @@
++#!/bin/bash
++# The crashes the unit tests could not see, as a script. Run it against a client that is already up (run.sh in the
++# background; about 25 s to the title screen), and it
++#   1. makes a world if there is none, and waits for the login;
++#   2. walks a 36-block #goto to its end;
++#   3. leaves the world while the elytra process holds a live behaviour (#elytra waits there for a take-off) -
++#      the way out that crashed the game once, from the first tick with no player;
++# then looks, in the log from step 2 on, for the game's own catch-all for an exception thrown from the tick.
++#
++# usage: smoke.sh      exit 0: none; exit 1: one or more, and the lines are printed; exit 2: the elytra process
++#                      did not take control, so the way out proved nothing
++# environment: BARITONE_HEADLESS (default ~/baritone-headless), HEADLESS_WORLD ("New World"), HEADLESS_DISPLAY (:99)
++set -eu
++HERE="$(cd "$(dirname "$0")" && pwd)"
++MC_DIR="${BARITONE_HEADLESS:-$HOME/baritone-headless}"
++WORLD="${HEADLESS_WORLD:-New World}"
++LOG="$MC_DIR/client.log"
++D="$HERE/drive.sh"
++
++if [ -d "$MC_DIR/game/saves/$WORLD" ]; then
++    "$D" wait-login
++    sleep 6
++else
++    "$D" newworld
++fi
++MARK=$(wc -l < "$LOG")
++
++"$D" chat '#goto ~30 ~ ~20'
++sleep 25
++"$D" chat '/item replace entity @s armor.chest with minecraft:elytra'
++sleep 1
++"$D" chat '/give @s minecraft:firework_rocket 64'
++sleep 1
++"$D" chat '#set elytraTermsAccepted true'
++sleep 1
++"$D" chat '#goal ~300 ~ ~'
++sleep 1
++"$D" chat '#elytra'
++sleep 3
++"$D" chat '#proc'
++sleep 2
++if ! tail -n +$((MARK + 1)) "$LOG" | grep -q 'Display name: Elytra'; then
++    echo "smoke.sh: the elytra process did not take control, so the way out below would prove nothing" >&2
++    exit 2
++fi
++"$D" key Escape
++sleep 1.5
++"$D" click 510 407   # Save and Quit to Title, in the pause menu of an 854x480 window
++sleep 6
++
++BAD="$(tail -n +$((MARK + 1)) "$LOG" | grep -E 'Unreported exception thrown|Game crashed|Crash report saved' || true)"
++if [ -n "$BAD" ]; then
++    echo "$BAD"
++    echo "smoke.sh: FAILED - an exception thrown from the tick" >&2
++    exit 1
++fi
++echo "smoke.sh: ok - a 36-block walk to its end and a way out with the elytra process alive, no exception from the tick"
+-- 
+2.47.3
+
