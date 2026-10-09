@@ -100,6 +100,13 @@ public class ElytraProcess extends BaritoneProcessHelper implements IBaritonePro
         this.landingSearchState = null;
         this.reachedGoal = false;
         this.goal = null;
+        // A swap that has begun is finished rather than dropped: letting go of the behaviour stops the
+        // drain that runs its clicks, and the half-applied state is the one the window rule exists to
+        // avoid. Asked here rather than in destroyBehaviorAsync, which runs on the executor and is also
+        // reached on the way out of a world. See InventoryTransaction#finishNow.
+        if (this.behavior != null) {
+            this.behavior.finishTheSwapBeforeGoing();
+        }
         destroyBehaviorAsync();
         if (destroyNpf) {
             destroyNpfContextAsync();

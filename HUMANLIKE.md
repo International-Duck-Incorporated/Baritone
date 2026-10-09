@@ -82,6 +82,19 @@ were, and the job that wanted the swap asks again while the elytra is still worn
 the one worth avoiding. A person swapping an elytra with a chest open is holding the elytra out over the
 chest.
 
+The same rule covers the end of the flight. The clicks are drained from the behaviour that queued them, and
+that behaviour is let go when the elytra process loses control, so a cancellation inside the gap between two
+of the three clicks used to leave the queue simply never asked again - the spare elytra on the cursor and the
+worn one still on the back, arrived at by a different road than the window going away. Losing control now
+finishes a sequence that has begun (`InventoryTransaction#finishNow`, asked from
+`ElytraProcess#onLostControl`), spends its remaining gaps doing it, and gives up whole one that has not -
+nothing happened, so the job asks again. The ask sits in `onLostControl` and not in `destroyBehaviorAsync`
+on purpose: that runs on the executor, where a window click has no client thread to be sent on, and
+`onWorldEvent` reaches it on the way out of a world, where there is nothing left to send it to. A begun
+sequence whose window is *not* the player's own is left exactly as it was rather than fired into a menu that
+would drop it, because clearing a queue that never ran turns "stalled and still retryable" into "stalled and
+silently abandoned".
+
 ## Steering
 
 | what | where | the rule |

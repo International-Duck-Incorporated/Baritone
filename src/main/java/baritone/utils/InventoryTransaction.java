@@ -87,6 +87,57 @@ public final class InventoryTransaction {
     }
 
     /**
+     * The end of the thing that owns this sequence: finish what has started rather than drop it.
+     * <p>
+     * The elytra auto-swap's clicks are drained from the behaviour that queued them, and that behaviour is
+     * let go when the flight is - so a cancellation inside the gap between two of the three clicks used to
+     * leave the queue simply never asked again, with the spare elytra still on the cursor and the worn one
+     * still on the back. That is the exact state the window rule above exists to prevent, arrived at by a
+     * different road.
+     * <p>
+     * This applies the same rule the class already has for a window that goes away mid-swap, with no "come
+     * back" to wait for:
+     * <ul>
+     * <li>a sequence that <em>has not begun</em> is given up whole and silently - nothing happened, the
+     * items are where they were, and the job that wanted the swap asks again if it still wants it;</li>
+     * <li>a sequence that <em>has begun</em> and whose window is still the one in front is finished now,
+     * remainder in one go. The gaps {@link #tick} keeps are a hand's timing and teardown is not a moment
+     * anybody is watching; the inventory being right is worth more than the rhythm here;</li>
+     * <li>a sequence that <em>has begun</em> whose window is <em>not</em> in front is left exactly as it
+     * is. Finishing it would send clicks with a window id the game drops and then clear a queue that never
+     * ran, which turns "stalled and still retryable" into "stalled and silently abandoned" - strictly
+     * worse, so it is reported unfinished instead.</li>
+     * </ul>
+     *
+     * @param windowIsOurs whether the menu the player has open is their own inventory
+     * @return whether the sequence is now empty - false only for a begun sequence that could not be
+     * finished, which is left untouched so a caller that wants to retry still has it
+     */
+    public boolean finishNow(boolean windowIsOurs) {
+        if (this.clicks.isEmpty()) {
+            this.begun = false;
+            this.countdown = 0;
+            return true;
+        }
+        if (!this.begun) {
+            // nothing went out, so there is nothing half applied to finish - the give-up-whole rule
+            this.clicks.clear();
+            this.countdown = 0;
+            return true;
+        }
+        if (!windowIsOurs) {
+            // the clicks would be dropped by the game; leave the queue alone and say it did not finish
+            return false;
+        }
+        while (!this.clicks.isEmpty()) {
+            this.clicks.poll().run();
+        }
+        this.countdown = 0;
+        this.begun = false;
+        return true;
+    }
+
+    /**
      * One tick of the sequence: at most one click goes out, and only while the window it was written for is
      * the one in front.
      *

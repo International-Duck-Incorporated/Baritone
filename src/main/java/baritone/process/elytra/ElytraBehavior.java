@@ -1328,6 +1328,18 @@ public final class ElytraBehavior implements Helper {
                 Baritone.settings().ticksBetweenInventoryMoves.value);
     }
 
+    /**
+     * Finishes a swap that has already begun before this behaviour is let go, because the drain above stops
+     * being asked the moment {@code ElytraProcess} drops its reference - see {@link InventoryTransaction#finishNow}.
+     * <p>
+     * Called from {@code ElytraProcess#onLostControl}, which is client-thread like every other caller of it,
+     * and deliberately not from {@code destroyBehaviorAsync}: that runs on the executor, and it is also
+     * reached on the way out of a world, where a window click has nothing to be sent to.
+     */
+    public void finishTheSwapBeforeGoing() {
+        invTransaction.finishNow(ctx.player().containerMenu == ctx.player().inventoryMenu);
+    }
+
     private void queueWindowClick(int windowId, int slotId, int button, ContainerInput type) {
         invTransaction.click(() -> ctx.playerController().windowClick(windowId, slotId, button, type, ctx.player()));
     }
