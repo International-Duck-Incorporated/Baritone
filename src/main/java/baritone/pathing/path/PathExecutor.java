@@ -381,6 +381,31 @@ public class PathExecutor implements IPathExecutor, Helper {
     }
 
     /**
+     * Whether the path still has a movement {@code ahead} places past {@code from}. A path of n movements
+     * runs over n + 1 positions and {@link IPath#length()} counts the positions, so it is one more than the
+     * index of the last movement: a look-ahead bounded by it lets the last movement of a path read one past
+     * its own end, which is an {@link IndexOutOfBoundsException} thrown from the tick.
+     */
+    static boolean hasMovementAhead(IPath path, int from, int ahead) {
+        return from + ahead < path.movements().size();
+    }
+
+    /**
+     * The rise and the run, in blocks, of the movements from {@code from} on - as many as it takes for the run
+     * to reach {@code lookahead}, or all of them if the path ends first. {@code {rise, run}}.
+     */
+    static double[] slopeAhead(IPath path, int from, double lookahead) {
+        double rise = 0;
+        double run = 0;
+        for (int i = from; i < path.movements().size() && run < lookahead; i++) {
+            final BlockPos direction = path.movements().get(i).getDirection();
+            rise += direction.getY();
+            run += Math.sqrt(direction.getX() * direction.getX() + direction.getZ() * direction.getZ());
+        }
+        return new double[]{rise, run};
+    }
+
+    /**
      * Offers the gaze the line the path takes next, so the head leads the body around corners instead
      * of whipping around at every movement boundary.
      * <p>
@@ -396,7 +421,7 @@ public class PathExecutor implements IPathExecutor, Helper {
         }
         if (movement.getDirection().getY() != 0
                 || movement instanceof MovementParkour
-                || pathPosition + 1 >= path.length()
+                || !hasMovementAhead(path, pathPosition, 1)
                 || !ctx.player().onGround()) {
             // A jump along the flat is a jump all the same: the run-up to a gap is the one walk where a
             // person has their eyes on the landing and nowhere else, so parkour gets no lean either.
@@ -429,13 +454,9 @@ public class PathExecutor implements IPathExecutor, Helper {
         if (!ctx.player().onGround() || ctx.player().isInWater() || movement instanceof MovementParkour) {
             return;
         }
-        double rise = 0;
-        double run = 0;
-        for (int i = pathPosition; i < path.length() && run < SLOPE_LOOKAHEAD; i++) {
-            final BlockPos direction = path.movements().get(i).getDirection();
-            rise += direction.getY();
-            run += Math.sqrt(direction.getX() * direction.getX() + direction.getZ() * direction.getZ());
-        }
+        final double[] slope = slopeAhead(path, pathPosition, SLOPE_LOOKAHEAD);
+        final double rise = slope[0];
+        final double run = slope[1];
         if (rise == 0) {
             return;
         }
@@ -452,7 +473,7 @@ public class PathExecutor implements IPathExecutor, Helper {
      * air are not walks, and a walk is plain when nothing on it is broken, placed or opened.
      */
     private void welcomeGlance(Movement movement) {
-        if (!ctx.player().onGround() || ctx.player().isInWater() || pathPosition + 2 >= path.length()) {
+        if (!ctx.player().onGround() || ctx.player().isInWater() || !hasMovementAhead(path, pathPosition, 2)) {
             return;
         }
         if (plainWalk(movement) && plainWalk(path.movements().get(pathPosition + 1)) && plainWalk(path.movements().get(pathPosition + 2))) {
