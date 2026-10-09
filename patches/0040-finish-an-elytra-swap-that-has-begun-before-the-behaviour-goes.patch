@@ -1,0 +1,391 @@
+From 7e1e6d3a9922581c17e35e0cce05d10670e933fe Mon Sep 17 00:00:00 2001
+From: 0xFFshell <0xffshell@users.noreply.gitlab.com>
+Date: Fri, 9 Oct 2026 07:09:51 +0000
+Subject: [PATCH] finish an elytra swap that has begun before the behaviour
+ goes
+
+The auto-swap's three window clicks are drained from ElytraBehavior#onTick0, so
+the drain stops the moment ElytraProcess#onLostControl drops its reference to the
+behaviour - not when destroy() runs, but at the assignment, and destroy() never
+sees the transaction at all. A flight cancelled inside the one-to-
+ticksBetweenInventoryMoves-tick gap between two of the three clicks therefore
+left the queue simply never asked again: the spare elytra on the cursor and the
+worn one still on the back, which is exactly the state the window rule in
+InventoryTransaction exists to prevent, arrived at by a different road.
+
+finishNow applies the rule the class already had for a window that goes away
+mid-swap, with no "come back" to wait for. A sequence that has not begun is given
+up whole and silently - nothing happened, so the job asks again. One that has
+begun and whose window is still the player's own is finished now, remainder in
+one go; the gaps tick keeps are a hand's timing and teardown is not a moment
+anybody is watching. One that has begun whose window is not in front is left
+exactly as it was and reported unfinished, because firing it would send clicks
+the game drops and then clear a queue that never ran - turning "stalled and still
+retryable" into "stalled and silently abandoned", which is strictly worse.
+
+The ask sits in onLostControl and not in destroyBehaviorAsync on purpose. Every
+caller of onLostControl is client-thread (PathingControlManager:59, :69 and
+:208, plus ElytraProcess's own from onTick), so the click has a thread to be sent
+on; destroyBehaviorAsync runs on the executor and is also reached by onWorldEvent
+on the way out of a world, where there is nothing left to send it to. Putting it
+in onLostControl excludes that path by construction rather than by a flag.
+
+44 classes / 370 tests / 0 failures / 0 errors / 0 skipped, up from 44/364 at
+e5c83449; InventoryTransactionTest goes 7 -> 13. Teeth proven by three
+mutations: deleting the ask fails the source-level wiring pin; making finishNow
+clear a begun queue and ignore the window fails exactly the two teardown tests
+and leaves the other eleven green.
+
+Two remainders are recorded in AGENTS.md's Known Problems rather than papered
+over: a begun sequence with a container open cannot be finished and needs a drain
+that outlives the behaviour, and trySwapElytra's guard reads its own fresh
+transaction, so a cursor left dirty is invisible to it. The second is
+pre-existing, inherited from before 31a1864c, and this change makes it rarer.
+---
+ HUMANLIKE.md                                  |  13 ++
+ .../java/baritone/process/ElytraProcess.java  |   7 +
+ .../process/elytra/ElytraBehavior.java        |  12 ++
+ .../baritone/utils/InventoryTransaction.java  |  51 +++++
+ .../utils/InventoryTransactionTest.java       | 180 ++++++++++++++++++
+ 5 files changed, 263 insertions(+)
+
+diff --git a/HUMANLIKE.md b/HUMANLIKE.md
+index b1e4d43b..f107c6a9 100644
+--- a/HUMANLIKE.md
++++ b/HUMANLIKE.md
+@@ -82,6 +82,19 @@ were, and the job that wanted the swap asks again while the elytra is still worn
+ the one worth avoiding. A person swapping an elytra with a chest open is holding the elytra out over the
+ chest.
+ 
++The same rule covers the end of the flight. The clicks are drained from the behaviour that queued them, and
++that behaviour is let go when the elytra process loses control, so a cancellation inside the gap between two
++of the three clicks used to leave the queue simply never asked again - the spare elytra on the cursor and the
++worn one still on the back, arrived at by a different road than the window going away. Losing control now
++finishes a sequence that has begun (`InventoryTransaction#finishNow`, asked from
++`ElytraProcess#onLostControl`), spends its remaining gaps doing it, and gives up whole one that has not -
++nothing happened, so the job asks again. The ask sits in `onLostControl` and not in `destroyBehaviorAsync`
++on purpose: that runs on the executor, where a window click has no client thread to be sent on, and
++`onWorldEvent` reaches it on the way out of a world, where there is nothing left to send it to. A begun
++sequence whose window is *not* the player's own is left exactly as it was rather than fired into a menu that
++would drop it, because clearing a queue that never ran turns "stalled and still retryable" into "stalled and
++silently abandoned".
++
+ ## Steering
+ 
+ | what | where | the rule |
+diff --git a/src/main/java/baritone/process/ElytraProcess.java b/src/main/java/baritone/process/ElytraProcess.java
+index 7ee911cd..a354d7ef 100644
+--- a/src/main/java/baritone/process/ElytraProcess.java
++++ b/src/main/java/baritone/process/ElytraProcess.java
+@@ -100,6 +100,13 @@ public class ElytraProcess extends BaritoneProcessHelper implements IBaritonePro
+         this.landingSearchState = null;
+         this.reachedGoal = false;
+         this.goal = null;
++        // A swap that has begun is finished rather than dropped: letting go of the behaviour stops the
++        // drain that runs its clicks, and the half-applied state is the one the window rule exists to
++        // avoid. Asked here rather than in destroyBehaviorAsync, which runs on the executor and is also
++        // reached on the way out of a world. See InventoryTransaction#finishNow.
++        if (this.behavior != null) {
++            this.behavior.finishTheSwapBeforeGoing();
++        }
+         destroyBehaviorAsync();
+         if (destroyNpf) {
+             destroyNpfContextAsync();
+diff --git a/src/main/java/baritone/process/elytra/ElytraBehavior.java b/src/main/java/baritone/process/elytra/ElytraBehavior.java
+index 51331da2..ca5503ee 100644
+--- a/src/main/java/baritone/process/elytra/ElytraBehavior.java
++++ b/src/main/java/baritone/process/elytra/ElytraBehavior.java
+@@ -1328,6 +1328,18 @@ public final class ElytraBehavior implements Helper {
+                 Baritone.settings().ticksBetweenInventoryMoves.value);
+     }
+ 
++    /**
++     * Finishes a swap that has already begun before this behaviour is let go, because the drain above stops
++     * being asked the moment {@code ElytraProcess} drops its reference - see {@link InventoryTransaction#finishNow}.
++     * <p>
++     * Called from {@code ElytraProcess#onLostControl}, which is client-thread like every other caller of it,
++     * and deliberately not from {@code destroyBehaviorAsync}: that runs on the executor, and it is also
++     * reached on the way out of a world, where a window click has nothing to be sent to.
++     */
++    public void finishTheSwapBeforeGoing() {
++        invTransaction.finishNow(ctx.player().containerMenu == ctx.player().inventoryMenu);
++    }
++
+     private void queueWindowClick(int windowId, int slotId, int button, ContainerInput type) {
+         invTransaction.click(() -> ctx.playerController().windowClick(windowId, slotId, button, type, ctx.player()));
+     }
+diff --git a/src/main/java/baritone/utils/InventoryTransaction.java b/src/main/java/baritone/utils/InventoryTransaction.java
+index 68cf194e..25bd3295 100644
+--- a/src/main/java/baritone/utils/InventoryTransaction.java
++++ b/src/main/java/baritone/utils/InventoryTransaction.java
+@@ -86,6 +86,57 @@ public final class InventoryTransaction {
+         return !this.clicks.isEmpty();
+     }
+ 
++    /**
++     * The end of the thing that owns this sequence: finish what has started rather than drop it.
++     * <p>
++     * The elytra auto-swap's clicks are drained from the behaviour that queued them, and that behaviour is
++     * let go when the flight is - so a cancellation inside the gap between two of the three clicks used to
++     * leave the queue simply never asked again, with the spare elytra still on the cursor and the worn one
++     * still on the back. That is the exact state the window rule above exists to prevent, arrived at by a
++     * different road.
++     * <p>
++     * This applies the same rule the class already has for a window that goes away mid-swap, with no "come
++     * back" to wait for:
++     * <ul>
++     * <li>a sequence that <em>has not begun</em> is given up whole and silently - nothing happened, the
++     * items are where they were, and the job that wanted the swap asks again if it still wants it;</li>
++     * <li>a sequence that <em>has begun</em> and whose window is still the one in front is finished now,
++     * remainder in one go. The gaps {@link #tick} keeps are a hand's timing and teardown is not a moment
++     * anybody is watching; the inventory being right is worth more than the rhythm here;</li>
++     * <li>a sequence that <em>has begun</em> whose window is <em>not</em> in front is left exactly as it
++     * is. Finishing it would send clicks with a window id the game drops and then clear a queue that never
++     * ran, which turns "stalled and still retryable" into "stalled and silently abandoned" - strictly
++     * worse, so it is reported unfinished instead.</li>
++     * </ul>
++     *
++     * @param windowIsOurs whether the menu the player has open is their own inventory
++     * @return whether the sequence is now empty - false only for a begun sequence that could not be
++     * finished, which is left untouched so a caller that wants to retry still has it
++     */
++    public boolean finishNow(boolean windowIsOurs) {
++        if (this.clicks.isEmpty()) {
++            this.begun = false;
++            this.countdown = 0;
++            return true;
++        }
++        if (!this.begun) {
++            // nothing went out, so there is nothing half applied to finish - the give-up-whole rule
++            this.clicks.clear();
++            this.countdown = 0;
++            return true;
++        }
++        if (!windowIsOurs) {
++            // the clicks would be dropped by the game; leave the queue alone and say it did not finish
++            return false;
++        }
++        while (!this.clicks.isEmpty()) {
++            this.clicks.poll().run();
++        }
++        this.countdown = 0;
++        this.begun = false;
++        return true;
++    }
++
+     /**
+      * One tick of the sequence: at most one click goes out, and only while the window it was written for is
+      * the one in front.
+diff --git a/src/test/java/baritone/utils/InventoryTransactionTest.java b/src/test/java/baritone/utils/InventoryTransactionTest.java
+index ec6e0fd4..6c881c69 100644
+--- a/src/test/java/baritone/utils/InventoryTransactionTest.java
++++ b/src/test/java/baritone/utils/InventoryTransactionTest.java
+@@ -19,6 +19,10 @@ package baritone.utils;
+ 
+ import org.junit.Test;
+ 
++import java.io.IOException;
++import java.io.UncheckedIOException;
++import java.nio.file.Files;
++import java.nio.file.Path;
+ import java.util.ArrayList;
+ import java.util.List;
+ import java.util.Random;
+@@ -26,6 +30,7 @@ import java.util.Random;
+ import static org.junit.Assert.assertEquals;
+ import static org.junit.Assert.assertFalse;
+ import static org.junit.Assert.assertTrue;
++import static org.junit.Assume.assumeTrue;
+ 
+ /**
+  * The elytra auto-swap's three window clicks, and the rule about the window they land in: they wait for the
+@@ -74,6 +79,11 @@ public class InventoryTransactionTest {
+         boolean waiting() {
+             return this.transaction.waiting();
+         }
++
++        /** The behaviour being let go: finish what has started rather than drop it. */
++        boolean finishNow(boolean windowIsOurs) {
++            return this.transaction.finishNow(windowIsOurs);
++        }
+     }
+ 
+     @Test
+@@ -169,4 +179,174 @@ public class InventoryTransactionTest {
+         }
+         assertFalse("an empty transaction is waiting", transaction.waiting());
+     }
++
++    /**
++     * The residual this exists for: a flight cancelled inside the gap between two of the three clicks used
++     * to leave the queue never asked again, with the spare elytra on the cursor and the worn one still on
++     * the back. The drain is not run any more, so the sequence has to be finished on the way out.
++     */
++    @Test
++    public void teardownFinishesASwapThatHasBegun() {
++        final Swap swap = new Swap(11);
++        assertTrue("the transaction did not begin", swap.tick(true, 5));
++        assertEquals("the swap did not begin with exactly one click out", 1, swap.ticks.size());
++        assertTrue("teardown of a begun swap with its window open did not finish it", swap.finishNow(true));
++        assertEquals("teardown did not run the two clicks that were left", 3, swap.ticks.size());
++        assertEquals("the remainder was spaced rather than sent now",
++                List.of(1, 1, 1), swap.ticks);
++        assertFalse("a finished transaction is still waiting", swap.waiting());
++    }
++
++    @Test
++    public void teardownGivesUpASwapThatHasNotBegun() {
++        for (boolean windowIsOurs : new boolean[]{true, false}) {
++            final Swap swap = new Swap(12);
++            assertTrue("teardown of a swap that never began reported unfinished", swap.finishNow(windowIsOurs));
++            assertEquals("a click went out for a swap that was given up whole", 0, swap.ticks.size());
++            assertFalse("a given-up transaction is still waiting", swap.waiting());
++            // and it is gone for good, the way the window rule's give-up is: nothing happened, so the job
++            // asks again rather than this queue firing late
++            for (int tick = 0; tick < 10; tick++) {
++                swap.tick(true, 1);
++            }
++            assertEquals("a given-up transaction fired afterwards", 0, swap.ticks.size());
++        }
++    }
++
++    /**
++     * The case that is honestly left open. Finishing into somebody else's window would send clicks the game
++     * drops and then clear a queue that never ran - turning "stalled and still retryable" into "stalled and
++     * silently abandoned" - so the queue is left exactly as it was and the caller is told.
++     */
++    @Test
++    public void teardownLeavesABegunSwapItCannotFinish() {
++        final Swap swap = new Swap(13);
++        assertTrue("the transaction did not begin", swap.tick(true, 5));
++        assertFalse("teardown claimed to finish a swap it could not send", swap.finishNow(false));
++        assertEquals("a click went out into a window that was not the one it was written for",
++                1, swap.ticks.size());
++        assertTrue("an unfinished transaction stopped waiting", swap.waiting());
++        // the queue is untouched, so a caller that wants to retry still can, and the window rule still holds
++        for (int tick = 0; tick < 10 && swap.ticks.size() < 3; tick++) {
++            swap.tick(true, 5);
++        }
++        assertEquals("the left-alone transaction did not finish when its window came back",
++                3, swap.ticks.size());
++        assertFalse("a finished transaction is still waiting", swap.waiting());
++    }
++
++    @Test
++    public void teardownSpendsNoCountdownOnTheNextSequence() {
++        // a swap finished on the way out leaves no clock behind: the next sequence the auto-swap queues
++        // begins at once, the way a sequence after a finished one always has
++        final Swap swap = new Swap(14);
++        swap.tick(true, 20);
++        swap.finishNow(true);
++        swap.andAnother();
++        assertTrue("the next sequence waited on a teardown's clock", swap.tick(true, 20));
++    }
++
++    @Test
++    public void teardownOfAnEmptyTransactionDoesNothing() {
++        final InventoryTransaction transaction = new InventoryTransaction(new Random(15));
++        assertTrue("teardown of an empty transaction reported unfinished", transaction.finishNow(true));
++        assertTrue("teardown of an empty transaction reported unfinished", transaction.finishNow(false));
++        assertFalse("an empty transaction is waiting", transaction.waiting());
++    }
++
++    /**
++     * The wiring, pinned from the source because there is no world to cancel a flight in here.
++     * <p>
++     * Two things have to hold and both are about <em>where</em> the ask sits. It has to be in
++     * {@code onLostControl}, which every caller reaches on the client thread, and not in
++     * {@code destroyBehaviorAsync}, which runs on the executor and is also reached by
++     * {@code onWorldEvent} on the way out of a world - a window click sent into a closing connection is
++     * worse than the residual this closes. And it has to reach the rule, not a copy of it.
++     */
++    @Test
++    public void theSwapIsFinishedOnTheWayOutAndNotOnTheExecutor() {
++        final Path root = repoRoot();
++        assumeTrue("the sources are not next to this test run", root != null);
++        final Path process = root.resolve("src/main/java/baritone/process/ElytraProcess.java");
++        final Path behavior = root.resolve("src/main/java/baritone/process/elytra/ElytraBehavior.java");
++        assumeTrue("the elytra process is not next to this test run", Files.isRegularFile(process));
++        assumeTrue("the elytra behaviour is not next to this test run", Files.isRegularFile(behavior));
++
++        final List<String> processLines = read(process);
++        final int ask = lineContaining(processLines, "this.behavior.finishTheSwapBeforeGoing();");
++        assertTrue("the swap is no longer finished on the way out: a flight cancelled inside the gap between"
++                        + " two of the three clicks leaves the spare elytra on the cursor",
++                ask >= 0);
++        assertEquals("the swap is finished in more than one place",
++                1, countContaining(processLines, "finishTheSwapBeforeGoing("));
++        final int destroyAsync = lineContaining(processLines, "private void destroyBehaviorAsync() {");
++        assertTrue("destroyBehaviorAsync moved above onLostControl; re-check that the ask is still in"
++                        + " onLostControl and not on the executor",
++                destroyAsync > 0);
++        assertTrue("the swap is finished inside destroyBehaviorAsync rather than in onLostControl: that runs"
++                        + " on the executor, and onWorldEvent reaches it on the way out of a world",
++                ask < destroyAsync);
++
++        // the behaviour's own teardown does not do it: destroy() runs on the executor and sees no window
++        final List<String> behaviorLines = read(behavior);
++        final int destroy = lineContaining(behaviorLines, "public void destroy() {");
++        assertTrue("ElytraBehavior#destroy moved; re-check the ask is not inside it", destroy >= 0);
++        int end = destroy + 1;
++        while (end < behaviorLines.size() && !behaviorLines.get(end).equals("    }")) {
++            end++;
++        }
++        for (int i = destroy; i < end; i++) {
++            assertFalse("ElytraBehavior#destroy reaches the transaction: it is on the executor, where a"
++                            + " window click has no thread to be sent on",
++                    behaviorLines.get(i).contains("finishNow(") || behaviorLines.get(i).contains("invTransaction"));
++        }
++        // and the ask reaches the rule rather than a copy of it
++        final int helper = lineContaining(behaviorLines, "void finishTheSwapBeforeGoing() {");
++        assertTrue("finishTheSwapBeforeGoing is gone from the behaviour", helper >= 0);
++        assertTrue("finishTheSwapBeforeGoing no longer asks InventoryTransaction#finishNow",
++                behaviorLines.subList(helper, Math.min(behaviorLines.size(), helper + 6)).stream()
++                        .anyMatch(line -> line.contains("invTransaction.finishNow(")));
++    }
++
++    private static int lineContaining(List<String> lines, String needle) {
++        for (int i = 0; i < lines.size(); i++) {
++            if (lines.get(i).contains(needle)) {
++                return i;
++            }
++        }
++        return -1;
++    }
++
++    private static int countContaining(List<String> lines, String needle) {
++        int count = 0;
++        for (String line : lines) {
++            if (line.contains(needle)) {
++                count++;
++            }
++        }
++        return count;
++    }
++
++    private static List<String> read(Path path) {
++        try {
++            return Files.readAllLines(path);
++        } catch (IOException e) {
++            throw new UncheckedIOException(e);
++        }
++    }
++
++    /**
++     * The checkout, found by walking up from wherever this test was started: Gradle runs from the project
++     * directory and so does the test runner beside the build scripts, but nothing guarantees either.
++     */
++    private static Path repoRoot() {
++        Path dir = Path.of("").toAbsolutePath();
++        for (int i = 0; i < 4 && dir != null; i++) {
++            if (Files.isDirectory(dir.resolve("src"))) {
++                return dir;
++            }
++            dir = dir.getParent();
++        }
++        return null;
++    }
+ }
+-- 
+2.47.3
+
