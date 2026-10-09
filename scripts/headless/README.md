@@ -34,6 +34,16 @@ grep CHAT "$BARITONE_HEADLESS/client.log"      # what Baritone and the game said
 `BARITONE_HEADLESS` is where everything lives (default `~/baritone-headless`). Later starts enter the saved world at
 once. The default window is 854x480 on a 1024x600 screen; `drive.sh` clicks at coordinates for exactly that.
 
+## The smoke test
+
+`smoke.sh` is what this harness found, kept as a check. Against a client that is up it walks a 36-block `#goto` to its
+end, then leaves the world with the elytra process holding a live behaviour, and fails (exit 1) if the log from there on
+holds the game's catch-all for an exception thrown from the tick (`Unreported exception thrown`, `Game crashed`). Exit 2
+means the elytra process never took control, so the way out proved nothing. It takes about a minute; run it before
+landing a change to how the bot walks, looks, or lets go of a process. It found two crashes the unit tests had passed:
+the path executor's look-aheads reading one movement past the end of a path, and the elytra teardown reading a player
+who is not there on the way out of a world.
+
 ## What cost a run each, so it need not again
 
 - **OpenGL does not come up under Xvfb** ("Couldn't find matching GLX visual"). The client falls back to Vulkan by
