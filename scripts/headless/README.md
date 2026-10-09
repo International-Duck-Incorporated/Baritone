@@ -44,6 +44,31 @@ landing a change to how the bot walks, looks, or lets go of a process. It found 
 the path executor's look-aheads reading one movement past the end of a path, and the elytra teardown reading a player
 who is not there on the way out of a world.
 
+## The scenes
+
+`scenes.sh` runs six scenes in the real game - `stairs` (a two-high bump, up and down), `bridge` (a 4-wide, 3-deep
+trench), `parkour` (a 3-wide one, with `allowParkour`), `mine` (6 of 27 iron ore), `farm` (24 ripe wheat round a water
+source), `explore` - about 7 minutes in all, or any of them by name. Each teleports to a spot of its own, builds what it
+needs with `/fill`, runs one Baritone command, and asserts what the game itself reports: arrival is a
+`/execute positioned X Y Z if entity @s[distance=..2.5] run say TOKEN` and a count is the number `/fill ... replace`
+prints, so nothing is read off a screenshot. Every scene also fails on `Unreported exception thrown` in the log.
+It records two pitfalls that made scenes fail for the scene's own reasons: state leaks between runs (six raw iron
+already in the inventory ends `#mine 6` before it begins, so the scene clears it), and `#farm 16` measures its range
+from where it is told (a scene that starts 14 blocks from the field's centre leaves the far corner out of reach).
+
+## The per-tick trace
+
+`drive.sh trace on` writes a datapack into the world whose tick function tells the player, once a game tick,
+`tick|[x, y, z]|[yaw, pitch]`; the lines land in the log as `[CHAT]` lines, and `trace.py LOG FROM TO` reads the ones
+between two log line numbers (`wc -l` on the log before and after) into a summary, or `--csv`. It is `tellraw` with
+`nbt` components and not `data get`, because the output of a tick function is suppressed. `drive.sh trace off`
+stops it; the lines are twenty a second and the chat fills with them.
+
+Read it with one thing in mind: a client below 20 frames a second runs its ticks in bursts, so two movement packets
+reach the server in one tick and none in the next. A per-tick speed reads 0.56, 0.28, 0.00 for a walk at 0.28 blocks a
+tick, so `trace.py` takes speed over windows of six ticks and reports the median over the middle of a walk as the
+cruise speed. Yaw and pitch are not doubled by a burst and are read as they are.
+
 ## What cost a run each, so it need not again
 
 - **OpenGL does not come up under Xvfb** ("Couldn't find matching GLX visual"). The client falls back to Vulkan by
@@ -68,7 +93,8 @@ who is not there on the way out of a world.
 
 ## What it can and cannot see
 
-It shows that the mod loads (every mixin applies), that commands run, and that a path can be walked to its end,
-by position, facing and screenshots. It has **no per-tick record**: nothing here logs keys, yaw or pitch per tick, so
-a rhythm or an angle over time is out of its reach until something writes one. Rendering is software, so frame
-timing says nothing about a real machine; tick timing does.
+It shows that the mod loads, that commands run, that a path can be walked to its end, mined, bridged, jumped and
+farmed, and what the player's position and rotation did tick by tick. It has **no record of the keys**: which of W, S,
+sprint, sneak, jump and the buttons were down, and when, is out of its reach, and so is anything that needs the
+client's own ticks rather than the server's view of them. Rendering is software, so frame timing says nothing about a
+real machine; tick timing does.

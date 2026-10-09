@@ -3,11 +3,13 @@
 # it the way a person would: screenshots, and the log. The screen is 1024x600 and the game window is 854x480
 # at (85, 60); the coordinates below are on the screen, for a window of that size.
 #
-# usage: drive.sh chat TEXT | key KEY | click X Y | shot FILE [PERCENT] | wait-login | respawn | newworld
+# usage: drive.sh chat TEXT | key KEY | click X Y | shot FILE [PERCENT] | wait-login | respawn | newworld | trace on|off
 #   chat       opens the chat with t, types TEXT, sends it ('#goto ~30 ~ ~20', '/difficulty peaceful')
 #   shot       the game window, optionally scaled down, as a PNG
 #   newworld   on a fresh game directory only: creates a superflat world with commands on, waits for the
 #              login, and sets the difficulty to peaceful (slimes spawn on a superflat surface by day)
+#   trace      on: a datapack in the world that tells the player their position and rotation once a game tick,
+#              which land in the log as [CHAT] lines for trace.py to read; off: stops it (the lines are 20 a second)
 # environment: BARITONE_HEADLESS (default ~/baritone-headless), HEADLESS_DISPLAY (:99)
 set -eu
 MC_DIR="${BARITONE_HEADLESS:-$HOME/baritone-headless}"
@@ -30,6 +32,23 @@ case "${1:-}" in
         echo "drive.sh: no login in 90 seconds - see $LOG" >&2
         exit 1 ;;
     respawn) click 511 343 ;;
+    trace)
+        PACK="$MC_DIR/game/saves/${HEADLESS_WORLD:-New World}/datapacks/trace"
+        if [ "${2:-}" = on ]; then
+            mkdir -p "$PACK/data/minecraft/tags/function" "$PACK/data/trace/function"
+            echo '{"pack": {"description": "per-tick trace of the player", "min_format": 121, "max_format": 121}}' > "$PACK/pack.mcmeta"
+            echo '{"values": ["trace:load"]}' > "$PACK/data/minecraft/tags/function/load.json"
+            echo '{"values": ["trace:tick"]}' > "$PACK/data/minecraft/tags/function/tick.json"
+            echo 'scoreboard objectives add trace dummy' > "$PACK/data/trace/function/load.mcfunction"
+            # tellraw and not data get: the output of a tick function is suppressed, a tellraw is not
+            printf 'scoreboard players add #t trace 1\ntellraw @a [{"score":{"name":"#t","objective":"trace"}},"|",{"nbt":"Pos","entity":"@p"},"|",{"nbt":"Rotation","entity":"@p"}]\n' > "$PACK/data/trace/function/tick.mcfunction"
+            chat '/reload'; sleep 6
+            chat '/datapack enable "file/trace"'; sleep 3
+        elif [ "${2:-}" = off ]; then
+            chat '/datapack disable "file/trace"'; sleep 2
+        else
+            echo "drive.sh: trace on|off" >&2; exit 2
+        fi ;;
     newworld)
         click 511 296   # Singleplayer: with no world saved the game goes straight to Create New World
         sleep 2
@@ -41,5 +60,5 @@ case "${1:-}" in
         "$0" wait-login
         sleep 6
         chat '/difficulty peaceful' ;;
-    *) sed -n '2,12p' "$0"; exit 2 ;;
+    *) sed -n '2,14p' "$0"; exit 2 ;;
 esac
