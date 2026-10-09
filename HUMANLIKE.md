@@ -229,9 +229,19 @@ The item in the hand has the same rule, and it is counted the same way. It is wr
   the way `HotbarSwitch` is, and for a rule about what to do next rather than how to look doing it, beside the process
   that uses it, the way `FollowProgress`, `PlaceSearch` and `FarmReach` are.
 - Everything with a random source takes it through its constructor - `HeadWander`, `PitchWander`,
-  `IdleGlance`, `WalkGlance`, `Newcomer`, `IdleFidget`, `ReactionDelay`, `KeyBeat`, `SprintWindup` - and the constructor with no argument is the
-  only one that seeds itself from the clock. Every machine in a test run draws from that run's seed,
-  because a failure reported for a seed has to be reproducible by running that seed.
+  `IdleGlance`, `WalkGlance`, `Newcomer`, `IdleFidget`, `Flinch`, `TurnPace`, `ReactionDelay`, `KeyBeat`,
+  `SprintWindup`, `HotbarSwitch`, `InventorySwap` and `InventoryTransaction` - and the constructor with no
+  argument is the only one that seeds itself from the clock. Every machine in a test run draws from that
+  run's seed, because a failure reported for a seed has to be reproducible by running that seed.
+  `RandomSourceTest` counts this from the source, so the rule is a build check and not advice: fourteen
+  classes read the clock that way, and a fifteenth that does not has to be added to that test's list with
+  the reason written next to it. Nine are on the list already and eight of them are a gap rather than a
+  reason - `cadenceRand` in `InventoryBehavior` and `PathExecutor`, the `Cadence` builders in `MineProcess`,
+  `FarmProcess`, `GetToBlockProcess` and `BuilderProcess`, and the `Random` fields in `BlockBreakHelper` and
+  `BlockPlaceHelper` - each of which paces something a spectator can see and cannot be driven from a seed
+  yet, so a failure in that pacing cannot be re-run. The ninth, `AimScatter`'s per-run `SALT`, is a static
+  utility with no constructor to inject through and already has its seam: the overload that takes the salt
+  for the tests, which `AimScatterTest` drives with a fixed one.
 - The numbers are allowed to move; the invariants are not. `HumanlikeLookFuzzTest` runs the hand
   through twenty thousand hostile ticks and asserts that the aim never moves more than its tick limit,
   that a settled hand is always arrived, and that the sway never escapes its band. `AimDynamicsTest`,
@@ -243,7 +253,10 @@ The item in the hand has the same rule, and it is counted the same way. It is wr
   crouch and the sprint all reach the game through `PlayerMovementInput` and `InputOverrideHandler`, and a
   write to them from anywhere else skips the beat, the stance and the wind-up, whether it is spelled as
   an assignment or as a method call (`makeJump`, the toggle resets, `consumeClick`) - `StripCommentsTest`
-  pins the helper that `ClickGatesTest` strips comments with - and `BridgeCrossingTest`
+  pins the helper that `ClickGatesTest` strips comments with, `RandomSourceTest` guards where the
+  randomness itself comes from - every `new Random` under the three source roots is either the clock read
+  inside a constructor with no argument or it is on that test's list with the reason written next to it,
+  because an interval that cannot be seeded cannot be re-run - and `BridgeCrossingTest`
   guards the two ends of the crossing - the ask on every tick of every movement, and both bridge paths
   charging the crouch they are walked with.
 - Behaviour that already exists as a setting - `randomLooking`, `randomLooking113`, `smoothLook`,
