@@ -1,0 +1,362 @@
+From 6549a8c0186f12b08258b99b26e852edbd38af11 Mon Sep 17 00:00:00 2001
+From: 0xFFshell <>
+Date: Fri, 9 Oct 2026 10:18:38 +0000
+Subject: [PATCH] scripts: scenes.sh, six real-game scenes, and a per-tick
+ trace from a datapack
+
+scenes.sh climbs a bump, bridges a trench, parkours a gap, mines six of
+twenty-seven ore, farms twenty-four wheat and explores, each on a spot of its own
+with what it needs built by /fill, asserting what the game reports (an arrival
+token from /execute ... run say, the counts /fill prints) and that the log holds
+no exception thrown from the tick. It records two pitfalls that failed scenes for
+their own reasons: state leaking between runs, and #farm's range being measured
+from where it is told.
+
+drive.sh trace on writes a datapack whose tick function tellraws the player's
+position and rotation once a game tick (tellraw, because the output of a tick
+function is suppressed), and trace.py turns the [CHAT] lines between two log line
+numbers into a summary or CSV, taking speed over six-tick windows because a client
+below twenty frames a second runs its ticks in bursts. No product code.
+---
+ scripts/headless/README.md |  34 +++++++++--
+ scripts/headless/drive.sh  |  23 +++++++-
+ scripts/headless/scenes.sh | 116 +++++++++++++++++++++++++++++++++++++
+ scripts/headless/trace.py  | 104 +++++++++++++++++++++++++++++++++
+ 4 files changed, 271 insertions(+), 6 deletions(-)
+ create mode 100755 scripts/headless/scenes.sh
+ create mode 100755 scripts/headless/trace.py
+
+diff --git a/scripts/headless/README.md b/scripts/headless/README.md
+index 84c436a4..9fe455b4 100644
+--- a/scripts/headless/README.md
++++ b/scripts/headless/README.md
+@@ -44,6 +44,31 @@ landing a change to how the bot walks, looks, or lets go of a process. It found
+ the path executor's look-aheads reading one movement past the end of a path, and the elytra teardown reading a player
+ who is not there on the way out of a world.
+ 
++## The scenes
++
++`scenes.sh` runs six scenes in the real game - `stairs` (a two-high bump, up and down), `bridge` (a 4-wide, 3-deep
++trench), `parkour` (a 3-wide one, with `allowParkour`), `mine` (6 of 27 iron ore), `farm` (24 ripe wheat round a water
++source), `explore` - about 7 minutes in all, or any of them by name. Each teleports to a spot of its own, builds what it
++needs with `/fill`, runs one Baritone command, and asserts what the game itself reports: arrival is a
++`/execute positioned X Y Z if entity @s[distance=..2.5] run say TOKEN` and a count is the number `/fill ... replace`
++prints, so nothing is read off a screenshot. Every scene also fails on `Unreported exception thrown` in the log.
++It records two pitfalls that made scenes fail for the scene's own reasons: state leaks between runs (six raw iron
++already in the inventory ends `#mine 6` before it begins, so the scene clears it), and `#farm 16` measures its range
++from where it is told (a scene that starts 14 blocks from the field's centre leaves the far corner out of reach).
++
++## The per-tick trace
++
++`drive.sh trace on` writes a datapack into the world whose tick function tells the player, once a game tick,
++`tick|[x, y, z]|[yaw, pitch]`; the lines land in the log as `[CHAT]` lines, and `trace.py LOG FROM TO` reads the ones
++between two log line numbers (`wc -l` on the log before and after) into a summary, or `--csv`. It is `tellraw` with
++`nbt` components and not `data get`, because the output of a tick function is suppressed. `drive.sh trace off`
++stops it; the lines are twenty a second and the chat fills with them.
++
++Read it with one thing in mind: a client below 20 frames a second runs its ticks in bursts, so two movement packets
++reach the server in one tick and none in the next. A per-tick speed reads 0.56, 0.28, 0.00 for a walk at 0.28 blocks a
++tick, so `trace.py` takes speed over windows of six ticks and reports the median over the middle of a walk as the
++cruise speed. Yaw and pitch are not doubled by a burst and are read as they are.
++
+ ## What cost a run each, so it need not again
+ 
+ - **OpenGL does not come up under Xvfb** ("Couldn't find matching GLX visual"). The client falls back to Vulkan by
+@@ -68,7 +93,8 @@ who is not there on the way out of a world.
+ 
+ ## What it can and cannot see
+ 
+-It shows that the mod loads (every mixin applies), that commands run, and that a path can be walked to its end,
+-by position, facing and screenshots. It has **no per-tick record**: nothing here logs keys, yaw or pitch per tick, so
+-a rhythm or an angle over time is out of its reach until something writes one. Rendering is software, so frame
+-timing says nothing about a real machine; tick timing does.
++It shows that the mod loads, that commands run, that a path can be walked to its end, mined, bridged, jumped and
++farmed, and what the player's position and rotation did tick by tick. It has **no record of the keys**: which of W, S,
++sprint, sneak, jump and the buttons were down, and when, is out of its reach, and so is anything that needs the
++client's own ticks rather than the server's view of them. Rendering is software, so frame timing says nothing about a
++real machine; tick timing does.
+diff --git a/scripts/headless/drive.sh b/scripts/headless/drive.sh
+index e578ca5b..66da8ec1 100755
+--- a/scripts/headless/drive.sh
++++ b/scripts/headless/drive.sh
+@@ -3,11 +3,13 @@
+ # it the way a person would: screenshots, and the log. The screen is 1024x600 and the game window is 854x480
+ # at (85, 60); the coordinates below are on the screen, for a window of that size.
+ #
+-# usage: drive.sh chat TEXT | key KEY | click X Y | shot FILE [PERCENT] | wait-login | respawn | newworld
++# usage: drive.sh chat TEXT | key KEY | click X Y | shot FILE [PERCENT] | wait-login | respawn | newworld | trace on|off
+ #   chat       opens the chat with t, types TEXT, sends it ('#goto ~30 ~ ~20', '/difficulty peaceful')
+ #   shot       the game window, optionally scaled down, as a PNG
+ #   newworld   on a fresh game directory only: creates a superflat world with commands on, waits for the
+ #              login, and sets the difficulty to peaceful (slimes spawn on a superflat surface by day)
++#   trace      on: a datapack in the world that tells the player their position and rotation once a game tick,
++#              which land in the log as [CHAT] lines for trace.py to read; off: stops it (the lines are 20 a second)
+ # environment: BARITONE_HEADLESS (default ~/baritone-headless), HEADLESS_DISPLAY (:99)
+ set -eu
+ MC_DIR="${BARITONE_HEADLESS:-$HOME/baritone-headless}"
+@@ -30,6 +32,23 @@ case "${1:-}" in
+         echo "drive.sh: no login in 90 seconds - see $LOG" >&2
+         exit 1 ;;
+     respawn) click 511 343 ;;
++    trace)
++        PACK="$MC_DIR/game/saves/${HEADLESS_WORLD:-New World}/datapacks/trace"
++        if [ "${2:-}" = on ]; then
++            mkdir -p "$PACK/data/minecraft/tags/function" "$PACK/data/trace/function"
++            echo '{"pack": {"description": "per-tick trace of the player", "min_format": 121, "max_format": 121}}' > "$PACK/pack.mcmeta"
++            echo '{"values": ["trace:load"]}' > "$PACK/data/minecraft/tags/function/load.json"
++            echo '{"values": ["trace:tick"]}' > "$PACK/data/minecraft/tags/function/tick.json"
++            echo 'scoreboard objectives add trace dummy' > "$PACK/data/trace/function/load.mcfunction"
++            # tellraw and not data get: the output of a tick function is suppressed, a tellraw is not
++            printf 'scoreboard players add #t trace 1\ntellraw @a [{"score":{"name":"#t","objective":"trace"}},"|",{"nbt":"Pos","entity":"@p"},"|",{"nbt":"Rotation","entity":"@p"}]\n' > "$PACK/data/trace/function/tick.mcfunction"
++            chat '/reload'; sleep 6
++            chat '/datapack enable "file/trace"'; sleep 3
++        elif [ "${2:-}" = off ]; then
++            chat '/datapack disable "file/trace"'; sleep 2
++        else
++            echo "drive.sh: trace on|off" >&2; exit 2
++        fi ;;
+     newworld)
+         click 511 296   # Singleplayer: with no world saved the game goes straight to Create New World
+         sleep 2
+@@ -41,5 +60,5 @@ case "${1:-}" in
+         "$0" wait-login
+         sleep 6
+         chat '/difficulty peaceful' ;;
+-    *) sed -n '2,12p' "$0"; exit 2 ;;
++    *) sed -n '2,14p' "$0"; exit 2 ;;
+ esac
+diff --git a/scripts/headless/scenes.sh b/scripts/headless/scenes.sh
+new file mode 100755
+index 00000000..b4238c28
+--- /dev/null
++++ b/scripts/headless/scenes.sh
+@@ -0,0 +1,116 @@
++#!/bin/bash
++# Real-game scenes for what the unit tests cannot run: climbing, bridging, parkour, mining, the farm, exploring.
++# Each scene teleports to a spot of its own on the superflat world, builds what it needs with /fill, runs one Baritone
++# command, and asserts what the game reports - arrival is a /execute ... run say token, a count is the number /fill
++# prints for the blocks it replaced - and that the log holds no exception thrown from the tick.
++#
++# Run it against a client that is already up (run.sh in the background) with a world made by drive.sh newworld.
++# usage: scenes.sh [stairs] [bridge] [parkour] [mine] [farm] [explore]      (default: all of them, about 7 minutes)
++# exit: the number of scenes that failed
++# environment: BARITONE_HEADLESS (default ~/baritone-headless), HEADLESS_DISPLAY (:99)
++set -u
++HERE="$(cd "$(dirname "$0")" && pwd)"
++MC_DIR="${BARITONE_HEADLESS:-$HOME/baritone-headless}"
++LOG="$MC_DIR/client.log"
++D="$HERE/drive.sh"
++pass=0
++fail=0
++
++lines() { wc -l < "$LOG"; }
++since() { tail -n +$(( $1 + 1 )) "$LOG"; }
++tick_exceptions() { since "$1" | grep -c -E 'Unreported exception thrown|Game crashed' || true; }
++# the last "Successfully filled N" (N) or "No blocks were filled" (0) after line $1
++filled() { since "$1" | grep -E 'CHAT.*(Successfully filled [0-9]+|No blocks were filled)' | tail -1 | sed -E 's/.*Successfully filled ([0-9]+).*/\1/; s/.*No blocks were filled.*/0/'; }
++arrived() { # X Y Z MARK: was the player within 2.5 blocks of the block, according to the game
++    local token="ARR$RANDOM$RANDOM"
++    "$D" chat "/execute positioned $1 $2 $3 if entity @s[distance=..2.5] run say $token"
++    sleep 2.5
++    since "$4" | grep -q "\[${HEADLESS_USER:-Headless}\] $token"   # as say output, never as the typed command
++}
++go() { "$D" chat "/tp @s $1 -60 $2"; sleep 5; } # to a scene's start, and let the chunks around it come in
++report() { # NAME OK DETAIL
++    if [ "$2" = 1 ]; then echo "PASS  $1 - $3"; pass=$((pass + 1)); else echo "FAIL  $1 - $3"; fail=$((fail + 1)); fi
++}
++
++scene_stairs() { # a two-high bump, wide enough that climbing is cheaper than going round it
++    go 0 0; local m; m=$(lines)
++    "$D" chat '/fill 4 -60 -12 4 -60 12 minecraft:stone'
++    "$D" chat '/fill 5 -60 -12 7 -59 12 minecraft:stone'
++    "$D" chat '/fill 8 -60 -12 8 -60 12 minecraft:stone'
++    "$D" chat '#goto 12 -60 0'; sleep 25
++    local ok=1 x; arrived 12 -60 0 "$m" || ok=0; x=$(tick_exceptions "$m"); [ "$x" = 0 ] || ok=0
++    report stairs "$ok" "up two, along, down two; tick exceptions $x"
++}
++
++scene_bridge() { # a trench four wide and three deep, the whole length of what is loaded: it has to be bridged
++    go 12 60; local m; m=$(lines)
++    "$D" chat '/fill 14 -63 36 17 -61 84 minecraft:air'
++    "$D" chat '/give @s minecraft:stone 64'
++    "$D" chat '#goto 22 -60 60'; sleep 55
++    local ok=1 x; arrived 22 -60 60 "$m" || ok=0; x=$(tick_exceptions "$m"); [ "$x" = 0 ] || ok=0
++    report bridge "$ok" "across a 4-wide trench; tick exceptions $x"
++}
++
++scene_parkour() { # a trench three wide, with parkour allowed
++    go 24 120; local m; m=$(lines)
++    "$D" chat '/fill 26 -63 96 28 -61 144 minecraft:air'
++    "$D" chat '#set allowParkour true'
++    "$D" chat '#goto 33 -60 120'; sleep 40
++    local ok=1 x; arrived 33 -60 120 "$m" || ok=0; x=$(tick_exceptions "$m"); [ "$x" = 0 ] || ok=0
++    "$D" chat '#set allowParkour false'
++    report parkour "$ok" "across a 3-wide trench; tick exceptions $x"
++}
++
++scene_mine() { # six of twenty-seven
++    go 33 180; local m; m=$(lines)
++    "$D" chat '/give @s minecraft:iron_pickaxe'
++    "$D" chat '/clear @s minecraft:raw_iron' # a mined six from an earlier run would end #mine 6 before it began
++    "$D" chat '/fill 38 -60 179 40 -58 181 minecraft:iron_ore'
++    "$D" chat '#mine 6 iron_ore'; sleep 55
++    "$D" chat '#stop'; sleep 2
++    local after; after=$(lines)
++    "$D" chat '/fill 38 -60 179 40 -58 181 minecraft:air replace minecraft:iron_ore'; sleep 2.5
++    local left x ok=1; left=$(filled "$after"); x=$(tick_exceptions "$m")
++    since "$m" | grep -q 'Have 6 valid items' || ok=0
++    { [ -n "$left" ] && [ "$left" -le 21 ] && [ "$left" -ge 18 ]; } || ok=0
++    [ "$x" = 0 ] || ok=0
++    report mine "$ok" "27 ore built, ${left:-?} left standing, baritone said 'Have 6 valid items': $(since "$m" | grep -c 'Have 6 valid items'); tick exceptions $x"
++}
++
++scene_farm() { # twenty-four ripe wheat round a water source: all harvested, and replanted
++    go 38 244; local m; m=$(lines) # inside the range of #farm 16 from the far corner: the range is from where it is told
++    "$D" chat '/fill 40 -61 248 44 -61 252 minecraft:farmland'
++    "$D" chat '/setblock 42 -61 250 minecraft:water'
++    "$D" chat '/fill 40 -60 248 44 -60 252 minecraft:wheat[age=7]'
++    "$D" chat '/give @s minecraft:wheat_seeds 64'
++    "$D" chat '#farm 16'; sleep 70
++    "$D" chat '#stop'; sleep 2
++    local a b; a=$(lines)
++    "$D" chat '/fill 40 -60 248 44 -60 252 minecraft:air replace minecraft:wheat[age=7]'; sleep 2.5
++    local ripe; ripe=$(filled "$a"); b=$(lines)
++    "$D" chat '/fill 40 -60 248 44 -60 252 minecraft:air replace minecraft:wheat'; sleep 2.5
++    local planted x ok=1; planted=$(filled "$b"); x=$(tick_exceptions "$m")
++    [ "${ripe:-1}" = 0 ] || ok=0
++    { [ -n "$planted" ] && [ "$planted" -ge 15 ]; } || ok=0
++    [ "$x" = 0 ] || ok=0
++    report farm "$ok" "ripe wheat left standing ${ripe:-?} (24 before), replanted ${planted:-?}; tick exceptions $x"
++}
++
++scene_explore() { # twenty seconds of #explore
++    go 33 300; local m; m=$(lines)
++    "$D" chat '#explore'; sleep 25
++    "$D" chat '#stop'; sleep 2
++    local x ok=1; x=$(tick_exceptions "$m"); [ "$x" = 0 ] || ok=0
++    report explore "$ok" "twenty-five seconds; tick exceptions $x"
++}
++
++"$D" wait-login
++sleep 3
++scenes=("$@")
++[ ${#scenes[@]} -gt 0 ] || scenes=(stairs bridge parkour mine farm explore)
++for s in "${scenes[@]}"; do
++    "$D" chat '#stop'; sleep 1
++    "scene_$s"
++done
++echo "scenes: $pass passed, $fail failed"
++exit "$fail"
+diff --git a/scripts/headless/trace.py b/scripts/headless/trace.py
+new file mode 100755
+index 00000000..fdf9f24b
+--- /dev/null
++++ b/scripts/headless/trace.py
+@@ -0,0 +1,104 @@
++#!/usr/bin/env python3
++"""Reads the per-tick trace out of the client log and says what the player did.
++
++The trace is a datapack that drive.sh trace on writes into the world: a tick function that tells the player,
++once a game tick, "tick|[x, y, z]|[yaw, pitch]" (it is tellraw and not data get, because the output of a tick
++function is suppressed). The lines land in the log as [CHAT] lines.
++
++usage: trace.py LOG [FROM_LINE [TO_LINE]] [--csv]
++  FROM_LINE, TO_LINE   log line numbers (wc -l on the log before and after the thing you want to see)
++  --csv                one row per sample - tick,x,y,z,yaw,pitch - instead of the summary
++
++Read the numbers with one thing in mind. The positions are what the server was told, and a client that runs below
++20 frames a second (this one, on software rendering) runs its 20 ticks a second in bursts: two movement packets
++reach the server in one tick and none in the next. A per-tick speed therefore reads 0.56, 0.28, 0.00 for a walk
++at 0.28 blocks a tick. Everything here that depends on speed is taken over windows of four ticks; yaw and pitch
++are read as they are, since a rotation does not double.
++"""
++import math
++import re
++import statistics
++import sys
++
++SAMPLE = re.compile(r'\[CHAT\] (\d+)\|\[([-\d.eE]+)d, ([-\d.eE]+)d, ([-\d.eE]+)d\]\|\[([-\d.eE]+)f, ([-\d.eE]+)f\]')
++WINDOW = 6
++
++
++def read(path, start, stop):
++    rows = []
++    with open(path, errors='replace') as f:
++        for i, line in enumerate(f):
++            if i < start or (stop is not None and i >= stop):
++                continue
++            m = SAMPLE.search(line)
++            if m:
++                rows.append((int(m.group(1)),) + tuple(float(g) for g in m.groups()[1:]))
++    return rows
++
++
++def wrap(angle):
++    return (angle + 180.0) % 360.0 - 180.0
++
++
++def summary(rows):
++    if len(rows) < 3 * WINDOW:
++        sys.exit('trace.py: %d samples is too few to say anything' % len(rows))
++    print('samples %d, ticks %d to %d' % (len(rows), rows[0][0], rows[-1][0]))
++    # speed over WINDOW ticks, in blocks a tick, at the end of each window
++    speed = [0.0] * len(rows)
++    for i in range(WINDOW, len(rows)):
++        a, b = rows[i - WINDOW], rows[i]
++        ticks = max(1, b[0] - a[0])
++        speed[i] = math.hypot(b[1] - a[1], b[3] - a[3]) / ticks
++    top = max(speed)
++    if top < 0.02:
++        print('the player did not move; yaw %.1f..%.1f, pitch %.1f..%.1f'
++              % (min(r[4] for r in rows), max(r[4] for r in rows), min(r[5] for r in rows), max(r[5] for r in rows)))
++        return
++    moving = [i for i, v in enumerate(speed) if v > 0.02]
++    first, last = moving[0], moving[-1]
++    # the middle half of the walk is where the speed is steady; the fastest window is inflated by bursts
++    middle = speed[first + (last - first) // 4: last - (last - first) // 4] or speed[first:last + 1]
++    cruise = statistics.median(middle)
++    along = sum(math.hypot(b[1] - a[1], b[3] - a[3]) for a, b in zip(rows[first - WINDOW:last], rows[first - WINDOW + 1:last + 1]))
++    seconds = (rows[last][0] - rows[max(0, first - WINDOW)][0]) / 20.0
++    print('moving for about %d ticks (%.1f s); %.1f blocks covered, %.2f blocks/s on average'
++          % (last - first, (last - first) / 20.0, along, along / seconds if seconds else 0))
++    print('cruise (median over the middle of the walk) %.3f blocks/tick = %.2f blocks/s; the fastest window %.3f is inflated by bursts'
++          % (cruise, cruise * 20, top))
++    ramp = next(i for i in range(first, len(speed)) if speed[i] >= 0.9 * cruise) - first
++    print('ticks from the first motion to 90%% of cruise: %d (%d-tick windows: a resolution of %d)' % (ramp, WINDOW, WINDOW))
++    tail = [i for i in range(last, first, -1) if speed[i] >= 0.9 * cruise]
++    print('ticks from the last 90%% of cruise to the stop: %d' % (last - (tail[0] if tail else last)))
++    ys = [r[4] for r in rows[first:last + 1]]
++    ps = [r[5] for r in rows[first:last + 1]]
++    dy = [abs(wrap(rows[i][4] - rows[i - WINDOW][4])) for i in range(first, last + 1) if i >= WINDOW]
++    dp = [abs(rows[i][5] - rows[i - WINDOW][5]) for i in range(first, last + 1) if i >= WINDOW]
++    print('yaw   while moving: %.1f to %.1f (range %.1f), fastest turn %.1f degrees in %d ticks'
++          % (min(ys), max(ys), max(ys) - min(ys), max(dy or [0]), WINDOW))
++    print('pitch while moving: %.2f to %.2f (range %.2f), fastest change %.2f degrees in %d ticks, %d distinct values'
++          % (min(ps), max(ps), max(ps) - min(ps), max(dp or [0]), WINDOW, len(set(round(p, 3) for p in ps))))
++    print('pitch while moving: median %.1f, mean %.1f; %.0f%% of the samples more than 15 degrees down (positive is down)'
++          % (statistics.median(ps), statistics.fmean(ps), 100.0 * sum(1 for p in ps if p > 15.0) / len(ps)))
++    print('at rest before: yaw %.1f pitch %.1f; at rest after: yaw %.1f pitch %.1f'
++          % (rows[0][4], rows[0][5], rows[-1][4], rows[-1][5]))
++
++
++def main(argv):
++    args = [a for a in argv if not a.startswith('--')]
++    if not args:
++        sys.exit(__doc__)
++    path = args[0]
++    start = int(args[1]) if len(args) > 1 else 0
++    stop = int(args[2]) if len(args) > 2 else None
++    rows = read(path, start, stop)
++    if '--csv' in argv:
++        print('tick,x,y,z,yaw,pitch')
++        for r in rows:
++            print('%d,%.4f,%.4f,%.4f,%.3f,%.3f' % r)
++    else:
++        summary(rows)
++
++
++if __name__ == '__main__':
++    main(sys.argv[1:])
+-- 
+2.47.3
+

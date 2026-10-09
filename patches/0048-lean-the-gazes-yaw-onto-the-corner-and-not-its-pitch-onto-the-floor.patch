@@ -1,0 +1,145 @@
+From 87581e58755f8787d721c3be24503cc8f0bb1bc1 Mon Sep 17 00:00:00 2001
+From: 0xFFshell <>
+Date: Fri, 9 Oct 2026 10:18:38 +0000
+Subject: [PATCH] humanize: lean the gaze's yaw onto the corner, not its pitch
+ onto the floor
+
+GazeAhead leaned the walking target onto the line the path takes next in both
+axes. The line is the angle from the eyes to the centre of the next block, about
+thirty degrees down on level ground, while the walking target keeps the player's
+own pitch - so the class's premise, that on a straight line the two directions
+are the same and the lean is nothing, held for the yaw and not for the pitch. With
+every walking movement one block long the player is always inside the two-block
+lead distance, so the lean was on for the whole of every flat walk and held the
+head on the floor two blocks ahead: measured in the client with the new per-tick
+trace, a level start settled at a median of 29 degrees down, 93% of the samples
+past fifteen, against HUMANLIKE.md's "near level most of the time".
+
+The lean is now of the yaw alone; the pitch is PitchWander's, and the slope lean's
+where the path climbs or falls. In the client the same walk has a median pitch of
+0.5 to 2.6 degrees and none of its samples past fifteen. thePitchLeansToo, which
+pinned the old behaviour, becomes thePitchIsNeverLeanedOnto, with a test that a
+straight flat walk is no lean in either axis; restoring the pitch blend fails both
+and nothing else. HumanlikeLookFuzzTest's expected pitch (8.5, half of the way to
+the offer) is the walk's own 5 now, and the spec row says why.
+---
+ HUMANLIKE.md                                  |  2 +-
+ .../baritone/behavior/look/GazeAhead.java     | 17 ++++++++-----
+ .../baritone/behavior/look/GazeAheadTest.java | 25 ++++++++++++++++---
+ .../behavior/look/HumanlikeLookFuzzTest.java  |  6 +++--
+ 4 files changed, 38 insertions(+), 12 deletions(-)
+
+diff --git a/HUMANLIKE.md b/HUMANLIKE.md
+index 30e8b826..5be492ad 100644
+--- a/HUMANLIKE.md
++++ b/HUMANLIKE.md
+@@ -20,7 +20,7 @@ opt-in: a bot that has to be told to look alive is a bot that looks dead by defa
+ | The hand calls itself arrived | `behavior/look/AimDynamics.java`, `ILookBehavior#hasArrivedAt` | "Is the aim here yet" is asked of the aim, not of a hundredth-of-a-degree comparison against the target: a settled hand sits a fraction of a degree off, because it is easing and the tremor is still shaking it. |
+ | The hand lands on the block, not on its centre | `api/utils/AimScatter.java`, `RotationUtils#reachable` | Upstream aimed every block it broke, opened or used at the exact centre of its box. The hand now goes to a point of the block's own, inside the middle two thirds of its box on each axis, the same point for that block for the whole run (a hash of its position and a salt drawn once, never a draw per tick under a hand that is holding) and somewhere else next run. Where the point cannot be seen from where the player stands, the centre and the face centres are tried as before, and a block with no collision box - a crop, a torch, a fire - keeps the centre. `remainWithExistingLookDirection` used to freeze the hand the moment the crosshair touched the block, which with a hand that eases was always just inside the edge it came from; it now freezes it once the hand has got to its point, mining on the way. A face a throwaway block is placed against - under a bridge, a pillar, a step up, a jump - takes a point of its own too (`AimScatter#facePoint`, `MovementHelper#attemptToPlaceABlock`, `MovementTraverse`, `MovementPillar`): on the face and in the middle two thirds of it, keyed on where the block is going, with the trace that confirms the face run on the point actually aimed at and the exact centre tried when the point cannot be seen. Where the crosshair lands on a face only decides anything for a block that takes its shape from the landing, a slab or a stair, and dirt and cobble do not; the builder tries a point of the face's own first for a block that is a full cube whatever is clicked where (`BuilderProcess#placementMultipliers`) and only its fixed points, well clear of the halfway line, for a slab, a stair or a trapdoor, with what would actually be placed from the point checked as it always was. A door or a gate in the way takes the same treatment on the block itself (`MovementTraverse`): the half of the door that is actually blocking is the half aimed at - upstream aimed at `positionsToBreak[0]` whether or not that was the door - and through `RotationUtils#reachable`, so the point is one of the door's own and one that can be seen from where the player stands, the centre being aimed at blind only when nothing on the door can be reached. Its click is held back until the crosshair is on the door, which it was not: the button used to go down the tick the door was noticed, while the hand was still turning, and a click sent on its way to a door lands on whatever the crosshair crosses in the meantime - the frame, the wall beside the doorway - which with a throwaway block in hand is a block placed against that wall. |
+ | The eyes are on the job before the feet get there | `behavior/look/ApproachLook.java`, `PathExecutor#lookAtTheJob` | A person who has decided to open a chest, mine an ore, use a table or work a field is looking at it while they walk the last steps to it: the eyes arrive with the feet and the only thing left to do is reach. A walk's own look is the walk - the movement's target for the tick, leaned onto the line the path takes after it (the row above) - so on a walk whose goal named a block the head stayed on the line until the feet had stopped and the process that wanted the block turned it at the last moment: the bot walked up to a chest facing the wall beside it and turned. Over the last six blocks of such a walk the gaze is now offered that block in place of the line ahead, easing in over four blocks so nothing appears at a distance, at most half of the way to it, and nothing at all once it sits more than forty degrees off the walk - fading out by sixty, the over-the-shoulder bound the row above already holds itself to - or when it is the block the feet are standing in, which is where every ordinary `goto` ends and is what keeps this from changing a walk that is not walking *to* something. The block is the goal's own, asked for and not guessed: only the goals that name one render as a position (`GoalBlock`, `GoalTwoBlocks`, `GoalGetToBlock`, `GoalNear`), a composite - what mining and exploring walk on - answers with the part of itself nearest the end of the walk, and the answer is resolved once per path from the executing goal rather than every tick, because `simplifyUnloadedYCoord` can hand the pathfinder a `GoalXZ` in place of the goal that named the block and a walk to a chest calculated from far off would otherwise arrive having forgotten what it was for. Offered into the same lean, so every rule of the row above holds unchanged: the lean is on the gaze only and the movement's own rotation is untouched, a fall, a climb, a jump, a parkour run-up or water gets nothing, and a target about to be clicked is still aimed at exactly. Nothing when the goal names no block, which is most walks. |
+-| The gaze leans onto the line ahead | `behavior/look/GazeAhead.java`, `PathExecutor#leanGazeAhead` | A person walking a route has their head around the corner before their feet are: in the last two blocks of a walk the aim leans up to halfway toward where the path goes next, more the closer it gets. On a straight line the two directions are the same and the lean is nothing. Never off the walking direction by more than 60° - a path that doubles back gets an over-the-shoulder glance, not a head facing backwards while the feet walk forwards - and never onto a target about to be clicked, which every rule in this fork aims at exactly. Falls, climbs, jumps and parkour run-ups steer on the angles they are given and take no lean at all. The lean is on the *gaze* only: the movement's own rotation is what the game turns the pressed keys by (`LookBehavior#onPlayerRotationMove`), and it is kept exactly as asked for, so the head leads the body round the corner and never drags it there. |
++| The gaze leans onto the line ahead | `behavior/look/GazeAhead.java`, `PathExecutor#leanGazeAhead` | A person walking a route has their head around the corner before their feet are: in the last two blocks of a walk the aim leans up to halfway toward where the path goes next, more the closer it gets. On a straight line the two directions are the same and the lean is nothing. The lean is of the yaw alone: the angle from the eyes down to the next block is about thirty degrees on level ground, not the pitch of a level walk, and leaning the pitch onto it held the head on the floor for the whole of every flat walk (measured in the client: a median of 29 degrees down, 93% of the walk past fifteen); the pitch is `PitchWander`'s, and the slope lean's where the path climbs or falls. Never off the walking direction by more than 60° - a path that doubles back gets an over-the-shoulder glance, not a head facing backwards while the feet walk forwards - and never onto a target about to be clicked, which every rule in this fork aims at exactly. Falls, climbs, jumps and parkour run-ups steer on the angles they are given and take no lean at all. The lean is on the *gaze* only: the movement's own rotation is what the game turns the pressed keys by (`LookBehavior#onPlayerRotationMove`), and it is kept exactly as asked for, so the head leads the body round the corner and never drags it there. |
+ | A target with no opinion about the pitch | `behavior/look/PitchWander.java`, `LookBehavior#settledGaze` | The gaze settles a few degrees this way and that every few seconds - triangular around level, a degree a tick, ten degrees out at the extremes - instead of holding one angle for a whole journey, and it settles *on the aim*, which is the angle the server is told and the one the arm is traced along. Only where the pitch is decoration: a swim travels by the pitch it is looking along and a glide solves for it, so in water and in the air the pitch stays where the movement put it, and a target that holds an opinion about the pitch - a block to break, a face to place against - is aimed at exactly. The ground ahead pulls on where the gaze settles (`PitchWander#lean`, `PathExecutor#leanOntoTheSlope`): the rise over the run of the next five blocks of path, as the angle a person would look along it, and then part of that - six tenths of a way down, a third of a way up, never more than thirty-five degrees - offered every tick and gone the tick it is not, so a stair down is watched for its footing, a drop at the end of a corridor is looked down into as it comes, and a climb is glanced up; nothing on the flat, in water, in the air or on the run-up to a jump. |
+ | The eyes go to the side of the road | `behavior/look/WalkGlance.java`, `PathExecutor#welcomeGlance` | Every five to fifteen seconds of plain walking the head turns twelve to forty degrees to one side - more, at something actually there: the nearest animal or player in view, up to seventy degrees off the way - eases there over half a second, holds for anything from a flick to a second, and eases back to exactly nothing, at the speed of a look (`AimDynamics.IDLE_YAW_STEP`) and never faster. It is an offset on the aim rather than an angle of its own, so it rides round a corner with the head under it and cannot leave the head somewhere stale when it ends. Welcome only on a plain walk along the flat with two more plain ones to come - nothing to break, place or open, no jump, drop, water or parkour - and the moment the walk stops being plain, or anything is about to be clicked, it comes back at the full looking speed and the count starts over; a walk that is all corners and jumps never glances at all. The keys are chosen against the aim and not against the sent rotation (`ILookBehavior#headRotation`), so a look to the side is not read as a change of heading. Now and then the feet stop for the look (`WalkGlance#stopped`, `PathExecutor#standForTheLook`): once in ten glances at nothing and once in three at something, the walking keys come off halfway out, the body stands while the head is held there, and it sets off again as the head comes back - a pause of under a second once every couple of minutes of open walking, taken only on a walk the executor has already welcomed the glance on, so there is nothing under the feet it could cost. The idle glance keeps off the head while the walking one is out on a stopped foot. A blow that is still owed a look stands it down for that whole episode, and the idle glance with it: a person staring at whoever just hit them is not also looking at the cow, and the stare is measured against the head this one is on, so one of them has to give way - see the flinch row below. |
+ | Somebody hit us | `behavior/look/Flinch.java`, `LookBehavior#noticeBlows` | A blow used to be delivered as a prompt to whichever glance was running, which is the one answer to it a look cannot give: the walking glance will not turn to somebody further off than its own interest (`MAX_INTEREST_YAW`) and is only advanced at all on a walk the executor has welcomed, so a bot punched from the side or behind while walking - which is where somebody sneaking up on a bot actually is - did not turn its head at all, and a standing one took the better part of a second over it. A blow has a flinch of its own now. Nothing for a drawn reaction of two to six ticks - a head that moves on the tick the blow lands has no reaction time in it at all - then the turn at the hand's own ceiling, eighteen degrees a tick, because a startle is the one time a person's head moves as fast as it can. Unbounded while the feet are still, because a body that is standing turns whole; stopped at seventy degrees - a neck's quarter turn, the same one the walking glance holds itself to - while the feet are moving, because a walking body cannot come round without walking backwards. Held for ten to thirty ticks, drawn when the blow lands and counted from arrival, asking after the attacker again every tick so somebody walking about is tracked rather than remembered, then handed back at the speed of a look with the sway still riding, because coming home is not a flinch and a head snapped back onto its aim is the other half of the same tell. Measured against the head it is added to - the aim, or the aim plus whatever a glance has put on it - so the stare lands on whoever hit us rather than on them plus whatever the road was showing at the time, which is up to a glance's seventy degrees and is exactly where a bot punched mid-glance used to end up looking. The sway is deliberately not in that sum: the sway is meant to keep riding on the stare. It stands down wherever the sway does, and for anything being clicked exactly as the glances do: the head comes home rather than vanishing, so a bot hit mid-block looks round at whoever did it as soon as the block is done, and every click keeps its target because the click waits for the head. A second blow on the heels of the first is the same flinch held again, at whoever it names last, and draws itself no second reaction - a person punched twice in a second does not flinch twice. Who did it is a person's guess, because the client is only told that a blow landed: the nearest player within ten blocks that can be seen, or failing one the nearest hostile; a fall with nobody near is not looked round at, and if they are gone - logged out, dead, unloaded - the head has nothing left to stare at and comes home. A head that goes on staring at the horizon while it is punched fails the one test every suspected bot gets. |
+diff --git a/src/main/java/baritone/behavior/look/GazeAhead.java b/src/main/java/baritone/behavior/look/GazeAhead.java
+index 7669d7a8..98dfd012 100644
+--- a/src/main/java/baritone/behavior/look/GazeAhead.java
++++ b/src/main/java/baritone/behavior/look/GazeAhead.java
+@@ -29,6 +29,14 @@ import baritone.api.utils.Rotation;
+  * its end. On a straight line the two directions are the same and the lean is nothing at all, which is
+  * the point: the head only leads where the path actually bends.
+  * <p>
++ * The lean is of the yaw alone. The direction the path takes next has a pitch too, but the pitch from the eyes
++ * down to the centre of the next block is about thirty degrees on level ground - not the pitch of a level walk,
++ * so the two directions are not "the same" on a straight line in that axis, and leaning onto it held the head
++ * on the floor two blocks ahead for the whole of every flat walk (measured in the client: a median of 29
++ * degrees down, 93% of the walk past fifteen, with the target level). The pitch belongs to
++ * {@link PitchWander}, which keeps it near level, and to {@code PathExecutor#leanOntoTheSlope}, which carries it
++ * where the path climbs or falls.
++ * <p>
+  * Only ever a lean on a walking target. A target that is about to be clicked is aimed at exactly, under
+  * every rule this fork has, and this stands aside for those like the sway and the carry do - see
+  * {@code LookBehavior#updateTarget}. And it is one tick of memory at most: the walk offers where the
+@@ -59,7 +67,7 @@ public final class GazeAhead {
+     /**
+      * Where the path goes next, and how far the gaze may lean onto it this tick.
+      *
+-     * @param ahead  the direction the path takes after the walk under way, or null for none
++     * @param ahead  the direction the path takes after the walk under way, or null for none; only its yaw is used
+      * @param weight how far to lean, from 0 for not at all to {@link #LEAN} for as far as it ever goes
+      */
+     public void offer(Rotation ahead, double weight) {
+@@ -94,11 +102,8 @@ public final class GazeAhead {
+         // the shortest way round: a path that bends across the ±180 seam leans through the seam, not
+         // all the way around the compass
+         final float deltaYaw = Rotation.normalizeYaw(ahead.getYaw() - target.getYaw());
+-        final float deltaPitch = ahead.getPitch() - target.getPitch();
+         final float leanYaw = (float) Math.max(-MAX_LEAN_DEGREES, Math.min(MAX_LEAN_DEGREES, deltaYaw * w));
+-        return new Rotation(
+-                Rotation.normalizeYaw((float) (target.getYaw() + leanYaw)),
+-                (float) (target.getPitch() + deltaPitch * w)
+-        );
++        // the pitch is the target's own, untouched: see the class comment
++        return new Rotation(Rotation.normalizeYaw((float) (target.getYaw() + leanYaw)), target.getPitch());
+     }
+ }
+diff --git a/src/test/java/baritone/behavior/look/GazeAheadTest.java b/src/test/java/baritone/behavior/look/GazeAheadTest.java
+index 40b7636d..88c1c84b 100644
+--- a/src/test/java/baritone/behavior/look/GazeAheadTest.java
++++ b/src/test/java/baritone/behavior/look/GazeAheadTest.java
+@@ -101,11 +101,30 @@ public class GazeAheadTest {
+     }
+ 
+     @Test
+-    public void thePitchLeansToo() {
+-        // the path climbs round the corner and the gaze takes the stairs with it
++    public void thePitchIsNeverLeanedOnto() {
++        // it used to be: the offer's pitch pulled the walking target's halfway. But the pitch of the line to the
++        // next block is the angle down from the eyes to it - about thirty degrees on level ground - and not a
++        // pitch the walk is going to, so the head was dragged to the floor for the whole of every flat walk.
++        // Where the path climbs or falls it is PathExecutor#leanOntoTheSlope that carries the pitch.
+         final GazeAhead gaze = new GazeAhead();
+         gaze.offer(new Rotation(0f, -30f), GazeAhead.LEAN);
+-        assertEquals(-15f, gaze.lean(WALKING, false).getPitch(), 1e-3f);
++        assertEquals(0f, gaze.lean(WALKING, false).getPitch(), 0f);
++        gaze.offer(new Rotation(90f, 45f), GazeAhead.LEAN);
++        final Rotation round = gaze.lean(WALKING, false);
++        assertEquals("a corner still leans the yaw", 45f, round.getYaw(), 1e-3f);
++        assertEquals("and leaves the pitch", 0f, round.getPitch(), 0f);
++    }
++
++    @Test
++    public void aStraightFlatWalkIsNoLeanInEitherAxis() {
++        // the geometry of a flat walk: the next block is straight ahead and about thirty degrees below the eyes,
++        // and the walking target keeps the player's own pitch, whatever it is
++        final GazeAhead gaze = new GazeAhead();
++        final Rotation own = new Rotation(0f, 12f);
++        gaze.offer(new Rotation(0f, 29f), GazeAhead.LEAN);
++        final Rotation leaned = gaze.lean(own, false);
++        assertEquals(0f, leaned.getYaw(), 1e-6f);
++        assertEquals("the player's own pitch, not thirty degrees down", 12f, leaned.getPitch(), 0f);
+     }
+ 
+     @Test
+diff --git a/src/test/java/baritone/behavior/look/HumanlikeLookFuzzTest.java b/src/test/java/baritone/behavior/look/HumanlikeLookFuzzTest.java
+index 778ae64a..6ff2f3a1 100644
+--- a/src/test/java/baritone/behavior/look/HumanlikeLookFuzzTest.java
++++ b/src/test/java/baritone/behavior/look/HumanlikeLookFuzzTest.java
+@@ -829,9 +829,11 @@ public class HumanlikeLookFuzzTest {
+                 midTurn = new Rotation(aim.getYaw(), aim.getPitch());
+             }
+         }
+-        // seven ticks of ramp at 0.08, the full offer from tick 8: 25 degrees over, pitch 8.5
++        // seven ticks of ramp at 0.08, the full offer from tick 8: 25 degrees over, and the pitch the walk's own -
++        // the lean is of the yaw alone (it was 8.5, half of the way to the offer's twelve, and on a real flat walk
++        // that pull put the head thirty degrees down for the whole walk: see GazeAhead)
+         assertEquals("the hand did not settle onto the leaned line", 25f, midTurn.getYaw(), 2f);
+-        assertEquals("the pitch did not follow the offer's share", 8.5f, midTurn.getPitch(), 2f);
++        assertEquals("the pitch left the walk's own: the lean is of the yaw alone", 5f, midTurn.getPitch(), 2f);
+         assertEquals("the offer turned and the hand did not follow", -25f, aim.getYaw(), 2f);
+     }
+ 
+-- 
+2.47.3
+
