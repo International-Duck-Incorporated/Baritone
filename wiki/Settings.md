@@ -1,0 +1,99 @@
+# Settings Reference
+
+All settings are documented in the [Javadocs](https://baritone.leijurv.com/baritone/api/Settings.html#field.detail).
+
+## Changing Settings
+
+In-game, open chat and type the setting name:
+
+```
+allowBreak              # Toggle block breaking on/off
+allowSprint             # Toggle sprinting on/off
+primaryTimeoutMS 250    # Set pathfinding timeout to 250ms
+acceptableThrowawayItems reset  # Reset to default
+reset                   # Reset all settings
+modified                # Show settings changed from default
+```
+
+Settings are saved to `minecraft/baritone/settings.txt`. Delete this file to reset everything.
+
+## Important Settings
+
+### Movement
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `allowSprint` | true | Allow sprinting |
+| `allowBreak` | true | Allow breaking blocks as part of pathing |
+| `allowPlace` | true | Allow placing blocks as part of pathing |
+| `allowParkour` | false | Allow sprint jump parkour |
+| `allowParkourPlace` | false | Allow placing blocks mid-parkour jump |
+| `allowWaterBucketFall` | true | Use water bucket for long falls |
+| `allowVines` | false | Allow climbing and traversing vines |
+| `allowDiagonalAscend` | true | Allow diagonal ascending movements |
+| `assumeSafeWalk` | false | Assume safe walk (no crouch on bridges) |
+| `sprintInWater` | true | Sprint while in water |
+
+### Pathfinding
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `primaryTimeoutMS` | 2000 | Primary pathfinding timeout in ms |
+| `failureTimeoutMS` | 5000 | Failure timeout in ms |
+| `planAheadPrimaryTimeoutMS` | 1500 | Timeout for planning next segment |
+| `planAheadFailureTimeoutMS` | 3500 | Failure timeout for planning ahead |
+| `movementTimeoutTicks` | 10 | Ticks to wait for a movement to complete |
+| `pathingMaxChunkBorderFetch` | 16 | Max chunks to fetch for border pathing |
+
+### Mining
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `legitMine` | false | Only mine ores you can actually see |
+| `legitMineYLevel` | -59 | Y level for legit mining |
+| `mineGoalUpdateInterval` | 5 | Ticks between mine goal rescans |
+| `acceptableThrowawayItems` | cobblestone, dirt, netherrack | Items for placing |
+
+### Building
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `buildInLayers` | false | Build schematic layer by layer |
+| `buildRepeat` | false | Repeat building the same schematic |
+| `buildRepeatCount` | -1 | Number of times to repeat (-1 = infinite) |
+| `buildRepeatSpacing` | 1 | Spacing between repeated builds |
+
+### Chat
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `chatControl` | true | Allow commands without prefix |
+| `chatDebug` | false | Print debug info in chat |
+| `prefixControl` | true | Allow commands with `#` prefix |
+
+### Rendering
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `renderPath` | true | Render the current path |
+| `renderGoal` | true | Render the current goal |
+| `renderSelectionBoxes` | true | Render selection boxes |
+| `renderCachedChunks` | false | Render cached chunks |
+
+### Humanlike
+
+The humanlike features are always on. There are no settings to toggle them. A bot that has to be told to look alive is a bot that looks dead by default.
+
+The only humanlike-adjacent settings are:
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `elytraAutoSwap` | true | Auto-swap elytra when durability is low |
+| `elytraSwapMinimumDurability` | 5 | Minimum durability before swapping |
+
+## Tips
+
+- `primaryTimeoutMS` is the most impactful setting. Lower = faster but less optimal paths. Higher = slower but better paths.
+- `allowParkour` can find shortcuts but may occasionally fail jumps.
+- `legitMine` makes mining look more natural but is slower.
+- `assumeSafeWalk` disables the bridge crouch but may cause falls.

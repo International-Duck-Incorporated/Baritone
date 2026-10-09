@@ -1,150 +1,150 @@
-# Baritone
+# Baritone - International Duck Fork
 
-<p align="center">
-  <a href="https://github.com/cabaletta/baritone/releases/"><img src="https://img.shields.io/github/downloads/cabaletta/baritone/total.svg" alt="GitHub All Releases"/></a>
-</p>
+A Minecraft pathfinder bot with humanlike behavior.
 
-<p align="center">
-  <a href="#Baritone"><img src="https://img.shields.io/badge/MC-1.12.2-brightgreen.svg" alt="Minecraft"/></a>
-  <a href="#Baritone"><img src="https://img.shields.io/badge/MC-1.13.2-yellow.svg" alt="Minecraft"/></a>
-  <a href="#Baritone"><img src="https://img.shields.io/badge/MC-1.14.4-yellow.svg" alt="Minecraft"/></a>
-  <a href="#Baritone"><img src="https://img.shields.io/badge/MC-1.15.2-yellow.svg" alt="Minecraft"/></a>
-  <a href="#Baritone"><img src="https://img.shields.io/badge/MC-1.16.5-yellow.svg" alt="Minecraft"/></a>
-  <a href="#Baritone"><img src="https://img.shields.io/badge/MC-1.17.1-yellow.svg" alt="Minecraft"/></a>
-  <a href="#Baritone"><img src="https://img.shields.io/badge/MC-1.18.2-yellow.svg" alt="Minecraft"/></a>
-  <a href="#Baritone"><img src="https://img.shields.io/badge/MC-1.19.2-brightgreen.svg" alt="Minecraft"/></a>
-  <a href="#Baritone"><img src="https://img.shields.io/badge/MC-1.19.4-brightgreen.svg" alt="Minecraft"/></a>
-  <a href="#Baritone"><img src="https://img.shields.io/badge/MC-1.20.1-brightgreen.svg" alt="Minecraft"/></a>
-  <a href="#Baritone"><img src="https://img.shields.io/badge/MC-1.21.3-brightgreen.svg" alt="Minecraft"/></a>
-</p>
+This is a fork of [Baritone](https://github.com/cabaletta/baritone) focused on making the bot look like a real player. The pathfinding is unchanged; the camera, timing, movement, idle behavior, and reactions are smoothed, varied, and contextual so a spectator standing next to the bot sees a person, not a machine.
 
-<p align="center">
-  <a href="https://travis-ci.com/cabaletta/baritone/"><img src="https://travis-ci.com/cabaletta/baritone.svg?branch=master" alt="Build Status"/></a>
-  <a href="https://github.com/cabaletta/baritone/releases/"><img src="https://img.shields.io/github/release/cabaletta/baritone.svg" alt="Release"/></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-LGPL--3.0%20with%20anime%20exception-green.svg" alt="License"/></a>
-  <a href="https://www.codacy.com/gh/cabaletta/baritone/dashboard?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=cabaletta/baritone&amp;utm_campaign=Badge_Grade"><img src="https://app.codacy.com/project/badge/Grade/cadab857dab049438b6e28b3cfc5570e" alt="Codacy Badge"/></a>
-  <a href="https://github.com/cabaletta/baritone/blob/master/CODE_OF_CONDUCT.md"><img src="https://img.shields.io/badge/%E2%9D%A4-code%20of%20conduct-blue.svg?style=flat" alt="Code of Conduct"/></a>
-  <a href="https://snyk.io/test/github/cabaletta/baritone?targetFile=build.gradle"><img src="https://snyk.io/test/github/cabaletta/baritone/badge.svg?targetFile=build.gradle" alt="Known Vulnerabilities"/></a>
-  <a href="https://github.com/cabaletta/baritone/issues/"><img src="https://img.shields.io/badge/contributions-welcome-brightgreen.svg?style=flat" alt="Contributions welcome"/></a>
-  <a href="https://github.com/cabaletta/baritone/issues/"><img src="https://img.shields.io/github/issues/cabaletta/baritone.svg" alt="Issues"/></a>
-  <a href="https://github.com/cabaletta/baritone/issues?q=is%3Aissue+is%3Aclosed"><img src="https://img.shields.io/github/issues-closed/cabaletta/baritone.svg" alt="GitHub issues-closed"/></a>
-  <a href="https://github.com/cabaletta/baritone/pulls/"><img src="https://img.shields.io/github/issues-pr/cabaletta/baritone.svg" alt="Pull Requests"/></a>
-  <a href="https://github.com/cabaletta/baritone/graphs/contributors/"><img src="https://img.shields.io/github/contributors/cabaletta/baritone.svg" alt="GitHub contributors"/></a>
-  <a href="https://github.com/cabaletta/baritone/commit/"><img src="https://img.shields.io/github/commits-since/cabaletta/baritone/v1.0.0.svg" alt="GitHub commits"/></a>
-  <img src="https://img.shields.io/github/languages/code-size/cabaletta/baritone.svg" alt="Code size"/>
-  <img src="https://img.shields.io/github/repo-size/cabaletta/baritone.svg" alt="GitHub repo size"/>
-  <img src="https://tokei.rs/b1/github/cabaletta/baritone?category=code&style=flat" alt="Lines of Code"/>
-  <img src="https://img.shields.io/badge/Badges-36-blue.svg" alt="yes"/>
-</p>
+[**Discord Server**](http://discord.gg/s6fRBAUpmr)
 
-<p align="center">
-  <a href="https://impactclient.net/"><img src="https://img.shields.io/badge/Impact%20integration-v1.2.14%20/%20v1.3.8%20/%20v1.4.6%20/%20v1.5.3%20/%20v1.6.3-brightgreen.svg" alt="Impact integration"/></a>
-  <a href="https://github.com/lambda-client/lambda"><img src="https://img.shields.io/badge/Lambda%20integration-v1.2.17-brightgreen.svg" alt="Lambda integration"/></a>
-  <a href="https://github.com/fr1kin/ForgeHax/"><img src="https://img.shields.io/badge/ForgeHax%20%22integration%22-scuffed-yellow.svg" alt="ForgeHax integration"/></a>
-  <a href="https://aristois.net/"><img src="https://img.shields.io/badge/Aristois%20add--on%20integration-v1.6.3-green.svg" alt="Aristois add-on integration"/></a>
-  <a href="https://rootnet.dev/"><img src="https://img.shields.io/badge/rootNET%20integration-v1.2.14-green.svg" alt="rootNET integration"/></a>
-  <a href="https://futureclient.net/"><img src="https://img.shields.io/badge/Future%20integration-v1.2.12%20%2F%20v1.3.6%20%2F%20v1.4.4-red" alt="Future integration"/></a>
-  <a href="https://rusherhack.org/"><img src="https://img.shields.io/badge/RusherHack%20integration-v1.2.14-green" alt="RusherHack integration"/></a>
-</p>
+## Supported Minecraft Versions
 
-<p align="center">
-  <a href="http://forthebadge.com/"><img src="https://web.archive.org/web/20230604002050/https://forthebadge.com/images/badges/built-with-swag.svg" alt="forthebadge"/></a>
-  <a href="http://forthebadge.com/"><img src="https://web.archive.org/web/20230604002050/https://forthebadge.com/images/badges/mom-made-pizza-rolls.svg" alt="forthebadge"/></a>
-</p>
+| Branch | Minecraft | Mod Loader | Status |
+|--------|-----------|------------|--------|
+| `26.1` | 26.1, 26.1.1, 26.1.2 | Fabric | [Release v26.1](https://gitlab.com/international-duck-incorporated/Baritone/-/releases/v26.1) |
+| `26.2` | 26.2 | Fabric | [Release v26.2](https://gitlab.com/international-duck-incorporated/Baritone/-/releases/v26.2) |
+| `26.3` | 26.3 | Fabric | [Release v26.3](https://gitlab.com/international-duck-incorporated/Baritone/-/releases/v26.3) |
 
-A Minecraft pathfinder bot.
+## Quick Start
 
-Baritone is the pathfinding system used in [Impact](https://impactclient.net/) since 4.4. [Here's](https://www.youtube.com/watch?v=StquF69-_wI) a (very old!) video I made showing off what it can do.
+Install the mod jar for your Minecraft version, then in-game:
 
-[**Baritone Discord Server**](http://discord.gg/s6fRBAUpmr)
+```
+#goto 1000 500        # Walk to x=1000, z=500
+#mine diamond_ore     # Mine diamond ore
+#path                 # Path to the current goal
+#stop                 # Stop everything
+#elytra               # Elytra fly with fireworks
+```
 
-**Quick download links:**
+For full command reference, see [USAGE.md](USAGE.md).
 
-| Forge                                                                                                         | Fabric                                                                                                          | NeoForge                                                                                                            |
-|---------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------|
-| [1.12.2 Forge](https://github.com/cabaletta/baritone/releases/download/v1.2.19/baritone-api-forge-1.2.19.jar) |                                                                                                                 |                                                                                                                     |
-| [1.16.5 Forge](https://github.com/cabaletta/baritone/releases/download/v1.6.5/baritone-api-forge-1.6.5.jar)   | [1.16.5 Fabric](https://github.com/cabaletta/baritone/releases/download/v1.6.5/baritone-api-fabric-1.6.5.jar)   |                                                                                                                     |
-| [1.17.1 Forge](https://github.com/cabaletta/baritone/releases/download/v1.7.3/baritone-api-forge-1.7.3.jar)   | [1.17.1 Fabric](https://github.com/cabaletta/baritone/releases/download/v1.7.3/baritone-api-fabric-1.7.3.jar)   |                                                                                                                     |
-| [1.18.2 Forge](https://github.com/cabaletta/baritone/releases/download/v1.8.6/baritone-api-forge-1.8.6.jar)   | [1.18.2 Fabric](https://github.com/cabaletta/baritone/releases/download/v1.8.6/baritone-api-fabric-1.8.6.jar)   |                                                                                                                     |
-| [1.19.2 Forge](https://github.com/cabaletta/baritone/releases/download/v1.9.4/baritone-api-forge-1.9.4.jar)   | [1.19.2 Fabric](https://github.com/cabaletta/baritone/releases/download/v1.9.4/baritone-api-fabric-1.9.4.jar)   |                                                                                                                     |
-| [1.19.3 Forge](https://github.com/cabaletta/baritone/releases/download/v1.9.1/baritone-api-forge-1.9.1.jar)   | [1.19.3 Fabric](https://github.com/cabaletta/baritone/releases/download/v1.9.1/baritone-api-fabric-1.9.1.jar)   |                                                                                                                     |
-| [1.19.4 Forge](https://github.com/cabaletta/baritone/releases/download/v1.9.5/baritone-api-forge-1.9.5.jar)   | [1.19.4 Fabric](https://github.com/cabaletta/baritone/releases/download/v1.9.5/baritone-api-fabric-1.9.5.jar)   |                                                                                                                     |
-| [1.20.1 Forge](https://github.com/cabaletta/baritone/releases/download/v1.10.3/baritone-api-forge-1.10.3.jar) | [1.20.1 Fabric](https://github.com/cabaletta/baritone/releases/download/v1.10.3/baritone-api-fabric-1.10.3.jar) |                                                                                                                     |
-| [1.20.3 Forge](https://github.com/cabaletta/baritone/releases/download/v1.10.4/baritone-api-forge-1.10.4.jar) | [1.20.3 Fabric](https://github.com/cabaletta/baritone/releases/download/v1.10.4/baritone-api-fabric-1.10.4.jar) | [1.20.3 NeoForge](https://github.com/cabaletta/baritone/releases/download/v1.10.4/baritone-api-neoforge-1.10.4.jar) |
-| [1.20.4 Forge](https://github.com/cabaletta/baritone/releases/download/v1.10.4/baritone-api-forge-1.10.4.jar) | [1.20.4 Fabric](https://github.com/cabaletta/baritone/releases/download/v1.10.4/baritone-api-fabric-1.10.4.jar) | [1.20.4 NeoForge](https://github.com/cabaletta/baritone/releases/download/v1.10.4/baritone-api-neoforge-1.10.4.jar) |
-| [1.21.1 Forge](https://github.com/cabaletta/baritone/releases/download/v1.11.2/baritone-api-forge-1.11.2.jar) | [1.21.1 Fabric](https://github.com/cabaletta/baritone/releases/download/v1.11.2/baritone-api-fabric-1.11.2.jar) | [1.21.1 NeoForge](https://github.com/cabaletta/baritone/releases/download/v1.11.2/baritone-api-neoforge-1.11.2.jar) |
-| [1.21.3 Forge](https://github.com/cabaletta/baritone/releases/download/v1.11.1/baritone-api-forge-1.11.1.jar) | [1.21.3 Fabric](https://github.com/cabaletta/baritone/releases/download/v1.11.1/baritone-api-fabric-1.11.1.jar) | [1.21.3 NeoForge](https://github.com/cabaletta/baritone/releases/download/v1.11.1/baritone-api-neoforge-1.11.1.jar) |
-| [1.21.4 Forge](https://github.com/cabaletta/baritone/releases/download/v1.13.1/baritone-api-forge-1.13.1.jar) | [1.21.4 Fabric](https://github.com/cabaletta/baritone/releases/download/v1.13.1/baritone-api-fabric-1.13.1.jar) | [1.21.4 NeoForge](https://github.com/cabaletta/baritone/releases/download/v1.13.1/baritone-api-neoforge-1.13.1.jar) |
-| [1.21.5 Forge](https://github.com/cabaletta/baritone/releases/download/v1.14.0/baritone-api-forge-1.14.0.jar) | [1.21.5 Fabric](https://github.com/cabaletta/baritone/releases/download/v1.14.0/baritone-api-fabric-1.14.0.jar) | [1.21.5 NeoForge](https://github.com/cabaletta/baritone/releases/download/v1.14.0/baritone-api-neoforge-1.14.0.jar) |
-| [1.21.6 Forge](https://github.com/cabaletta/baritone/releases/download/v1.15.0/baritone-api-forge-1.15.0.jar) | [1.21.6 Fabric](https://github.com/cabaletta/baritone/releases/download/v1.15.0/baritone-api-fabric-1.15.0.jar) | [1.21.6 NeoForge](https://github.com/cabaletta/baritone/releases/download/v1.15.0/baritone-api-neoforge-1.15.0.jar) |
-| [1.21.7 Forge](https://github.com/cabaletta/baritone/releases/download/v1.15.0/baritone-api-forge-1.15.0.jar) | [1.21.7 Fabric](https://github.com/cabaletta/baritone/releases/download/v1.15.0/baritone-api-fabric-1.15.0.jar) | [1.21.7 NeoForge](https://github.com/cabaletta/baritone/releases/download/v1.15.0/baritone-api-neoforge-1.15.0.jar) |
-| [1.21.8 Forge](https://github.com/cabaletta/baritone/releases/download/v1.15.0/baritone-api-forge-1.15.0.jar) | [1.21.8 Fabric](https://github.com/cabaletta/baritone/releases/download/v1.15.0/baritone-api-fabric-1.15.0.jar) | [1.21.8 NeoForge](https://github.com/cabaletta/baritone/releases/download/v1.15.0/baritone-api-neoforge-1.15.0.jar) |
+## What Makes This Fork Look Human
 
-**How to immediately get started:** Type `#goto 1000 500` in chat to go to x=1000 z=500. Type `#mine diamond_ore` to mine diamond ore. Type `#stop` to stop. For more, read [the usage page](USAGE.md) and/or watch this [tutorial playlist](https://www.youtube.com/playlist?list=PLnwnJ1qsS7CoQl9Si-RTluuzCo_4Oulpa). Also try `#elytra` for Elytra flying in the Nether using fireworks ([trailer](https://youtu.be/4bGGPo8yiHo), [usage](https://youtu.be/NnSlQi-68eQ)). For help, join the [Baritone Discord Server](http://discord.gg/s6fRBAUpmr).
+Everything below is the default. No setting turns it on; a bot that has to be told to look alive is a bot that looks dead by default. Nothing changes what the bot does or how well it does it. It changes how the doing looks.
 
-For other versions of Minecraft or more complicated situations or for development, see [Installation & setup](SETUP.md). For 1.16.5, [click here](https://www.youtube.com/watch?v=_4eVJ9Qz2J8) and see description. Once Baritone is installed, look [here](USAGE.md) for instructions on how to use it. There's a [showcase video](https://youtu.be/CZkLXWo4Fg4) made by @Adovin#6313 on Baritone which I recommend. For help, join the [Baritone Discord Server](http://discord.gg/s6fRBAUpmr).
+### Camera
 
-This project is an updated version of [MineBot](https://github.com/leijurv/MineBot/),
-the original version of the bot for Minecraft 1.8.9, rebuilt for 1.12.2 onwards. Baritone focuses on reliability and particularly performance (it's over [30x faster](https://github.com/cabaletta/baritone/pull/180#issuecomment-423822928) than MineBot at calculating paths).
+- **Eased aim** - The camera accelerates and decelerates, capped at 18/s yaw and 9/s pitch, instead of snapping.
+- **Turn tempo** - Every turn draws its own speed (0.85x to 1.15x), so the same corner walked twice is never the same ticks of the same steps.
+- **Reaction beat** - 2 to 4 ticks before the aim starts toward a new target. Only while standing still.
+- **Overshoot** - The hand goes a few percent past the target and eases back, only while walking.
+- **Two-axis sway** - Both yaw and pitch wander a fraction of a degree, smoothed so it drifts rather than shivers.
+- **Aim scatter** - The crosshair lands on a point of the block, not the center, different each run.
+- **Approach look** - The eyes turn toward the target block over the last 6 blocks of the walk.
+- **Gaze lean** - The head leans around the corner before the feet get there.
+- **Pitch wander** - The pitch settles a few degrees this way and that, pulled by the slope ahead.
+- **Walk glance** - Every 5 to 15 seconds the head turns to the side; now and then the feet stop for it.
+- **Flinch** - A blow turns the head at full speed, held for 10 to 30 ticks, tracked if the attacker moves.
 
-Have committed at least once a day from Aug 1, 2018, to Aug 1, 2019.
+### Idle Behavior
 
-1Leijurv3DWTrGAfmmiTphjhXLvQiHg7K2
+- **Post-job sway** - When a job ends, the body keeps swaying, glancing, and noticing until the human arrives.
+- **Idle glance** - Every 3 to 8 seconds, bounded to 28 yaw / 7 pitch, one in four looks at the hand.
+- **Notice people** - One glance in three goes to the nearest player or creature within 12 blocks.
+- **Newcomer detection** - Someone arriving in view is looked at once, a quarter to seven tenths of a second later.
+- **Idle fidget** - A swing at the air every 10 to 60 seconds. Animation only, no click.
 
-# Getting Started
+### Timing
 
-Here are some links to help to get started:
+Nothing repeats on a fixed interval:
 
-- [Features](FEATURES.md)
+- **Jittered intervals** - Every repeated interval redraws its length, +/- 1 tick from the setting.
+- **Settle beat** - 1 to 2 ticks between the crosshair arriving and the swing.
+- **Sprint windup** - 2 to 4 ticks of walking before sprinting on a new run.
+- **Key beat** - 1 to 2 ticks of no keys between a direction and its opposite.
+- **Hotbar switch** - 2 to 5 ticks between deciding on a slot and pressing it, with no mouse button during.
+- **Landing rest** - A jittered beat of standing after a fall. Longer for longer drops.
+- **Sprint hangover** - The sprint key trails off over 1 to 3 ticks instead of stopping instantly.
 
-- [Installation & setup](SETUP.md)
+### Movement
 
-- [API Javadocs](https://baritone.leijurv.com/)
+- **Key reversal beat** - W becoming S costs 1 to 2 ticks of no keys while the hand repositions.
+- **Head leads feet** - The body waits for the head to turn within 60 of the way the feet are going.
+- **Bridge crouch** - A crossing is walked crouched from one edge to the other, priced as crouched.
+- **Eight-direction keys** - Keys are chosen by angle, not scaled distance, and camera + keys are chosen together.
 
-- [Settings](https://baritone.leijurv.com/baritone/api/Settings.html#field.detail)
+### Other
 
-- [Usage (chat control)](USAGE.md)
+- **Elytra auto-swap guard** - The three swap clicks wait for the player's own inventory; half-applied sequences finish.
+- **Face trace** - Placement clicks ask the face they need, not the block center.
+- **5 counted edges** - Tests that pin which files may write rotation, slot, buttons, clicks, and keys.
 
-- [What makes this fork look human](HUMANLIKE.md) (camera, timing, idle behaviour)
+Full details: [HUMANLIKE.md](HUMANLIKE.md)
 
-## Stars over time
+## Installation
 
-[![Stargazers over time](https://starchart.cc/cabaletta/baritone.svg)](https://starchart.cc/cabaletta/baritone)
+See [SETUP.md](SETUP.md) for build-from-source instructions and loader-specific setup.
 
-# API
+### Prebuilt Releases
 
-The API is heavily documented, you can find the Javadocs for the latest release [here](https://baritone.leijurv.com/).
-Please note that usage of anything located outside of the `baritone.api` package is not supported by the API release
-jar.
+Download from the [Releases](https://gitlab.com/international-duck-incorporated/Baritone/-/releases) page.
 
-Below is an example of basic usage for changing some settings, and then pathing to an X/Z goal.
+- **baritone-api-\*.jar** - Only non-API packages are obfuscated. Use when other mods integrate with Baritone.
+- **baritone-standalone-\*.jar** - Everything obfuscated. Extra performance, no mod integration.
+- **baritone-unoptimized-\*.jar** - Nothing obfuscated. For crash reports and debugging.
+
+### Build From Source
+
+```bash
+git clone https://gitlab.com/international-duck-incorporated/Baritone.git
+cd Baritone
+git checkout 26.3   # or 26.1, 26.2
+./gradlew build
+```
+
+Artifacts are in `dist/`.
+
+Requires Java 25. On a box with less than 4 GB RAM, override the JVM args:
+
+```bash
+./gradlew build -Dorg.gradle.jvmargs="-Xmx640m -XX:MaxMetaspaceSize=256m -XX:+UseSerialGC" --no-daemon --max-workers=1
+```
+
+## API
 
 ```java
 BaritoneAPI.getSettings().allowSprint.value = true;
 BaritoneAPI.getSettings().primaryTimeoutMS.value = 2000L;
-BaritoneAPI.getProvider().getPrimaryBaritone().getCustomGoalProcess().setGoalAndPath(new GoalXZ(10000, 20000));
+BaritoneAPI.getProvider().getPrimaryBaritone().getCustomGoalProcess()
+    .setGoalAndPath(new GoalXZ(10000, 20000));
 ```
 
-# FAQ
+Javadocs: [baritone.leijurv.com](https://baritone.leijurv.com/)
 
-## Can I use Baritone as a library in my custom utility client?
+Only the `baritone.api` package is part of the public API. Usage of anything outside it is not supported.
 
-That's what it's for, sure! (As long as usage complies with the LGPL 3.0 License)
+## Settings
 
-## How is it so fast?
+All settings are documented at [Settings](https://baritone.leijurv.com/baritone/api/Settings.html#field.detail).
 
-Magic. (Hours of [leijurv](https://github.com/leijurv/) enduring excruciating pain)
+Toggle a boolean setting by saying its name in chat. Set a numeric value by saying its name then the number. Reset all settings with `reset`.
 
-### Additional Special Thanks To:
+## Wiki
 
-![YourKit-Logo](https://www.yourkit.com/images/yklogo.png)
+- [Getting Started](wiki/Getting-Started.md)
+- [Commands](wiki/Commands.md)
+- [Humanlike Features](wiki/Humanlike-Features.md)
+- [Settings Reference](wiki/Settings.md)
+- [Building from Source](wiki/Building.md)
+- [API Guide](wiki/API.md)
+- [Contributing](wiki/Contributing.md)
 
-YourKit supports open source projects with innovative and intelligent tools for monitoring and profiling Java and .NET applications.
+## License
 
-YourKit is the creator of the [YourKit Java Profiler](https://www.yourkit.com/java/profiler/), [YourKit .NET Profiler](https://www.yourkit.com/.net/profiler/), and [YourKit YouMonitor](https://www.yourkit.com/youmonitor/).
+LGPL 3.0 with anime exception. See [LICENSE](LICENSE).
 
-We thank them for granting Baritone an OSS license so that we can make our software the best it can be.
+## Credits
 
-## Why is it called Baritone?
+Originally by [leijurv](https://github.com/leijurv/). Humanlike behavior by the International Duck team.
 
-It's named for FitMC's deep sultry voice.
+YourKit supports open source projects with intelligent tools for monitoring and profiling Java and .NET applications. [YourKit Java Profiler](https://www.yourkit.com/java/profiler/)
