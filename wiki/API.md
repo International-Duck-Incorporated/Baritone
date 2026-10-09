@@ -4,11 +4,15 @@ Baritone has a public API in the `baritone.api` package. Usage of anything outsi
 
 Javadocs: [baritone.leijurv.com](https://baritone.leijurv.com/)
 
+> The examples here are copied against `src/api/java/baritone/api/`, which is the source of truth. Nothing
+> compiles them yet, so a signature that moves does not fail the build - check them against the interfaces
+> before relying on one.
+
 ## Basic Usage
 
 ```java
 import baritone.api.BaritoneAPI;
-import baritone.api.utils.GoalXZ;
+import baritone.api.pathing.goals.GoalXZ;   // the goals live in pathing.goals, not utils
 
 // Enable sprinting
 BaritoneAPI.getSettings().allowSprint.value = true;
@@ -47,20 +51,27 @@ baritone.getCustomGoalProcess().setGoalAndPath(goal);
 baritone.getCustomGoalProcess().setGoal(goal);  // set without pathing
 baritone.getPathingBehavior().cancelEverything();
 
-// Mining
-baritone.getMineProcess().mine("diamond_ore");
-baritone.getMineProcess().mine(64, "diamond_ore");
+// Mining - the target is a BlockOptionalMeta, not a String; there is no String overload.
+// A BlockOptionalMeta can be built from a selector string, which is what #mine parses into.
+baritone.getMineProcess().mine(new BlockOptionalMeta("diamond_ore"));
+baritone.getMineProcess().mine(64, new BlockOptionalMeta("diamond_ore"));
 
 // Building
 baritone.getBuilderProcess().build("file.schematic", origin);
 
-// Following
-baritone.getFollowProcess().follow("playerName");
+// Following - the filter is a Predicate<Entity>; there is no String overload.
+baritone.getFollowProcess().follow(entity -> entity instanceof Player
+        && entity.getName().getString().equalsIgnoreCase("playerName"));
 ```
 
 ## Events
 
 Subscribe to events:
+
+`IGameEventListener` is an interface with sixteen abstract methods and the fork ships no adapter, so an
+anonymous listener has to implement all sixteen - the example below overrides three and is only valid with
+the other thirteen filled in (empty bodies are enough). It lives in `baritone.api.event.listener`, and the
+interaction callback is `onBlockInteract(BlockInteractEvent)`; there is no `onPlayerInteract`.
 
 ```java
 BaritoneAPI.getProvider().getPrimaryBaritone().getGameEventHandler()
@@ -71,8 +82,8 @@ BaritoneAPI.getProvider().getPrimaryBaritone().getGameEventHandler()
         }
 
         @Override
-        public void onPlayerInteract(PlayerInteractEvent event) {
-            // Called on player interaction
+        public void onBlockInteract(BlockInteractEvent event) {
+            // Called on block interaction
         }
 
         @Override
@@ -95,14 +106,11 @@ IBaritone baritone = BaritoneAPI.getProvider().getBaritoneForPlayer(player);
 ## Pathing
 
 ```java
-// Get current path
-IPath path = baritone.getPathingBehavior().getPath();
+// Get current path - Optional, because there is no path before the first calculation lands
+Optional<IPath> path = baritone.getPathingBehavior().getPath();
 
 // Check if pathing
 boolean isPathing = baritone.getPathingBehavior().isPathing();
-
-// Get path calculation progress
-PathCalculationResult result = baritone.getPathingBehavior().getPathfinder().calculate();
 ```
 
 ## Settings
@@ -125,11 +133,13 @@ settings.acceptableThrowawayItems.value.add(Items.STONE);
 
 ## Mod Integration
 
-If you are integrating Baritone into your mod, use the `baritone-api-*.jar` artifact. This keeps the API classes unobfuscated while obfuscating internals for performance.
+This fork does not build a separate api artifact; `baritone-api-*.jar` is upstream's naming and does not
+appear in any `build.gradle` here. Depend on the loader jar for your loader and code against
+`baritone.api`, which is the package this page documents and the only one that counts as supported.
 
 Key interfaces:
 - `IBaritone` - Main entry point
-- `IGoalProcess` - Goal/path management
+- `ICustomGoalProcess` - Goal/path management (there is no `IGoalProcess`)
 - `IMineProcess` - Mining
 - `IBuilderProcess` - Building
 - `IFollowProcess` - Following

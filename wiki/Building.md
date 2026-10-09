@@ -82,11 +82,23 @@ export PATH="$JAVA_HOME/bin:$PATH"
 
 ## Build Artifacts
 
-| Artifact | Description |
-|----------|-------------|
-| `baritone-api-*.jar` | Only non-API packages obfuscated. For mod integration. |
-| `baritone-standalone-*.jar` | Everything obfuscated. Best performance. |
-| `baritone-unoptimized-*.jar` | Nothing obfuscated. For debugging. |
+> The task and classifier names here are read out of each loader's `build.gradle`, which is the source of
+> truth for them.
+
+This fork builds one jar per loader rather than upstream's api / standalone / unoptimized trio; those three
+names do not appear anywhere in the build. The loader modules are `fabric`, `forge`, `neoforge` and
+`tweaker`, the archive base name is `baritone` (`gradle.properties`, with `neoforge` appending `-neoforge`),
+and each module declares three variants:
+
+| Task | Classifier | Description |
+|------|-----------|-------------|
+| `remapJar` | none | The remapped jar, built from the shadow jar's output. This is the one a loader loads. |
+| `shadowJar` | `dev-shadow` | Dependencies shadowed in, not remapped. What `scripts/headless/README.md` drives. |
+| `jar` | `dev` | The plain compiled jar, for debugging against sources. |
+
+So `./gradlew :fabric:shadowJar` produces the Fabric `dev-shadow` jar - the invocation
+`scripts/headless/README.md` is written around, and a known-good one: that harness has run this tree in a
+real client.
 
 Each is available for Forge, Fabric, and NeoForge loaders.
 

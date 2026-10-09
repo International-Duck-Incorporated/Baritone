@@ -16,9 +16,14 @@ Drop the jar into your `mods/` folder. That's it.
 
 ### Which Jar?
 
-- **baritone-api-\*.jar** - Only non-API packages are obfuscated. Use when other mods integrate with Baritone.
-- **baritone-standalone-\*.jar** - Everything obfuscated. A bit faster, but no mod integration.
-- **baritone-unoptimized-\*.jar** - Nothing obfuscated. For crash reports and debugging only.
+Pick the jar for your loader - `fabric`, `forge`, `neoforge` or `tweaker` - and take the one with no
+classifier suffix, which is the remapped jar a loader actually loads. The `-dev-shadow` jar has its
+dependencies shadowed in but is not remapped, and the `-dev` jar is the plain compiled one for debugging;
+neither is what goes in `mods/`.
+
+The names upstream Baritone used - `baritone-api`, `baritone-standalone`, `baritone-unoptimized` - are not
+built by this fork, so a release will not have them. See `wiki/Building.md` for the tasks and classifiers
+each loader declares.
 
 ### Build From Source
 
