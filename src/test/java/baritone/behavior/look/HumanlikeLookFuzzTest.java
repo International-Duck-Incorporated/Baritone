@@ -829,9 +829,11 @@ public class HumanlikeLookFuzzTest {
                 midTurn = new Rotation(aim.getYaw(), aim.getPitch());
             }
         }
-        // seven ticks of ramp at 0.08, the full offer from tick 8: 25 degrees over, pitch 8.5
+        // seven ticks of ramp at 0.08, the full offer from tick 8: 25 degrees over, and the pitch the walk's own -
+        // the lean is of the yaw alone (it was 8.5, half of the way to the offer's twelve, and on a real flat walk
+        // that pull put the head thirty degrees down for the whole walk: see GazeAhead)
         assertEquals("the hand did not settle onto the leaned line", 25f, midTurn.getYaw(), 2f);
-        assertEquals("the pitch did not follow the offer's share", 8.5f, midTurn.getPitch(), 2f);
+        assertEquals("the pitch left the walk's own: the lean is of the yaw alone", 5f, midTurn.getPitch(), 2f);
         assertEquals("the offer turned and the hand did not follow", -25f, aim.getYaw(), 2f);
     }
 

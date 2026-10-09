@@ -29,6 +29,14 @@ import baritone.api.utils.Rotation;
  * its end. On a straight line the two directions are the same and the lean is nothing at all, which is
  * the point: the head only leads where the path actually bends.
  * <p>
+ * The lean is of the yaw alone. The direction the path takes next has a pitch too, but the pitch from the eyes
+ * down to the centre of the next block is about thirty degrees on level ground - not the pitch of a level walk,
+ * so the two directions are not "the same" on a straight line in that axis, and leaning onto it held the head
+ * on the floor two blocks ahead for the whole of every flat walk (measured in the client: a median of 29
+ * degrees down, 93% of the walk past fifteen, with the target level). The pitch belongs to
+ * {@link PitchWander}, which keeps it near level, and to {@code PathExecutor#leanOntoTheSlope}, which carries it
+ * where the path climbs or falls.
+ * <p>
  * Only ever a lean on a walking target. A target that is about to be clicked is aimed at exactly, under
  * every rule this fork has, and this stands aside for those like the sway and the carry do - see
  * {@code LookBehavior#updateTarget}. And it is one tick of memory at most: the walk offers where the
@@ -59,7 +67,7 @@ public final class GazeAhead {
     /**
      * Where the path goes next, and how far the gaze may lean onto it this tick.
      *
-     * @param ahead  the direction the path takes after the walk under way, or null for none
+     * @param ahead  the direction the path takes after the walk under way, or null for none; only its yaw is used
      * @param weight how far to lean, from 0 for not at all to {@link #LEAN} for as far as it ever goes
      */
     public void offer(Rotation ahead, double weight) {
@@ -94,11 +102,8 @@ public final class GazeAhead {
         // the shortest way round: a path that bends across the ±180 seam leans through the seam, not
         // all the way around the compass
         final float deltaYaw = Rotation.normalizeYaw(ahead.getYaw() - target.getYaw());
-        final float deltaPitch = ahead.getPitch() - target.getPitch();
         final float leanYaw = (float) Math.max(-MAX_LEAN_DEGREES, Math.min(MAX_LEAN_DEGREES, deltaYaw * w));
-        return new Rotation(
-                Rotation.normalizeYaw((float) (target.getYaw() + leanYaw)),
-                (float) (target.getPitch() + deltaPitch * w)
-        );
+        // the pitch is the target's own, untouched: see the class comment
+        return new Rotation(Rotation.normalizeYaw((float) (target.getYaw() + leanYaw)), target.getPitch());
     }
 }

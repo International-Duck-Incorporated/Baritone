@@ -101,11 +101,30 @@ public class GazeAheadTest {
     }
 
     @Test
-    public void thePitchLeansToo() {
-        // the path climbs round the corner and the gaze takes the stairs with it
+    public void thePitchIsNeverLeanedOnto() {
+        // it used to be: the offer's pitch pulled the walking target's halfway. But the pitch of the line to the
+        // next block is the angle down from the eyes to it - about thirty degrees on level ground - and not a
+        // pitch the walk is going to, so the head was dragged to the floor for the whole of every flat walk.
+        // Where the path climbs or falls it is PathExecutor#leanOntoTheSlope that carries the pitch.
         final GazeAhead gaze = new GazeAhead();
         gaze.offer(new Rotation(0f, -30f), GazeAhead.LEAN);
-        assertEquals(-15f, gaze.lean(WALKING, false).getPitch(), 1e-3f);
+        assertEquals(0f, gaze.lean(WALKING, false).getPitch(), 0f);
+        gaze.offer(new Rotation(90f, 45f), GazeAhead.LEAN);
+        final Rotation round = gaze.lean(WALKING, false);
+        assertEquals("a corner still leans the yaw", 45f, round.getYaw(), 1e-3f);
+        assertEquals("and leaves the pitch", 0f, round.getPitch(), 0f);
+    }
+
+    @Test
+    public void aStraightFlatWalkIsNoLeanInEitherAxis() {
+        // the geometry of a flat walk: the next block is straight ahead and about thirty degrees below the eyes,
+        // and the walking target keeps the player's own pitch, whatever it is
+        final GazeAhead gaze = new GazeAhead();
+        final Rotation own = new Rotation(0f, 12f);
+        gaze.offer(new Rotation(0f, 29f), GazeAhead.LEAN);
+        final Rotation leaned = gaze.lean(own, false);
+        assertEquals(0f, leaned.getYaw(), 1e-6f);
+        assertEquals("the player's own pitch, not thirty degrees down", 12f, leaned.getPitch(), 0f);
     }
 
     @Test
