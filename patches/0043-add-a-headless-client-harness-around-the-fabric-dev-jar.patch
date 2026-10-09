@@ -1,0 +1,371 @@
+From a145acc581e3666730c22234fd00a71de3ea9d9e Mon Sep 17 00:00:00 2001
+From: 0xFFshell <0xffshell@users.noreply.gitlab.com>
+Date: Fri, 9 Oct 2026 07:25:59 +0000
+Subject: [PATCH] scripts: a headless client harness - Xvfb, Mesa lavapipe and
+ Fabric Loader around the dev-shadow jar
+
+fetch.py gets the vanilla client, its libraries, the asset objects (not the
+sounds) and Fabric Loader's libraries at the versions gradle.properties pins.
+run.sh starts the client under Xvfb inside a 2 GB box: -Xmx640m, no Gradle
+alive, graphicsPreset pinned to custom and render distance 2. drive.sh clicks,
+types into the chat, takes screenshots and makes a superflat world. The README
+records what each hazard cost.
+
+Verified from an empty directory with nothing from earlier runs: world created,
+#help answered, #goto ~30 ~ ~20 walked to its goal block, no exception.
+---
+ scripts/headless/README.md |  64 +++++++++++++++++
+ scripts/headless/drive.sh  |  45 ++++++++++++
+ scripts/headless/fetch.py  | 138 +++++++++++++++++++++++++++++++++++++
+ scripts/headless/run.sh    |  71 +++++++++++++++++++
+ 4 files changed, 318 insertions(+)
+ create mode 100644 scripts/headless/README.md
+ create mode 100755 scripts/headless/drive.sh
+ create mode 100755 scripts/headless/fetch.py
+ create mode 100755 scripts/headless/run.sh
+
+diff --git a/scripts/headless/README.md b/scripts/headless/README.md
+new file mode 100644
+index 00000000..ba9d65ab
+--- /dev/null
++++ b/scripts/headless/README.md
+@@ -0,0 +1,64 @@
++# A Minecraft client with no screen
++
++Runs Minecraft 26.3 with this checkout's Baritone in it, on a machine with no display and no GPU, so a change can be
++walked in a real game instead of only being read. It exists because the first walk in one found a crash that every
++unit test had missed (`PathExecutorBoundsTest` is the record of it).
++
++What is in it: Xvfb for the display, Mesa's software Vulkan (lavapipe) for the renderer, the vanilla client, Fabric
++Loader, and `fabric/build/libs/*-dev-shadow.jar`. Nothing here touches the build or the product.
++
++## What it needs
++
++- Debian or Ubuntu packages: `xvfb libgl1 libgl1-mesa-dri libglx-mesa0 libegl1 mesa-vulkan-drivers libvulkan1 xdotool
++  imagemagick libxrandr2 libxcursor1 libxxf86vm1 libxi6 libxrender1 libxext6 libxtst6 libxinerama1 libxkbcommon0`
++- Java 25 (`JAVA=` if it is not the `java` on the path), and Python 3.
++- Measured on 2 vCPU, 1.9 GB, no swap, Debian 13: with `-Xmx640m` the client is **1.25 to 1.3 GB resident**, runs at
++  about 13 fps (render distance 2, software Vulkan), and the integrated server spends **2.5 of its 50 ms** a tick.
++  A Gradle build (about 1 GB) does not fit beside it: build, stop Gradle, then start the client. `run.sh` refuses to
++  start while Gradle is alive.
++
++## The steps
++
++```
++python3 scripts/headless/fetch.py              # 227 MB, about 4 s; versions come from gradle.properties
++./gradlew :fabric:shadowJar                    # 25-30 s warm; no client running
++scripts/headless/run.sh                        # in the background; the log is $BARITONE_HEADLESS/client.log
++                                               # about 25 s to the title screen
++scripts/headless/drive.sh newworld             # once: a superflat world, commands on, peaceful
++scripts/headless/drive.sh chat '#goto ~30 ~ ~20'
++scripts/headless/drive.sh key F3               # the debug overlay: position, facing, ms per tick
++scripts/headless/drive.sh shot /tmp/a.png 60   # the game window, scaled to 60%
++grep CHAT "$BARITONE_HEADLESS/client.log"      # what Baritone and the game said
++```
++
++`BARITONE_HEADLESS` is where everything lives (default `~/baritone-headless`). Later starts enter the saved world at
++once. The default window is 854x480 on a 1024x600 screen; `drive.sh` clicks at coordinates for exactly that.
++
++## What cost a run each, so it need not again
++
++- **OpenGL does not come up under Xvfb** ("Couldn't find matching GLX visual"). The client falls back to Vulkan by
++  itself; the log says `Using graphics backend Vulkan ... llvmpipe`.
++- **The title screen needs the asset objects**: its panorama is an asset, not part of the jar, and a client without
++  them crashes at the first reload. `fetch.py` takes every object except the sounds.
++- **The first-run screen** ("Would you like to enable the Narrator") takes the first clicks. `run.sh` sets
++  `onboardAccessibility:false`.
++- **A graphics preset puts its own distances back at every start.** A game-written `options.txt` says
++  `graphicsPreset:"fancy"`, which means render distance 16 whatever the file says: the heap fills, the client drops to
++  8 fps and a walk never finishes. `run.sh` pins `graphicsPreset:"custom"`, render distance 2, simulation distance 5.
++- **Slimes spawn on a superflat surface by day** and killed the player 40 seconds into the first run. `newworld` sets
++  peaceful. A player who dies stays dead in the save, and the next start opens on the death screen:
++  `drive.sh respawn`.
++- **A crash in the tick** logs `Unreported exception thrown!`, writes `game/crash-reports/`, and may leave the
++  process alive with a black screen. Count `Unreported`, `IndexOutOfBounds`, `NoClassDefFound`, `MixinApply` in
++  the log after every run.
++- **`T: 20` on the first line of F3 is the frame cap** (`maxFps`), not the tick rate. The server's cost is the
++  `Integrated server @ x/50.0 ms` line on the right of the overlay.
++- The shadow jar does not carry `nether-pathfinder` (only `remapJar` nests it) and Baritone asks for it at start-up,
++  so `run.sh` adds it from the Gradle cache; `fabric/build/libs` can hold several shadow jars, and it takes the newest.
++
++## What it can and cannot see
++
++It shows that the mod loads (every mixin applies), that commands run, and that a path can be walked to its end,
++by position, facing and screenshots. It has **no per-tick record**: nothing here logs keys, yaw or pitch per tick, so
++a rhythm or an angle over time is out of its reach until something writes one. Rendering is software, so frame
++timing says nothing about a real machine; tick timing does.
+diff --git a/scripts/headless/drive.sh b/scripts/headless/drive.sh
+new file mode 100755
+index 00000000..e578ca5b
+--- /dev/null
++++ b/scripts/headless/drive.sh
+@@ -0,0 +1,45 @@
++#!/bin/bash
++# Drives the headless client the way a person would - the mouse and the keyboard, through xdotool - and reads
++# it the way a person would: screenshots, and the log. The screen is 1024x600 and the game window is 854x480
++# at (85, 60); the coordinates below are on the screen, for a window of that size.
++#
++# usage: drive.sh chat TEXT | key KEY | click X Y | shot FILE [PERCENT] | wait-login | respawn | newworld
++#   chat       opens the chat with t, types TEXT, sends it ('#goto ~30 ~ ~20', '/difficulty peaceful')
++#   shot       the game window, optionally scaled down, as a PNG
++#   newworld   on a fresh game directory only: creates a superflat world with commands on, waits for the
++#              login, and sets the difficulty to peaceful (slimes spawn on a superflat surface by day)
++# environment: BARITONE_HEADLESS (default ~/baritone-headless), HEADLESS_DISPLAY (:99)
++set -eu
++MC_DIR="${BARITONE_HEADLESS:-$HOME/baritone-headless}"
++export DISPLAY="${HEADLESS_DISPLAY:-:99}"
++LOG="$MC_DIR/client.log"
++
++click() { xdotool mousemove "$1" "$2"; sleep 0.4; xdotool click 1; sleep 0.8; }
++chat() { xdotool key t; sleep 1.2; xdotool type --delay 80 -- "$1"; sleep 0.6; xdotool key Return; }
++
++case "${1:-}" in
++    chat) chat "$2" ;;
++    key) xdotool key "$2" ;;
++    click) click "$2" "$3" ;;
++    shot) import -window root png:- | convert png:- -crop 854x480+85+60 +repage -resize "${3:-100}%" "$2" ;;
++    wait-login)
++        for _ in $(seq 1 45); do
++            grep -q 'logged in with entity id' "$LOG" 2>/dev/null && exit 0
++            sleep 2
++        done
++        echo "drive.sh: no login in 90 seconds - see $LOG" >&2
++        exit 1 ;;
++    respawn) click 511 343 ;;
++    newworld)
++        click 511 296   # Singleplayer: with no world saved the game goes straight to Create New World
++        sleep 2
++        click 400 343   # Allow Commands: ON
++        click 512 87    # the World tab
++        click 351 149   # World Type: Superflat
++        click 776 295   # Generate Structures: OFF
++        click 353 507   # Create New World
++        "$0" wait-login
++        sleep 6
++        chat '/difficulty peaceful' ;;
++    *) sed -n '2,12p' "$0"; exit 2 ;;
++esac
+diff --git a/scripts/headless/fetch.py b/scripts/headless/fetch.py
+new file mode 100755
+index 00000000..b939bf7a
+--- /dev/null
++++ b/scripts/headless/fetch.py
+@@ -0,0 +1,138 @@
++#!/usr/bin/env python3
++"""Fetches what a headless Baritone client needs and Gradle does not leave lying around.
++
++  - the vanilla client jar and its Linux libraries, from Mojang's version manifest
++  - the asset index and every asset object except the sounds (the title screen's panorama is an asset;
++    the sounds are not needed and are four fifths of the weight)
++  - the Fabric Loader's libraries, from Fabric's launcher profile
++
++usage: fetch.py [--dir DIR] [--minecraft VERSION] [--loader VERSION]
++
++The versions default to the ones pinned in gradle.properties, DIR to $BARITONE_HEADLESS or
++~/baritone-headless. Mojang's files are checked against the hash they were published with, and files
++that are already there are not fetched again. See README.md in this directory.
++"""
++import argparse
++import hashlib
++import json
++import os
++import re
++import sys
++import urllib.request
++from concurrent.futures import ThreadPoolExecutor
++
++REPO = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..'))
++MAVEN_CENTRAL = 'https://repo.maven.apache.org/maven2/'
++
++
++def properties():
++    found = {}
++    with open(os.path.join(REPO, 'gradle.properties')) as f:
++        for line in f:
++            m = re.match(r'^\s*([\w.]+)\s*=\s*(.*?)\s*$', line)
++            if m:
++                found[m.group(1)] = m.group(2)
++    return found
++
++
++def fetch_json(url):
++    with urllib.request.urlopen(url, timeout=60) as r:
++        return json.load(r)
++
++
++def on_linux(library):
++    allowed = 'rules' not in library
++    for rule in library.get('rules', []):
++        if rule.get('os', {}).get('name') in (None, 'linux'):
++            allowed = rule['action'] == 'allow'
++    return allowed
++
++
++def download(job):
++    dest, urls, sha1 = job
++    if os.path.exists(dest):
++        if sha1 is None or hashlib.sha1(open(dest, 'rb').read()).hexdigest() == sha1:
++            return 'cached'
++    os.makedirs(os.path.dirname(dest), exist_ok=True)
++    for url in urls:
++        for _ in range(3):
++            try:
++                with urllib.request.urlopen(url, timeout=60) as r:
++                    data = r.read()
++            except Exception:
++                continue
++            if sha1 is None or hashlib.sha1(data).hexdigest() == sha1:
++                with open(dest, 'wb') as f:
++                    f.write(data)
++                return 'ok'
++    return 'FAILED ' + urls[0]
++
++
++def run(jobs, label):
++    with ThreadPoolExecutor(12) as pool:
++        results = list(pool.map(download, jobs))
++    failed = [r for r in results if r.startswith('FAILED')]
++    print('%-12s %4d files: %d fetched, %d already there, %d failed'
++          % (label, len(results), results.count('ok'), results.count('cached'), len(failed)))
++    if failed:
++        sys.exit('\n'.join(failed[:5]))
++
++
++def main():
++    pins = properties()
++    ap = argparse.ArgumentParser()
++    ap.add_argument('--dir', default=os.environ.get('BARITONE_HEADLESS', os.path.expanduser('~/baritone-headless')))
++    ap.add_argument('--minecraft', default=pins['minecraft_version'])
++    ap.add_argument('--loader', default=pins['fabric_version'])
++    args = ap.parse_args()
++    root = os.path.abspath(args.dir)
++
++    manifest = fetch_json('https://piston-meta.mojang.com/mc/game/version_manifest_v2.json')
++    entry = next((v for v in manifest['versions'] if v['id'] == args.minecraft), None)
++    if entry is None:
++        sys.exit('Minecraft %s is not in the version manifest' % args.minecraft)
++    version = fetch_json(entry['url'])
++
++    client = version['downloads']['client']
++    jobs = [(root + '/client.jar', [client['url']], client['sha1'])]
++    classpath = [root + '/client.jar']
++    for lib in version['libraries']:
++        artifact = lib['downloads'].get('artifact')
++        if artifact and on_linux(lib):
++            dest = root + '/libs/' + artifact['path'].replace('/', '__')
++            jobs.append((dest, [artifact['url']], artifact['sha1']))
++            classpath.append(dest)
++    run(jobs, 'client')
++
++    index = version['assetIndex']
++    index_path = '%s/assets/indexes/%s.json' % (root, index['id'])
++    run([(index_path, [index['url']], index['sha1'])], 'asset index')
++    with open(index_path) as f:
++        objects = json.load(f)['objects']
++    wanted = []
++    for name, obj in objects.items():
++        if not name.endswith('.ogg'):
++            h = obj['hash']
++            wanted.append(('%s/assets/objects/%s/%s' % (root, h[:2], h), ['https://resources.download.minecraft.net/%s/%s' % (h[:2], h)], h))
++    run(wanted, 'assets')
++
++    profile = fetch_json('https://meta.fabricmc.net/v2/versions/loader/%s/%s/profile/json' % (args.minecraft, args.loader))
++    fabric_jobs = []
++    fabric_classpath = []
++    for lib in profile['libraries']:
++        group, artifact, ver = lib['name'].split(':')
++        rel = '%s/%s/%s/%s-%s.jar' % (group.replace('.', '/'), artifact, ver, artifact, ver)
++        dest = '%s/fabric-libs/%s-%s.jar' % (root, artifact, ver)
++        fabric_jobs.append((dest, [lib.get('url', 'https://maven.fabricmc.net/').rstrip('/') + '/' + rel, MAVEN_CENTRAL + rel], None))
++        fabric_classpath.append(dest)
++    run(fabric_jobs, 'fabric')
++
++    for name, text in (('classpath.txt', ':'.join(classpath)), ('fabric-classpath.txt', ':'.join(fabric_classpath)),
++                       ('asset-index.txt', index['id']), ('minecraft-version.txt', args.minecraft)):
++        with open(os.path.join(root, name), 'w') as f:
++            f.write(text)
++    print('ready in', root)
++
++
++if __name__ == '__main__':
++    main()
+diff --git a/scripts/headless/run.sh b/scripts/headless/run.sh
+new file mode 100755
+index 00000000..f639175d
+--- /dev/null
++++ b/scripts/headless/run.sh
+@@ -0,0 +1,71 @@
++#!/bin/bash
++# Starts the Fabric client with the Baritone mod you built, with no screen: Xvfb for the display and Mesa's
++# software Vulkan (lavapipe) for the renderer. OpenGL does not come up under Xvfb ("Couldn't find matching GLX
++# visual"); the client falls back to Vulkan by itself, so nothing here has to ask for it.
++#
++# Needs: fetch.py already run, ./gradlew :fabric:shadowJar already built, and NO Gradle alive - on a 2 GB box
++# the client (about 1.3 GB resident) and a Gradle build (about 1 GB) do not fit together.
++#
++# usage: run.sh [extra game arguments]        the log is $BARITONE_HEADLESS/client.log
++# environment: BARITONE_HEADLESS (default ~/baritone-headless), HEADLESS_DISPLAY (:99), HEADLESS_WORLD
++#   ("New World": entered at once if it exists), HEADLESS_HEAP (640m), HEADLESS_USER, JAVA (java, 25 or later)
++set -eu
++REPO="$(cd "$(dirname "$0")/../.." && pwd)"
++MC_DIR="${BARITONE_HEADLESS:-$HOME/baritone-headless}"
++DISPLAY_NAME="${HEADLESS_DISPLAY:-:99}"
++WORLD="${HEADLESS_WORLD:-New World}"
++JAVA="${JAVA:-java}"
++
++for f in classpath.txt fabric-classpath.txt asset-index.txt minecraft-version.txt; do
++    [ -f "$MC_DIR/$f" ] || { echo "run.sh: $MC_DIR/$f is missing - run scripts/headless/fetch.py first" >&2; exit 1; }
++done
++MOD="$(ls -t "$REPO"/fabric/build/libs/*-dev-shadow.jar 2>/dev/null | head -1 || true)"
++[ -n "$MOD" ] || { echo "run.sh: no fabric/build/libs/*-dev-shadow.jar - run ./gradlew :fabric:shadowJar first" >&2; exit 1; }
++# the shadow jar does not carry nether-pathfinder (only remapJar nests it), and Baritone asks for it at start-up
++NETHER="$(find "${GRADLE_USER_HOME:-$HOME/.gradle}/caches/modules-2/files-2.1/dev.babbaj/nether-pathfinder" -name 'nether-pathfinder-*.jar' ! -name '*-sources.jar' 2>/dev/null | head -1 || true)"
++[ -n "$NETHER" ] || { echo "run.sh: nether-pathfinder is not in the Gradle cache - build once first" >&2; exit 1; }
++if pgrep -f 'gradlew|GradleWrapperMain|GradleDaemon|gradle-launcher' >/dev/null; then
++    echo "run.sh: Gradle is running; the client will not fit beside it" >&2
++    exit 1
++fi
++
++export DISPLAY="$DISPLAY_NAME"
++export LIBGL_ALWAYS_SOFTWARE=1
++export LP_NUM_THREADS=1
++mkdir -p "$MC_DIR/natives/lwjgl" "$MC_DIR/natives/jna" "$MC_DIR/natives/netty" "$MC_DIR/natives/java" "$MC_DIR/game/mods"
++pgrep -x Xvfb >/dev/null || { Xvfb "$DISPLAY_NAME" -screen 0 1024x600x24 +extension GLX +render -noreset >"$MC_DIR/xvfb.log" 2>&1 & sleep 2; }
++cp -f "$MOD" "$MC_DIR/game/mods/baritone.jar"
++
++# Set on every start: the first-run screen asks about the narrator and would take the first clicks, and the
++# rest keeps the client inside a 2 GB box. Edit them in game/options.txt only if you also change this.
++OPTIONS="$MC_DIR/game/options.txt"
++touch "$OPTIONS"
++set_option() { # key value
++    if grep -q "^$1:" "$OPTIONS"; then sed -i "s|^$1:.*|$1:$2|" "$OPTIONS"; else echo "$1:$2" >> "$OPTIONS"; fi
++}
++set_option onboardAccessibility false
++set_option skipMultiplayerWarning true
++set_option preferredGraphicsBackend '"vulkan"'
++set_option graphicsPreset '"custom"' # a preset puts its own render and simulation distance back at every start
++set_option renderDistance 2
++set_option simulationDistance 5
++set_option maxFps 20
++set_option soundCategory_master 0.0
++set_option tutorialStep '"none"'
++
++QUICKPLAY=()
++[ -d "$MC_DIR/game/saves/$WORLD" ] && QUICKPLAY=(--quickPlaySingleplayer "$WORLD")
++cd "$MC_DIR/game"
++exec "$JAVA" -Xmx"${HEADLESS_HEAP:-640m}" -Xms96m -XX:+UseSerialGC -XX:TieredStopAtLevel=1 \
++    -XX:MaxMetaspaceSize=192m -XX:ReservedCodeCacheSize=64m -XX:StackShadowPages=32 \
++    --enable-native-access=ALL-UNNAMED --add-exports java.base/jdk.internal.misc=ALL-UNNAMED \
++    -Djava.library.path="$MC_DIR/natives/java" \
++    -Dorg.lwjgl.system.SharedLibraryExtractPath="$MC_DIR/natives/lwjgl" \
++    -Djna.tmpdir="$MC_DIR/natives/jna" -Dio.netty.native.workdir="$MC_DIR/natives/netty" \
++    "-DFabricMcEmu= net.minecraft.client.main.Main " \
++    -cp "$(cat "$MC_DIR/fabric-classpath.txt"):$(cat "$MC_DIR/classpath.txt"):$NETHER" \
++    net.fabricmc.loader.impl.launch.knot.KnotClient \
++    --username "${HEADLESS_USER:-Headless}" --version "$(cat "$MC_DIR/minecraft-version.txt")" \
++    --gameDir "$MC_DIR/game" --assetsDir "$MC_DIR/assets" --assetIndex "$(cat "$MC_DIR/asset-index.txt")" \
++    --uuid 00000000-0000-0000-0000-000000000001 --accessToken 0 --versionType release \
++    --width 854 --height 480 ${QUICKPLAY[@]+"${QUICKPLAY[@]}"} "$@" >"$MC_DIR/client.log" 2>&1
+-- 
+2.47.3
+

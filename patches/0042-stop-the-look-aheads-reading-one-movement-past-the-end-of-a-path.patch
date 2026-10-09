@@ -1,0 +1,287 @@
+From 901a999b32c3102afe683888d0c058677a5bceea Mon Sep 17 00:00:00 2001
+From: 0xFFshell <0xffshell@users.noreply.gitlab.com>
+Date: Fri, 9 Oct 2026 07:11:24 +0000
+Subject: [PATCH] humanize: stop the three look-aheads reading one movement
+ past the end of a path
+
+A path of n movements runs over n + 1 positions, and IPath#length() counts the
+positions. leanGazeAhead, leanOntoTheSlope and welcomeGlance bounded their
+look-ahead by it, so during the last movement of a path each could read
+movements().get(n). The first walk in a real client - #goto ~30 ~ ~20 on a
+superflat world, Fabric Loader and vanilla 26.3 under Xvfb - ended in an
+IndexOutOfBoundsException from the tick and a crash report as it reached the end
+of the path.
+
+hasMovementAhead and slopeAhead hold the arithmetic in one tested place.
+PathExecutorBoundsTest pins them: with the helpers bounded by length() three of
+its five tests fail, two with the in-game exception; with any of the three sites
+put back on length() the wiring test names it.
+---
+ .../baritone/pathing/path/PathExecutor.java   |  39 +++-
+ .../pathing/path/PathExecutorBoundsTest.java  | 183 ++++++++++++++++++
+ 2 files changed, 213 insertions(+), 9 deletions(-)
+ create mode 100644 src/test/java/baritone/pathing/path/PathExecutorBoundsTest.java
+
+diff --git a/src/main/java/baritone/pathing/path/PathExecutor.java b/src/main/java/baritone/pathing/path/PathExecutor.java
+index 99b1bfb4..9d454c56 100644
+--- a/src/main/java/baritone/pathing/path/PathExecutor.java
++++ b/src/main/java/baritone/pathing/path/PathExecutor.java
+@@ -380,6 +380,31 @@ public class PathExecutor implements IPathExecutor, Helper {
+         return true;
+     }
+ 
++    /**
++     * Whether the path still has a movement {@code ahead} places past {@code from}. A path of n movements
++     * runs over n + 1 positions and {@link IPath#length()} counts the positions, so it is one more than the
++     * index of the last movement: a look-ahead bounded by it lets the last movement of a path read one past
++     * its own end, which is an {@link IndexOutOfBoundsException} thrown from the tick.
++     */
++    static boolean hasMovementAhead(IPath path, int from, int ahead) {
++        return from + ahead < path.movements().size();
++    }
++
++    /**
++     * The rise and the run, in blocks, of the movements from {@code from} on - as many as it takes for the run
++     * to reach {@code lookahead}, or all of them if the path ends first. {@code {rise, run}}.
++     */
++    static double[] slopeAhead(IPath path, int from, double lookahead) {
++        double rise = 0;
++        double run = 0;
++        for (int i = from; i < path.movements().size() && run < lookahead; i++) {
++            final BlockPos direction = path.movements().get(i).getDirection();
++            rise += direction.getY();
++            run += Math.sqrt(direction.getX() * direction.getX() + direction.getZ() * direction.getZ());
++        }
++        return new double[]{rise, run};
++    }
++
+     /**
+      * Offers the gaze the line the path takes next, so the head leads the body around corners instead
+      * of whipping around at every movement boundary.
+@@ -396,7 +421,7 @@ public class PathExecutor implements IPathExecutor, Helper {
+         }
+         if (movement.getDirection().getY() != 0
+                 || movement instanceof MovementParkour
+-                || pathPosition + 1 >= path.length()
++                || !hasMovementAhead(path, pathPosition, 1)
+                 || !ctx.player().onGround()) {
+             // A jump along the flat is a jump all the same: the run-up to a gap is the one walk where a
+             // person has their eyes on the landing and nowhere else, so parkour gets no lean either.
+@@ -429,13 +454,9 @@ public class PathExecutor implements IPathExecutor, Helper {
+         if (!ctx.player().onGround() || ctx.player().isInWater() || movement instanceof MovementParkour) {
+             return;
+         }
+-        double rise = 0;
+-        double run = 0;
+-        for (int i = pathPosition; i < path.length() && run < SLOPE_LOOKAHEAD; i++) {
+-            final BlockPos direction = path.movements().get(i).getDirection();
+-            rise += direction.getY();
+-            run += Math.sqrt(direction.getX() * direction.getX() + direction.getZ() * direction.getZ());
+-        }
++        final double[] slope = slopeAhead(path, pathPosition, SLOPE_LOOKAHEAD);
++        final double rise = slope[0];
++        final double run = slope[1];
+         if (rise == 0) {
+             return;
+         }
+@@ -452,7 +473,7 @@ public class PathExecutor implements IPathExecutor, Helper {
+      * air are not walks, and a walk is plain when nothing on it is broken, placed or opened.
+      */
+     private void welcomeGlance(Movement movement) {
+-        if (!ctx.player().onGround() || ctx.player().isInWater() || pathPosition + 2 >= path.length()) {
++        if (!ctx.player().onGround() || ctx.player().isInWater() || !hasMovementAhead(path, pathPosition, 2)) {
+             return;
+         }
+         if (plainWalk(movement) && plainWalk(path.movements().get(pathPosition + 1)) && plainWalk(path.movements().get(pathPosition + 2))) {
+diff --git a/src/test/java/baritone/pathing/path/PathExecutorBoundsTest.java b/src/test/java/baritone/pathing/path/PathExecutorBoundsTest.java
+new file mode 100644
+index 00000000..9fbc758d
+--- /dev/null
++++ b/src/test/java/baritone/pathing/path/PathExecutorBoundsTest.java
+@@ -0,0 +1,183 @@
++/*
++ * This file is part of Baritone.
++ *
++ * Baritone is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU Lesser General Public License as published by
++ * the Free Software Foundation, either version 3 of the License, or
++ * (at your option) any later version.
++ *
++ * Baritone is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public License
++ * along with Baritone.  If not, see <https://www.gnu.org/licenses/>.
++ */
++
++package baritone.pathing.path;
++
++import baritone.api.pathing.calc.IPath;
++import baritone.api.pathing.movement.IMovement;
++import net.minecraft.core.BlockPos;
++import org.junit.Test;
++
++import java.io.IOException;
++import java.lang.reflect.InvocationHandler;
++import java.lang.reflect.Method;
++import java.lang.reflect.Proxy;
++import java.nio.file.Files;
++import java.nio.file.Paths;
++import java.util.ArrayList;
++import java.util.Collections;
++import java.util.List;
++
++import static org.junit.Assert.assertEquals;
++import static org.junit.Assert.assertFalse;
++import static org.junit.Assert.assertTrue;
++
++/**
++ * A path of n movements runs over n + 1 positions, and {@link IPath#length()} counts the positions. The
++ * three look-aheads that were written against it - the gaze's lean around the next corner, the lean onto
++ * the slope, and the welcome for a walking glance - each read one movement past the end of the path during
++ * the last movement of it, and the first walk in a real client ended in an IndexOutOfBoundsException from
++ * the tick at the end of the path. None of the unit tests could see it: nothing ran a path to its end.
++ * <p>
++ * The path here is a stand-in with the one property that matters - one more position than movements, and
++ * the real {@code length()} on top of them - so what is pinned is the arithmetic, and the wiring test
++ * pins that the three sites go through it.
++ */
++public class PathExecutorBoundsTest {
++
++    private static BlockPos east() {
++        return new BlockPos(1, 0, 0);
++    }
++
++    private static IMovement movement(BlockPos direction) {
++        return (IMovement) Proxy.newProxyInstance(IMovement.class.getClassLoader(), new Class<?>[]{IMovement.class}, (proxy, method, args) -> {
++            switch (method.getName()) {
++                case "getDirection":
++                    return direction;
++                case "toString":
++                    return "movement " + direction;
++                default:
++                    throw new UnsupportedOperationException(method.getName());
++            }
++        });
++    }
++
++    private static IPath pathOf(BlockPos... directions) {
++        final List<IMovement> movements = new ArrayList<>();
++        for (BlockPos direction : directions) {
++            movements.add(movement(direction));
++        }
++        return (IPath) Proxy.newProxyInstance(IPath.class.getClassLoader(), new Class<?>[]{IPath.class}, new InvocationHandler() {
++            @Override
++            public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
++                switch (method.getName()) {
++                    case "movements":
++                        return movements;
++                    case "positions":
++                        // one more position than there are movements: the start, and then where each one ends
++                        return Collections.nCopies(movements.size() + 1, null);
++                    default:
++                        if (method.isDefault()) {
++                            return InvocationHandler.invokeDefault(proxy, method, args);
++                        }
++                        throw new UnsupportedOperationException(method.getName());
++                }
++            }
++        });
++    }
++
++    @Test
++    public void thePathCountsOnePositionMoreThanItHasMovements() {
++        final IPath path = pathOf(east(), east(), east());
++        assertEquals(3, path.movements().size());
++        assertEquals("length() counts the positions: one more than there are movements", 4, path.length());
++    }
++
++    @Test
++    public void theLastMovementHasNothingAheadOfIt() {
++        final IPath path = pathOf(east(), east(), east(), east(), east());
++        assertTrue(PathExecutor.hasMovementAhead(path, 4, 0));
++        assertTrue(PathExecutor.hasMovementAhead(path, 3, 1));
++        assertFalse("on the last movement there is no next one", PathExecutor.hasMovementAhead(path, 4, 1));
++        assertTrue(PathExecutor.hasMovementAhead(path, 2, 2));
++        assertFalse("one before the last has one ahead and not two", PathExecutor.hasMovementAhead(path, 3, 2));
++        assertFalse(PathExecutor.hasMovementAhead(path, 0, 5));
++        assertTrue(PathExecutor.hasMovementAhead(path, 0, 4));
++    }
++
++    @Test
++    public void theSlopeStopsWhereThePathStops() {
++        // five flat blocks and then nothing: a look-ahead longer than what is left ends with the path
++        final IPath path = pathOf(east(), east(), east(), east(), east());
++        for (int from = 0; from < 5; from++) {
++            final double[] slope = PathExecutor.slopeAhead(path, from, 8.0);
++            assertEquals("rise from " + from, 0.0, slope[0], 0.0);
++            assertEquals("run from " + from, 5 - from, slope[1], 1e-9);
++        }
++        final double[] past = PathExecutor.slopeAhead(path, 5, 8.0);
++        assertEquals(0.0, past[0], 0.0);
++        assertEquals(0.0, past[1], 0.0);
++    }
++
++    @Test
++    public void theSlopeAddsUpTheRiseAndTheRunUntilTheLookAheadIsSpent() {
++        // two steps down the stairs, a flat block, a diagonal flat step, and the drop at the end
++        final IPath path = pathOf(new BlockPos(1, -1, 0), new BlockPos(1, -1, 0), east(), new BlockPos(1, 0, 1), new BlockPos(0, -1, 0));
++        final double[] all = PathExecutor.slopeAhead(path, 0, 100.0);
++        assertEquals(-3.0, all[0], 0.0);
++        assertEquals(3.0 + Math.sqrt(2.0), all[1], 1e-9);
++        // the run is spent after two movements, and the third is not read
++        final double[] two = PathExecutor.slopeAhead(path, 0, 2.0);
++        assertEquals(-2.0, two[0], 0.0);
++        assertEquals(2.0, two[1], 1e-9);
++        // from the diagonal on: it and the drop that follows it
++        final double[] tail = PathExecutor.slopeAhead(path, 3, 100.0);
++        assertEquals(-1.0, tail[0], 0.0);
++        assertEquals(Math.sqrt(2.0), tail[1], 1e-9);
++    }
++
++    @Test
++    public void theThreeLookAheadsGoThroughTheHelpersAndNotThroughLength() throws IOException {
++        final List<String> source = Files.readAllLines(Paths.get("src/main/java/baritone/pathing/path/PathExecutor.java"));
++        final String[][] sites = {
++                {"private void leanGazeAhead(", "hasMovementAhead("},
++                {"private void leanOntoTheSlope(", "slopeAhead("},
++                {"private void welcomeGlance(", "hasMovementAhead("},
++        };
++        final List<String> problems = new ArrayList<>();
++        for (String[] site : sites) {
++            final String body = bodyOf(source, site[0]);
++            if (body.contains("path.length()")) {
++                problems.add(site[0] + " bounds itself with path.length(), which counts the positions: one more than there are movements");
++            }
++            if (!body.contains(site[1])) {
++                problems.add(site[0] + " does not go through " + site[1]);
++            }
++        }
++        assertTrue(String.join("; ", problems), problems.isEmpty());
++    }
++
++    /**
++     * The lines of the method that opens on the line with {@code signature}, up to the line that closes it at
++     * the indent of a class member, with the {@code //} comments taken off.
++     */
++    private static String bodyOf(List<String> source, String signature) {
++        int start = -1;
++        for (int i = 0; i < source.size(); i++) {
++            if (source.get(i).contains(signature)) {
++                start = i;
++                break;
++            }
++        }
++        assertTrue("no " + signature + " in PathExecutor", start >= 0);
++        final StringBuilder body = new StringBuilder();
++        for (int i = start + 1; i < source.size() && !source.get(i).equals("    }"); i++) {
++            body.append(source.get(i).replaceAll("//.*", "")).append('\n');
++        }
++        return body.toString();
++    }
++}
+-- 
+2.47.3
+
