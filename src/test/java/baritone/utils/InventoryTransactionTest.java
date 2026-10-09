@@ -259,9 +259,9 @@ public class InventoryTransactionTest {
      * <p>
      * Two things have to hold and both are about <em>where</em> the ask sits. It has to be in
      * {@code onLostControl}, which every caller reaches on the client thread, and not in
-     * {@code destroyBehaviorAsync}, which runs on the executor and is also reached by
-     * {@code onWorldEvent} on the way out of a world - a window click sent into a closing connection is
-     * worse than the residual this closes. And it has to reach the rule, not a copy of it.
+     * {@code destroyBehaviorAsync}, which runs on the executor, where a window click has no thread to be
+     * sent on. The way out of a world is another matter and is pinned by
+     * {@link #theAskDoesNotReachForAPlayerThatIsNotThere}. And it has to reach the rule, not a copy of it.
      */
     @Test
     public void theSwapIsFinishedOnTheWayOutAndNotOnTheExecutor() {
@@ -284,7 +284,7 @@ public class InventoryTransactionTest {
                         + " onLostControl and not on the executor",
                 destroyAsync > 0);
         assertTrue("the swap is finished inside destroyBehaviorAsync rather than in onLostControl: that runs"
-                        + " on the executor, and onWorldEvent reaches it on the way out of a world",
+                        + " on the executor, where a window click has no thread to be sent on",
                 ask < destroyAsync);
 
         // the behaviour's own teardown does not do it: destroy() runs on the executor and sees no window
@@ -306,6 +306,50 @@ public class InventoryTransactionTest {
         assertTrue("finishTheSwapBeforeGoing no longer asks InventoryTransaction#finishNow",
                 behaviorLines.subList(helper, Math.min(behaviorLines.size(), helper + 6)).stream()
                         .anyMatch(line -> line.contains("invTransaction.finishNow(")));
+    }
+
+    /**
+     * The way out of a world has no player and reaches the ask all the same.
+     * <p>
+     * The first tick without a player runs {@code cancelEverything}, which calls every process's
+     * {@code onLostControl}, and {@code ElytraProcess#onWorldEvent} destroys the behaviour only on the way
+     * <em>into</em> a world: its test is {@code getWorld() != null}. So the ask arrives with the behaviour
+     * alive and {@code mc.player} null, and reading the player there was a NullPointerException from the tick -
+     * the game crashed on Save and Quit with the elytra process active. The headless client found it
+     * (scripts/headless/smoke.sh is the behavioural check); nothing here can leave a world, so the source says
+     * it: the helper looks at the player before it touches it.
+     */
+    @Test
+    public void theAskDoesNotReachForAPlayerThatIsNotThere() {
+        final Path root = repoRoot();
+        assumeTrue("the sources are not next to this test run", root != null);
+        final Path behavior = root.resolve("src/main/java/baritone/process/elytra/ElytraBehavior.java");
+        assumeTrue("the elytra behaviour is not next to this test run", Files.isRegularFile(behavior));
+
+        final List<String> lines = read(behavior);
+        final int helper = lineContaining(lines, "void finishTheSwapBeforeGoing() {");
+        assertTrue("finishTheSwapBeforeGoing is gone from the behaviour", helper >= 0);
+        int ask = -1;
+        for (int i = helper; i < Math.min(lines.size(), helper + 12); i++) {
+            if (lines.get(i).contains("invTransaction.finishNow(")) {
+                ask = i;
+                break;
+            }
+        }
+        assertTrue("finishTheSwapBeforeGoing no longer asks InventoryTransaction#finishNow", ask > helper);
+        int guard = -1;
+        for (int i = helper + 1; i < ask; i++) {
+            if (lines.get(i).contains("ctx.player() != null")) {
+                guard = i;
+                break;
+            }
+        }
+        assertTrue("finishTheSwapBeforeGoing asks without looking for the player first: the way out of a world"
+                + " reaches it with no player, and that is a NullPointerException from the tick", guard > helper);
+        for (int i = helper + 1; i < guard; i++) {
+            assertFalse("the player is used before it is looked for: " + lines.get(i).trim(),
+                    lines.get(i).replaceAll("//.*", "").contains("ctx.player()."));
+        }
     }
 
     private static int lineContaining(List<String> lines, String needle) {

@@ -89,8 +89,9 @@ worn one still on the back, arrived at by a different road than the window going
 finishes a sequence that has begun (`InventoryTransaction#finishNow`, asked from
 `ElytraProcess#onLostControl`), spends its remaining gaps doing it, and gives up whole one that has not -
 nothing happened, so the job asks again. The ask sits in `onLostControl` and not in `destroyBehaviorAsync`
-on purpose: that runs on the executor, where a window click has no client thread to be sent on, and
-`onWorldEvent` reaches it on the way out of a world, where there is nothing left to send it to. A begun
+on purpose: that runs on the executor, where a window click has no client thread to be sent on. The way out
+of a world reaches `onLostControl` too, from the first tick with no player, so the ask looks for the player
+first: with none there is no window and nothing to send a click to, and the queue goes with the behaviour. A begun
 sequence whose window is *not* the player's own is left exactly as it was rather than fired into a menu that
 would drop it, because clearing a queue that never ran turns "stalled and still retryable" into "stalled and
 silently abandoned".

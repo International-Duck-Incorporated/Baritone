@@ -1333,11 +1333,19 @@ public final class ElytraBehavior implements Helper {
      * being asked the moment {@code ElytraProcess} drops its reference - see {@link InventoryTransaction#finishNow}.
      * <p>
      * Called from {@code ElytraProcess#onLostControl}, which is client-thread like every other caller of it,
-     * and deliberately not from {@code destroyBehaviorAsync}: that runs on the executor, and it is also
-     * reached on the way out of a world, where a window click has nothing to be sent to.
+     * and deliberately not from {@code destroyBehaviorAsync}, which runs on the executor.
+     * <p>
+     * The way out of a world reaches {@code onLostControl} too, and with no player: the first tick without
+     * one runs {@code PathingControlManager#cancelEverything}, and {@code ElytraProcess#onWorldEvent}
+     * destroys the behaviour only on the way <em>into</em> a world (its test is {@code getWorld() != null}).
+     * Then there is no window to click in and nothing to send a click to, and the queue goes with the
+     * behaviour: reading the player there was a NullPointerException from the tick, a crash on Save and
+     * Quit with the elytra process active.
      */
     public void finishTheSwapBeforeGoing() {
-        invTransaction.finishNow(ctx.player().containerMenu == ctx.player().inventoryMenu);
+        if (ctx.player() != null) {
+            invTransaction.finishNow(ctx.player().containerMenu == ctx.player().inventoryMenu);
+        }
     }
 
     private void queueWindowClick(int windowId, int slotId, int button, ContainerInput type) {
