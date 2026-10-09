@@ -1,0 +1,240 @@
+From 78553ed5c56098249e5eeca6099f70af2acf3b07 Mon Sep 17 00:00:00 2001
+From: 0xFFshell <0xffshell@users.noreply.gitlab.com>
+Date: Fri, 9 Oct 2026 08:24:57 +0000
+Subject: [PATCH] correct the wiki's api, build and getting-started pages
+ against the source
+
+wiki/API.md printed ten things src/api does not say, and eight of them break the
+reader's build. The goals are in baritone.api.pathing.goals, not baritone.api.utils.
+IMineProcess has no String overload - it takes BlockOptionalMetaLookup,
+BlockOptionalMeta... or Block... - so mine("diamond_ore") and mine(64, "...") do not
+compile. IFollowProcess declares exactly one method, follow(Predicate<Entity>), so
+follow("playerName") does not either. IGameEventListener has sixteen abstract
+methods and the fork ships no adapter, so the anonymous listener overriding three
+cannot compile; and the interaction callback is onBlockInteract(BlockInteractEvent),
+not onPlayerInteract(PlayerInteractEvent). IPathingBehavior has no getPathfinder(),
+getPath() returns Optional<IPath>, the interface is ICustomGoalProcess rather than
+IGoalProcess, and baritone-api-*.jar is not built here.
+
+wiki/Building.md and wiki/Getting-Started.md both list baritone-api-*.jar,
+baritone-standalone-*.jar and baritone-unoptimized-*.jar. "standalone" and
+"unoptimized" appear in no build.gradle in the tree. What is declared is one jar per
+loader - fabric, forge, neoforge, tweaker - in three variants: remapJar with no
+classifier, built from the shadow jar's output, shadowJar as dev-shadow, and jar as
+dev. The Getting-Started copy is the worse of the two, because that is the page
+telling a first-time reader which file to drop in mods/.
+
+The mine example keeps its intent by way of BlockOptionalMeta's String selector
+constructor rather than becoming a block import. Building.md names the tasks and
+classifiers each loader declares and points at scripts/headless/README.md as a
+known-good invocation. Each page gains the source-of-truth note.
+
+No test pins these three. A defaults table is a structured claim against one file and
+SettingsWikiTest can hold it; a page of Java examples is not, and the honest pin is
+to compile them. That is feasible - AimScatterTest already imports
+net.minecraft.core.BlockPos, so the Minecraft API is on the test compile classpath -
+but it is a bigger change than correcting the pages and is left recorded rather than
+half built.
+
+47 classes / 381 tests / 0 failures / 0 errors / 0 skipped, unchanged. No src/ file
+is touched.
+---
+ AGENTS.md               | 18 +++++++++++++++++-
+ wiki/API.md             | 40 +++++++++++++++++++++++++---------------
+ wiki/Building.md        | 22 +++++++++++++++++-----
+ wiki/Getting-Started.md | 11 ++++++++---
+ 4 files changed, 67 insertions(+), 24 deletions(-)
+
+diff --git a/AGENTS.md b/AGENTS.md
+index 295740ae..56f0dabf 100644
+--- a/AGENTS.md
++++ b/AGENTS.md
+@@ -159,7 +159,7 @@ Keep messages technical and useful.
+ | Bittern | **No open claims - signed off.** Delivered: the three-round mutation sweep (report `ff1601db`), the two landings `0034`/`0035` and the two repairs `0036`/`0037`, all four teeth proven by mutation; the wind-up call-site second read (`32462f36`) | `src/test` (verification; scratch copies, no product file touched) | DONE / RESTING 2026-10-08 15:25 UTC; woke 15:30 UTC to recover Godwit's open items, closed 15:35 UTC; RESTING again | last verified remote `c7f33d98`; tip suite 42 classes / 347 tests / 0 failures re-run at the recovery; patch sweep `0030`-`0037` all trees match; the sweep's artifacts are on my box at `/home/user/sweep/` | nothing - the handoff is in the Chat (sign-off at 15:25 UTC), the patch table (`0034`-`0037`) and this row; the one open item is the second reader for `0034`-`0037` |
+ | Curlew | **No open claims - signed off.** Delivered: the fifth count (`KeyWritesTest`), the elytra window rule's second reader (no defect), and Merlin's patch renumbered/regenerated to `0032`; the doubled elytra read with Godwit is recorded in both rows and in `Known Problems` | `src/test/java/baritone/utils/KeyWritesTest.java` (new); `utils/InventoryTransaction`, `process/elytra/ElytraBehavior`, `ButtonWritesTest`, `InventoryTransactionTest` (reads); `HUMANLIKE.md`, `AGENTS.md`, `patches/0031`, `patches/0032` | DONE / RESTING 2026-10-08 15:40 UTC | last verified remote `e2737cd4`, working tree clean, nothing local and nothing unpushed; suite 42 classes / 345 tests / 0 failures on the integrated tree | nothing - the handoff is in `Completed` (the Curlew section), the Chat (sign-off at 15:35 UTC) and the two patches |
+ | Nightjar | (1) **DONE** - second reader for Bittern's `0034`-`0037`: six findings in the Chat, test-only repair `b47aed44`, patch `0039`; (2) **DONE** - a headless game client on a 1.9 GB box: **go**. Its first walk found a crash at the end of every ground path (`PathExecutor`'s three look-aheads), fixed as `901a999b`, patch `0042`; the harness is `scripts/headless/`, patch `0043` | (1) `src/test` guard rails + `HUMANLIKE.md`; (2) `PathExecutor`, `PathExecutorBoundsTest`, `scripts/headless/` (no other product file) | (1) DONE 2026-10-09 06:50 UTC; (2) DONE 2026-10-09 07:29 UTC | last verified remote `4063a2a2` before this push (the fix `901a999b` and the harness `a145acc5` ride on it, and the push is verified in the final report); **the integrated tree with Redshank's elytra landing `7e1e6d3a`, the random-source count `f037435a` and Swift's docs: 46 classes / 378 tests / 0 failures / 0 errors / 0 skipped**, counts read from the XML; in the client, a 36-block `#goto` ends on its goal block with no exception | the second read of Redshank's `0307a7cd` (`FarmReach`), then the wind-up-before-parkour gap announced in the Chat first; then the in-game checks the harness can see |
+-| Redshank | (1) The farm's in-reach work order - **landed** `0307a7cd`, patch `0038`; (2) second reader for Nightjar's repair `b47aed44` - **done, no defect**; (3) the elytra auto-swap's teardown residual - **landed**, `InventoryTransaction#finishNow` asked from `ElytraProcess#onLostControl` | `process/FarmReach` (new), `process/FarmProcess`, `src/test/.../FarmReachTest` (new), `HUMANLIKE.md`; reads of `src/test` guards; next `utils/InventoryTransaction`, `process/elytra/ElytraProcess`/`ElytraBehavior` | (4) the wiki's settings page: **landed**, eleven errors corrected and counted by `SettingsWikiTest` | `process/FarmReach` (new), `process/FarmProcess`, `utils/InventoryTransaction`, `process/ElytraProcess`, `process/elytra/ElytraBehavior`, `src/test/.../{FarmReachTest,RandomSourceTest}` (new), `HUMANLIKE.md` | DONE / RESTING 2026-10-09 08:08 UTC | suite **44 classes / 370 tests / 0 failures / 0 errors / 0 skipped** with the elytra fix in (`/home/user/logs_elytra2.log`, counts from the XML), up from 44/364 at `e5c83449`; three mutations CAUGHT (the ask removed -> the wiring pin; `finishNow` clearing a begun queue and ignoring the window -> exactly the two teardown tests); patch `0038` verified in a scratch worktree at `b35eeda4` -> tree `c953af6e` = `0307a7cd^{tree}`; logs on my box at `/home/user/logs_{baseline,farm2,final,tip2,probeNew,probeOld,stripOld,elytra2,mut1,mut2}.log` | nothing - the handoff is in the Chat (sign-off at 08:08 UTC), the patch table (`0038`, `0040`, `0041`, `0044`), `HUMANLIKE.md` and `Known Problems`. Nightjar has the two second reads; the two elytra remainders are unblocked by `scripts/headless/` |
++| Redshank | (1) The farm's in-reach work order - **landed** `0307a7cd`, patch `0038`; (2) second reader for Nightjar's repair `b47aed44` - **done, no defect**; (3) the elytra auto-swap's teardown residual - **landed**, `InventoryTransaction#finishNow` asked from `ElytraProcess#onLostControl` | `process/FarmReach` (new), `process/FarmProcess`, `src/test/.../FarmReachTest` (new), `HUMANLIKE.md`; reads of `src/test` guards; next `utils/InventoryTransaction`, `process/elytra/ElytraProcess`/`ElytraBehavior` | (4) the wiki's settings page: **landed**, eleven errors corrected and counted by `SettingsWikiTest` | `process/FarmReach` (new), `process/FarmProcess`, `utils/InventoryTransaction`, `process/ElytraProcess`, `process/elytra/ElytraBehavior`, `src/test/.../{FarmReachTest,RandomSourceTest}` (new), `HUMANLIKE.md` | DONE / RESTING 2026-10-09 08:24 UTC | suite **44 classes / 370 tests / 0 failures / 0 errors / 0 skipped** with the elytra fix in (`/home/user/logs_elytra2.log`, counts from the XML), up from 44/364 at `e5c83449`; three mutations CAUGHT (the ask removed -> the wiring pin; `finishNow` clearing a begun queue and ignoring the window -> exactly the two teardown tests); patch `0038` verified in a scratch worktree at `b35eeda4` -> tree `c953af6e` = `0307a7cd^{tree}`; logs on my box at `/home/user/logs_{baseline,farm2,final,tip2,probeNew,probeOld,stripOld,elytra2,mut1,mut2}.log` | nothing - the handoff is in the Chat (sign-off at 08:24 UTC), the patch table (`0038`, `0040`, `0041`, `0044`, `0045`), `HUMANLIKE.md` and `Known Problems`. All four checkable wiki pages are now read; Nightjar has the two second reads |
+ | Swift | Release management + docs: GitLab releases, README rewrite, wiki | GitLab API, docs, `wiki/`, `README.md` | DONE / RESTING 2026-10-09 | Created 3 GitLab releases (v26.1, v26.2, v26.3); rewrote README for the fork; created 7 GitLab wiki pages (home, Commands, Humanlike-Features, Settings, Building, API, Contributing) + same files in `wiki/` on branch; last verified remote `71fe1a74` | nothing - resting |
+ 
+ The previous session's agents have rows again, written back from the conversation the human's 12:54:59 UTC
+@@ -2952,6 +2952,22 @@ Message:
+ Response to: Nightjar 07:54 UTC (the headless client, the crash, and their taking the two second reads); my own 08:05 UTC, whose count this corrects.
+ Next action: none - resting. If the second reads come back with anything, or somebody starts the two elytra checks under the harness, I will answer it.
+ 
++### Redshank - 2026-10-09 08:24 UTC (I said I would not bet on the other three wiki pages; I checked, and there were ten more errors in API.md alone)
++
++Status: DONE / RESTING - nothing open, nothing unpushed
++Current task: none.
++Message:
++- **I closed the loop I left open.** At 08:08 I wrote that `wiki/API.md`, `wiki/Building.md` and `wiki/Getting-Started.md` were unread and that after eleven errors on the settings page I "would not bet on them from the family", then signed off anyway. That is the same move I corrected myself for earlier - flag a risk, do not check it - so I checked. All three were wrong, and `API.md` was the worst page in the set.
++- **`wiki/API.md`: ten errors, and eight of them break the reader's build.** `import baritone.api.utils.GoalXZ;` where the goals live in `baritone.api.pathing.goals`; `mine("diamond_ore")` and `mine(64, "diamond_ore")` where `IMineProcess` has no `String` overload at all - it takes `BlockOptionalMetaLookup`, `BlockOptionalMeta...` or `Block...`; `follow("playerName")` where `IFollowProcess` declares exactly one method, `follow(Predicate<Entity>)`; an anonymous `IGameEventListener` overriding three methods where all sixteen are abstract and the fork ships no adapter, so it cannot compile; `onPlayerInteract(PlayerInteractEvent)` where the method is `onBlockInteract(BlockInteractEvent)`; `getPathingBehavior().getPathfinder()` which does not exist on `IPathingBehavior`; `IPath path = getPath()` where the return is `Optional<IPath>`; `IGoalProcess` in the key-interfaces list where the interface is `ICustomGoalProcess`; and a "use the `baritone-api-*.jar` artifact" line for an artifact this fork does not build. Every code example on the page except the two settings assignments was uncompilable as printed.
++- **`wiki/Building.md` and `wiki/Getting-Started.md` document another project's artifacts.** Both list `baritone-api-*.jar`, `baritone-standalone-*.jar` and `baritone-unoptimized-*.jar`; `standalone` and `unoptimized` appear in no `build.gradle` in the tree, and neither does `baritone-api`. What the build declares is one jar per loader - `fabric`, `forge`, `neoforge`, `tweaker` - in three variants: `remapJar` with no classifier (what a loader loads, built from the shadow jar's output), `shadowJar` with `dev-shadow`, and `jar` with `dev`. The `Getting-Started` copy matters more than the `Building` one, because that is the page telling a first-time reader which file to drop in `mods/`, and the answer it gave was a file no release contains.
++- **All three pages are corrected, with the real names read out of the source rather than guessed.** The `mine` fix uses `new BlockOptionalMeta("diamond_ore")`, which is available because that class has a `String` selector constructor - so the example keeps its intent instead of turning into a `Blocks.DIAMOND_ORE` import the reader did not ask for. `Building.md` now names the tasks and classifiers each loader's `build.gradle` declares and points at `scripts/headless/README.md` as a known-good invocation, since that harness has actually run this tree in a client. Each page got the source-of-truth note, and `API.md` says plainly that nothing compiles its examples yet.
++- **What I did not do, and why.** No test pins these three pages. The settings page could be pinned because a defaults table is a structured claim against one file; a page of Java examples is not, and the honest pin for it is to compile the examples. That is feasible here - `AimScatterTest` imports `net.minecraft.core.BlockPos`, so the Minecraft API is already on the test compile classpath and the examples could live as real code in a test, where a moved signature fails the build instead of the reader. I did not build that at the end of a session on somebody else's pages, but it is a checked fact and not a guess, so whoever wants it does not have to rediscover it.
++- **Suite: 47 classes / 381 tests / 0 failures / 0 errors / 0 skipped**, unchanged (`/home/user/logs_wiki3.log`). This commit touches three wiki pages and this file; `git diff --stat` shows no `src/` file.
++- **The tally across the wiki, for whoever owns it next.** Four pages checked, four wrong: `Settings.md` eleven errors, `API.md` ten, `Building.md` and `Getting-Started.md` the same three artifact names between them. `Humanlike-Features.md` is the one page I found clean, and it is the one whose claims are already pinned by `Cadence`'s constants and the rule tests. The pattern is not carelessness, it is that only one page had anything checking it - which is the argument for the compile-the-examples test, not for more reading.
++
++Response to: my own 08:08 UTC sign-off, whose last open item this closes.
++Next action: none - logging off. Nightjar holds the two second reads; the two elytra remainders are unblocked by `scripts/headless/` and still unrun.
++
+ # Multi-Agent Planning
+ 
+ At the beginning of a new project session, agents must first plan together.
+diff --git a/wiki/API.md b/wiki/API.md
+index c7a657dc..5be79f70 100644
+--- a/wiki/API.md
++++ b/wiki/API.md
+@@ -4,11 +4,15 @@ Baritone has a public API in the `baritone.api` package. Usage of anything outsi
+ 
+ Javadocs: [baritone.leijurv.com](https://baritone.leijurv.com/)
+ 
++> The examples here are copied against `src/api/java/baritone/api/`, which is the source of truth. Nothing
++> compiles them yet, so a signature that moves does not fail the build - check them against the interfaces
++> before relying on one.
++
+ ## Basic Usage
+ 
+ ```java
+ import baritone.api.BaritoneAPI;
+-import baritone.api.utils.GoalXZ;
++import baritone.api.pathing.goals.GoalXZ;   // the goals live in pathing.goals, not utils
+ 
+ // Enable sprinting
+ BaritoneAPI.getSettings().allowSprint.value = true;
+@@ -47,21 +51,28 @@ baritone.getCustomGoalProcess().setGoalAndPath(goal);
+ baritone.getCustomGoalProcess().setGoal(goal);  // set without pathing
+ baritone.getPathingBehavior().cancelEverything();
+ 
+-// Mining
+-baritone.getMineProcess().mine("diamond_ore");
+-baritone.getMineProcess().mine(64, "diamond_ore");
++// Mining - the target is a BlockOptionalMeta, not a String; there is no String overload.
++// A BlockOptionalMeta can be built from a selector string, which is what #mine parses into.
++baritone.getMineProcess().mine(new BlockOptionalMeta("diamond_ore"));
++baritone.getMineProcess().mine(64, new BlockOptionalMeta("diamond_ore"));
+ 
+ // Building
+ baritone.getBuilderProcess().build("file.schematic", origin);
+ 
+-// Following
+-baritone.getFollowProcess().follow("playerName");
++// Following - the filter is a Predicate<Entity>; there is no String overload.
++baritone.getFollowProcess().follow(entity -> entity instanceof Player
++        && entity.getName().getString().equalsIgnoreCase("playerName"));
+ ```
+ 
+ ## Events
+ 
+ Subscribe to events:
+ 
++`IGameEventListener` is an interface with sixteen abstract methods and the fork ships no adapter, so an
++anonymous listener has to implement all sixteen - the example below overrides three and is only valid with
++the other thirteen filled in (empty bodies are enough). It lives in `baritone.api.event.listener`, and the
++interaction callback is `onBlockInteract(BlockInteractEvent)`; there is no `onPlayerInteract`.
++
+ ```java
+ BaritoneAPI.getProvider().getPrimaryBaritone().getGameEventHandler()
+     .registerEventListener(new IGameEventListener() {
+@@ -71,8 +82,8 @@ BaritoneAPI.getProvider().getPrimaryBaritone().getGameEventHandler()
+         }
+ 
+         @Override
+-        public void onPlayerInteract(PlayerInteractEvent event) {
+-            // Called on player interaction
++        public void onBlockInteract(BlockInteractEvent event) {
++            // Called on block interaction
+         }
+ 
+         @Override
+@@ -95,14 +106,11 @@ IBaritone baritone = BaritoneAPI.getProvider().getBaritoneForPlayer(player);
+ ## Pathing
+ 
+ ```java
+-// Get current path
+-IPath path = baritone.getPathingBehavior().getPath();
++// Get current path - Optional, because there is no path before the first calculation lands
++Optional<IPath> path = baritone.getPathingBehavior().getPath();
+ 
+ // Check if pathing
+ boolean isPathing = baritone.getPathingBehavior().isPathing();
+-
+-// Get path calculation progress
+-PathCalculationResult result = baritone.getPathingBehavior().getPathfinder().calculate();
+ ```
+ 
+ ## Settings
+@@ -125,11 +133,13 @@ settings.acceptableThrowawayItems.value.add(Items.STONE);
+ 
+ ## Mod Integration
+ 
+-If you are integrating Baritone into your mod, use the `baritone-api-*.jar` artifact. This keeps the API classes unobfuscated while obfuscating internals for performance.
++This fork does not build a separate api artifact; `baritone-api-*.jar` is upstream's naming and does not
++appear in any `build.gradle` here. Depend on the loader jar for your loader and code against
++`baritone.api`, which is the package this page documents and the only one that counts as supported.
+ 
+ Key interfaces:
+ - `IBaritone` - Main entry point
+-- `IGoalProcess` - Goal/path management
++- `ICustomGoalProcess` - Goal/path management (there is no `IGoalProcess`)
+ - `IMineProcess` - Mining
+ - `IBuilderProcess` - Building
+ - `IFollowProcess` - Following
+diff --git a/wiki/Building.md b/wiki/Building.md
+index ed25884d..faa783a5 100644
+--- a/wiki/Building.md
++++ b/wiki/Building.md
+@@ -82,11 +82,23 @@ export PATH="$JAVA_HOME/bin:$PATH"
+ 
+ ## Build Artifacts
+ 
+-| Artifact | Description |
+-|----------|-------------|
+-| `baritone-api-*.jar` | Only non-API packages obfuscated. For mod integration. |
+-| `baritone-standalone-*.jar` | Everything obfuscated. Best performance. |
+-| `baritone-unoptimized-*.jar` | Nothing obfuscated. For debugging. |
++> The task and classifier names here are read out of each loader's `build.gradle`, which is the source of
++> truth for them.
++
++This fork builds one jar per loader rather than upstream's api / standalone / unoptimized trio; those three
++names do not appear anywhere in the build. The loader modules are `fabric`, `forge`, `neoforge` and
++`tweaker`, the archive base name is `baritone` (`gradle.properties`, with `neoforge` appending `-neoforge`),
++and each module declares three variants:
++
++| Task | Classifier | Description |
++|------|-----------|-------------|
++| `remapJar` | none | The remapped jar, built from the shadow jar's output. This is the one a loader loads. |
++| `shadowJar` | `dev-shadow` | Dependencies shadowed in, not remapped. What `scripts/headless/README.md` drives. |
++| `jar` | `dev` | The plain compiled jar, for debugging against sources. |
++
++So `./gradlew :fabric:shadowJar` produces the Fabric `dev-shadow` jar - the invocation
++`scripts/headless/README.md` is written around, and a known-good one: that harness has run this tree in a
++real client.
+ 
+ Each is available for Forge, Fabric, and NeoForge loaders.
+ 
+diff --git a/wiki/Getting-Started.md b/wiki/Getting-Started.md
+index 1b0af821..6c2ac676 100644
+--- a/wiki/Getting-Started.md
++++ b/wiki/Getting-Started.md
+@@ -16,9 +16,14 @@ Drop the jar into your `mods/` folder. That's it.
+ 
+ ### Which Jar?
+ 
+-- **baritone-api-\*.jar** - Only non-API packages are obfuscated. Use when other mods integrate with Baritone.
+-- **baritone-standalone-\*.jar** - Everything obfuscated. A bit faster, but no mod integration.
+-- **baritone-unoptimized-\*.jar** - Nothing obfuscated. For crash reports and debugging only.
++Pick the jar for your loader - `fabric`, `forge`, `neoforge` or `tweaker` - and take the one with no
++classifier suffix, which is the remapped jar a loader actually loads. The `-dev-shadow` jar has its
++dependencies shadowed in but is not remapped, and the `-dev` jar is the plain compiled one for debugging;
++neither is what goes in `mods/`.
++
++The names upstream Baritone used - `baritone-api`, `baritone-standalone`, `baritone-unoptimized` - are not
++built by this fork, so a release will not have them. See `wiki/Building.md` for the tasks and classifiers
++each loader declares.
+ 
+ ### Build From Source
+ 
+-- 
+2.47.3
+
