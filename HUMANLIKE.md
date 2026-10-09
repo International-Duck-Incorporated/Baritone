@@ -153,7 +153,8 @@ given back inside the same tick so the game can be asked which way round a block
 two mixin bridges that carry the aim and the elytra solver, each of which puts the player's own angles back in
 POST. `CameraWritesTest` counts them, so a fifth file fails the build with this list beside it. The other two
 edges of the hand are counted the same way: `HandWritesTest` counts the files that may write the selected
-slot, and `ButtonWritesTest` counts the files that may press a mouse button or swing an arm - the two
+slot, and `ButtonWritesTest` counts the files that may press a mouse button, swing an arm or name the game's
+own controller (`.gameMode`, so a hand method nobody has spelled yet is watched too) - the two
 helpers, the inventory swap, the idle fidget, and the elytra's two, the firework and the window clicks of
 the auto-swap - asserting beside each one the beat it is on the list for and pinning the wait itself: the
 gate `InputOverrideHandler` computes from the inventory's wind-up, the question each helper asks before it
@@ -227,7 +228,9 @@ The item in the hand has the same rule, and it is counted the same way. It is wr
   `CameraWritesTest`, `HandWritesTest`, `ButtonWritesTest` and `ClickGatesTest` guard the camera, the hand,
   the buttons and where a click may go, `KeyWritesTest` guards the keys - the four walking keys, the jump, the
   crouch and the sprint all reach the game through `PlayerMovementInput` and `InputOverrideHandler`, and a
-  write to them from anywhere else skips the beat, the stance and the wind-up - and `BridgeCrossingTest`
+  write to them from anywhere else skips the beat, the stance and the wind-up, whether it is spelled as
+  an assignment or as a method call (`makeJump`, the toggle resets, `consumeClick`) - `StripCommentsTest`
+  pins the helper that `ClickGatesTest` strips comments with - and `BridgeCrossingTest`
   guards the two ends of the crossing - the ask on every tick of every movement, and both bridge paths
   charging the crouch they are walked with.
 - Behaviour that already exists as a setting - `randomLooking`, `randomLooking113`, `smoothLook`,

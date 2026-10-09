@@ -62,8 +62,9 @@ public class ButtonWritesTest {
     private static final String[] ALLOWED = {
             // the interface the clicks are declared on: names, not presses
             "src/api/java/baritone/api/utils/IPlayerController.java",
-            // the wrapper that forwards to the game's own controller: the only place mc.gameMode is touched,
-            // so that everything above it can be answered without a game
+            // the wrapper that forwards to the game's own controller: the only file that calls it to do
+            // anything, so that everything above it can be answered without a game (BlockBreakHelper, below,
+            // is the one other file that names it, to clear the controller's own destroy delay)
             "src/main/java/baritone/utils/player/BaritonePlayerController.java",
             // the left button: the beat, then the click, then the arm
             "src/main/java/baritone/utils/BlockBreakHelper.java",
@@ -140,6 +141,12 @@ public class ButtonWritesTest {
             "useItemOn(",
             "useItem(",
             "attack(",
+            // the game's own controller, whichever method is called on it. The spellings above are the ones the
+            // fork uses; the rest of its public hand methods (handleContainerInput, interact, releaseUsingItem,
+            // dropItem, handlePickItemFromBlock, handleInventoryButtonClick, handlePlaceRecipe, piercingAttack)
+            // are each one name away from a click with no beat in front of it, so the controller itself is
+            // what is watched, and the two files that name it are the two on the list that do
+            ".gameMode",
     };
 
     /** The one file on the list that is allowed to swing without pressing anything. */

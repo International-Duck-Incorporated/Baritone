@@ -263,22 +263,53 @@ public class ClickGatesTest {
 
     /**
      * The same text with its comments removed, so that a count of the questions a file asks counts the
-     * calls rather than the prose about them.
+     * calls rather than the prose about them. A comment opener inside a string, a character or a text
+     * block is not a comment ({@code "https://..."} must not take the rest of its line, and a {@code "/*"}
+     * must not take everything up to the next {@code *}{@code /}), and a comment that is taken out leaves
+     * a line break or a space behind, so the code on either side of it is never joined into a name that
+     * was not there. Pinned by {@code StripCommentsTest}.
      */
-    private static String stripComments(String text) {
+    static String stripComments(String text) {
         final StringBuilder out = new StringBuilder(text.length());
-        for (int i = 0; i < text.length(); i++) {
+        int i = 0;
+        while (i < text.length()) {
             if (text.startsWith("//", i)) {
                 final int end = text.indexOf('\n', i);
-                i = end < 0 ? text.length() : end;
+                i = end < 0 ? text.length() : end; // the line break itself stays
             } else if (text.startsWith("/*", i)) {
                 final int end = text.indexOf("*/", i + 2);
-                i = end < 0 ? text.length() : end + 1;
+                i = end < 0 ? text.length() : end + 2;
+                out.append(' ');
+            } else if (text.charAt(i) == '"' || text.charAt(i) == '\'') {
+                final int end = literalEnd(text, i);
+                out.append(text, i, end);
+                i = end;
             } else {
-                out.append(text.charAt(i));
+                out.append(text.charAt(i++));
             }
         }
         return out.toString();
+    }
+
+    /**
+     * The index just past the string, character or text block that opens at {@code at}. An escape takes
+     * the character after it whatever it is, so an escaped quote does not close anything, and a string or
+     * character literal that is never closed ends with its line rather than running into the next one.
+     */
+    private static int literalEnd(String text, int at) {
+        final boolean block = text.startsWith("\"\"\"", at);
+        final char quote = text.charAt(at);
+        for (int i = at + (block ? 3 : 1); i < text.length(); i++) {
+            final char c = text.charAt(i);
+            if (c == '\\') {
+                i++;
+            } else if (block ? text.startsWith("\"\"\"", i) : c == quote) {
+                return i + (block ? 3 : 1);
+            } else if (!block && c == '\n') {
+                return i;
+            }
+        }
+        return text.length();
     }
 
     /**

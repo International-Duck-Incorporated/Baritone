@@ -130,8 +130,14 @@ public class KeyWritesTest {
      * with no caller in the fork today - they are watched for the same reason the count exists: a key held
      * or clicked through vanilla's own plumbing has gone around every rule about the key stream, and the
      * next reader should find it watched rather than discover it. {@code setAll} and {@code releaseAll}
-     * are the same entry points in bulk; the binding-table rewrites ({@code resetMapping},
-     * {@code resetToggleKeys}) are configuration rather than a key, and are left out.
+     * are the same entry points in bulk, and so are the two that act on the toggle mappings (the sprint and
+     * sneak toggles): {@code resetToggleKeys} is a bulk {@code setDown(false)} and
+     * {@code restoreToggleStatesOnScreenClosed} a bulk {@code setDown(true)}. {@code makeJump} writes the
+     * jump bit of the record from a method call, with no assignment at the call site to find, and
+     * {@code consumeClick} takes a click the person made before the game has seen it. These four are
+     * spelled by their bare names: the names are unique, and a static import cannot dodge them. Only the
+     * binding-table rewrites ({@code resetMapping}, {@code setKey}) are configuration rather than a key,
+     * and are left out.
      */
     private static final String[] WRITES = {
             "keyPresses =",
@@ -146,6 +152,21 @@ public class KeyWritesTest {
             "KeyMapping.click(",
             "KeyMapping.setAll(",
             "KeyMapping.releaseAll(",
+            "resetToggleKeys(",
+            "restoreToggleStatesOnScreenClosed(",
+            "makeJump(",
+            "consumeClick(",
+    };
+
+    /**
+     * What the player's own input object offers to read, in the spellings it is read with: the record, and
+     * the two questions the game asks of it - the move vector and whether it has a forward impulse. The
+     * census in {@link #theKeysAreReadWhereTheyAreReadAndNowhereElse} is for a file naming any of them.
+     */
+    private static final String[] READ_SPELLINGS = {
+            "input.keyPresses",
+            ".getMoveVector(",
+            ".hasForwardImpulse(",
     };
 
     private static final String[] SOURCE_ROOTS = {"src/main/java", "src/api/java", "src/launch/java"};
@@ -203,7 +224,8 @@ public class KeyWritesTest {
         // and the other half of the name above: a file that names the player's own key state is a reader
         // whatever it does with it, so a reader the list does not name fails here. Pinned as the same text
         // the count reads, and generous about where a known file puts it - the mixin names the record as an
-        // argument rather than through the player, so only the player-side shape is asked for.
+        // argument rather than through the player, so only the player-side shape is asked for. The record is
+        // one spelling of that; the move vector and the forward impulse are the other two (READ_SPELLINGS).
         final TreeSet<String> unknown = new TreeSet<>();
         for (String sourceRoot : SOURCE_ROOTS) {
             final Path dir = root.resolve(sourceRoot);
@@ -223,7 +245,7 @@ public class KeyWritesTest {
                     continue;
                 }
                 for (String line : read(source)) {
-                    if (line.contains("input.keyPresses")) {
+                    if (namesTheInput(line)) {
                         unknown.add(relative);
                         break;
                     }
@@ -244,6 +266,15 @@ public class KeyWritesTest {
                         + " InputOverrideHandler was asked for this tick, and a key read from the keyboard"
                         + " here is a key no rule of this fork has seen",
                 keysFile.stream().noneMatch(line -> line.contains("options.key")));
+    }
+
+    private static boolean namesTheInput(String line) {
+        for (String spelling : READ_SPELLINGS) {
+            if (line.contains(spelling)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static boolean writesTheKeys(String line) {

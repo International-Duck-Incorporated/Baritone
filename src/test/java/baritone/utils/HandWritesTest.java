@@ -119,7 +119,11 @@ public class HandWritesTest {
         }
     }
 
-    /** The keywords a write to the item in the hand can be spelled with. */
+    /**
+     * The keywords a write to the item in the hand can be spelled with. {@code pickSlot} and
+     * {@code addAndPickItem} are vanilla's own pick path: each ends in a selected slot the caller never
+     * names, and neither has a caller in the fork.
+     */
     private static boolean writesHand(String line) {
         final String trimmed = line.trim();
         if (trimmed.startsWith("//") || trimmed.startsWith("*") || trimmed.startsWith("/*")) {
@@ -129,7 +133,9 @@ public class HandWritesTest {
                 || trimmed.contains("ServerboundSetCarriedItemPacket")
                 || trimmed.contains("selectedSlot =")
                 || trimmed.contains("setSelectedItem(")
-                || trimmed.contains("removeFromSelected(");
+                || trimmed.contains("removeFromSelected(")
+                || trimmed.contains("pickSlot(")
+                || trimmed.contains("addAndPickItem(");
     }
 
     private static List<Path> javaFiles(Path dir) {
