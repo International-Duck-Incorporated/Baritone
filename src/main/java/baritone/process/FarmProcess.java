@@ -272,6 +272,9 @@ public final class FarmProcess extends BaritoneProcessHelper implements IFarmPro
         baritone.getInputOverrideHandler().clearAllKeys();
         BetterBlockPos playerPos = ctx.playerFeet();
         double blockReachDistance = ctx.playerController().getBlockReachDistance();
+        // Work outwards from where the bot is standing, not west-to-east across the section the scan swept:
+        // the block a person harvests is the one they are next to. See FarmReach.
+        FarmReach.nearestFirst(toBreak, playerPos);
         for (BlockPos pos : toBreak) {
             if (playerPos.distSqr(pos) > blockReachDistance * blockReachDistance) {
                 continue;
@@ -290,6 +293,9 @@ public final class FarmProcess extends BaritoneProcessHelper implements IFarmPro
         }
         ArrayList<BlockPos> both = new ArrayList<>(openFarmland);
         both.addAll(openSoulsand);
+        // Sorted after the merge: two lists each nearest-first would interleave wrongly, and the planting
+        // loop takes the first of the merged one.
+        FarmReach.nearestFirst(both, playerPos);
         for (BlockPos pos : both) {
             if (playerPos.distSqr(pos) > blockReachDistance * blockReachDistance) {
                 continue;
@@ -320,6 +326,7 @@ public final class FarmProcess extends BaritoneProcessHelper implements IFarmPro
             }
             return new PathingCommand(null, PathingCommandType.REQUEST_PAUSE);
         }
+        FarmReach.nearestFirst(openLog, playerPos);
         for (BlockPos pos : openLog) {
             if (playerPos.distSqr(pos) > blockReachDistance * blockReachDistance) {
                 continue;
@@ -351,6 +358,7 @@ public final class FarmProcess extends BaritoneProcessHelper implements IFarmPro
                 return new PathingCommand(null, PathingCommandType.REQUEST_PAUSE);
             }
         }
+        FarmReach.nearestFirst(bonemealable, playerPos);
         for (BlockPos pos : bonemealable) {
             if (playerPos.distSqr(pos) > blockReachDistance * blockReachDistance) {
                 continue;
