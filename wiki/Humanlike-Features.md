@@ -1,5 +1,7 @@
 # Humanlike Features
 
+> **Note:** This page summarizes the in-repo [HUMANLIKE.md](../HUMANLIKE.md). That file is the source of truth and the one the test guards cite. If there is a discrepancy, HUMANLIKE.md wins.
+
 This fork makes Baritone look like a real player. Nothing changes what the bot does or how well it does it. It changes how the doing looks to somebody standing next to it.
 
 Everything is on by default. No setting turns it on; a bot that has to be told to look alive is a bot that looks dead by default.
