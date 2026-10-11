@@ -2,6 +2,8 @@
 
 **Planning proposal — QuartzHeron.** Latest human instruction overrides conflicting old repository rules. No feature/rebrand implementation is authorized until the human approves the shared scope. The existing `AGENTS.md` sections/history and GitLab `26.3` remain authoritative; this file indexes a consolidated proposal rather than starting a competing private plan.
 
+**Current scope decision (2026-10-11 16:49 UTC):** human “you decide” replies authorize the conservative foundation G/P0/P2-00..01/P1-01,02,04 and Wayquill Stage1 display/provenance, with freeLook=true preserved. Earlier pending-approval statements describe planning history. All code/runtime review/DoD remains; DEFEND, broader P2/P3, state/API/ID/build-coordinate migration and external operator actions are not authorized by this delegation. QuartzHeron claims G-01 preflight/value fixtures and P0-03 arbitration design/wiring; volunteers explicitly claim other unowned approved cards.
+
 ## 1. Current team and proposed allocation
 
 | Agent/role | Current verified planning contribution | Proposed approved-work allocation; not an implicit new claim |

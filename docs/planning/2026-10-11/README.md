@@ -12,7 +12,7 @@
 6. **Implement reliability before fighting.** First milestone: Gauntlet, CI/release lineage, inventory cleanup ownership, safe temporary-goal/failure/resume contracts, sprint/air safety and pitch/profile correctness; then optional deterministic perception + AVOID. Restricted DEFEND, new resource actions/durable jobs and public namespace/state migration are additional explicitly gated scopes.
 7. **Recommend one new product name: Wayquill.** Six consistently scored/researched candidates; strongest three **Wayquill (93), VoxelHelm (83), Trailwarden (76)**. Display/provenance-first branding preserves `baritone.*` API, Fabric `baritone`, Forge/NeoForge **`baritoe`**, commands/settings/cache paths, licences/authors/history. Research is not legal/registry/domain clearance.
 
-**Status:** consolidated planning proposal, with substantive independent evidence review already incorporated. **Independent review at `dd9ab8fd`/`071411ff` is delivered, with four required amendments incorporated here; reviewer confirmation of this revised text and human scope approval remain pending. No new product feature or applied rebrand is authorized or implemented by this package.** Authentication for publishing does not approve implementation.
+**Status (2026-10-11 16:49 UTC):** the human delegated all three scope decisions with “you decide.” Selected authorization: **foundation G-01/P0-01..04/P2-00..01/P1-01,02,04; Wayquill Stage1 display/provenance only; keep freeLook=true default**. Independent proposal review and four amendments are incorporated; code/runtime/design gates remain. **No new product feature or applied rebrand yet.** Other cards, technical migration, registrations/hosting/releases/runner/billing remain separately gated. Publishing authentication was not approval; this later human delegation is the scope authority.
 
 ## Read the package
 
@@ -124,7 +124,7 @@ Audit-worded questions provide navigable coverage of the requested mission; they
 | 38 | Who does what and how are checks/review/handoffs continuous? | Proposed roles/file locks, actual fresh agents, layered tests/Gauntlet, unique real patches, correct authors, fetch/reconcile/push/verify, inactive recovery and redundant handoff. Workflow. |
 | 39 | What must the human approve and what is the next action? | Foundation scope, optional DEFEND/P3 capabilities, name stages/camera default, operator CI/hosting/release decisions; confirm the integrated review amendments then claim the next explicitly approved task. Decisions below / workflow §6. |
 
-## Explicit approval request and remaining work
+## Selected approval scope and remaining work
 
 **Recommended engineering decision:** approve the foundation milestone (G-01, P0-01..04, P2-00/P2-01, P1-01/P1-02/P1-04), preserving defaults and enabling optional AVOID only by user policy. Consider P2-02/P2-03/P3-01 as the next reviewed tranche. Restricted DEFEND (P1-03), new resource/checkpoint actions (P3-02), and public namespace/state migration are separate scopes.
 
@@ -141,4 +141,4 @@ Audit-worded questions provide navigable coverage of the requested mission; they
 - **No new implementation patch**: existing 49 patches were audited; there is no fabricated feature/rebrand patch for planning prose.
 - Latest remotely verified publication hash and clean/synchronized state must be reported after push/fetch/`ls-remote`; local documents alone are not the repository deliverable.
 
-After explicit approved-scope decisions and substantive contract review, the team continues through the next unowned priority using the existing Gauntlet. Pending approval is a real gate, not a promise of invisible background implementation.
+The conservative scope decisions above are now delegated and selected; after substantive contract review, the team continues through the next unowned priority using the existing Gauntlet. Pending approval is a real gate, not a promise of invisible background implementation.
