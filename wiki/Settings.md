@@ -98,6 +98,17 @@ The only humanlike-adjacent settings are:
 | `elytraAutoSwap` | true | Auto-swap elytra when durability is low |
 | `elytraMinimumDurability` | 5 | Minimum durability before the auto-swap asks |
 
+### Camera
+
+Four settings decide what the camera does while Baritone is driving. The defaults give the **visible-bot profile**: the person at the keyboard keeps their own view while walking, and the view turns visibly when the bot is breaking or placing blocks. See `docs/planning/2026-10-11/p2-00-camera-profiles.md` for the full decision table.
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `freeLook` | true | Drive the aim without turning your own view. While walking, the aim is sent to the server only (with `antiCheatCompatibility`) or not sent at all (without it). Set to false and your view turns with every aim. |
+| `blockFreeLook` | false | With `freeLook` on, also send block-breaking and placing aims silently. Off means your view visibly turns to a block while it is being mined or placed. |
+| `antiCheatCompatibility` | true | With `freeLook` on, the server is still sent the rotation while walking, so movement looks forward-facing to stricter anti-cheats. |
+| `elytraFreeLook` | true | While flying with the elytra, send the aim silently. Off means your view turns while flying. |
+
 ## Tips
 
 - `primaryTimeoutMS` is the most impactful setting. Lower = faster but less optimal paths. Higher = slower but better paths. It defaults to 500 ms, so "raise it for better paths" means raising it from 500, not from a larger figure.
