@@ -108,6 +108,9 @@ public class Baritone implements IBaritone {
             this.lookBehavior         = this.registerBehavior(LookBehavior::new);
             this.pathingBehavior      = this.registerBehavior(PathingBehavior::new);
             this.inventoryBehavior    = this.registerBehavior(InventoryBehavior::new);
+            // After the inventory behaviour, so a slot this one asks for is on its way the same
+            // tick, and before the input handler, so nothing is pressed while the hand is moving
+            this.registerBehavior(EatBehavior::new);
             this.inputOverrideHandler = this.registerBehavior(InputOverrideHandler::new);
             this.registerBehavior(WaypointBehavior::new);
         }

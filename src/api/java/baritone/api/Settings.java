@@ -93,6 +93,20 @@ public final class Settings {
     public final Setting<Boolean> allowInventory = new Setting<>(false);
 
     /**
+     * Eat when hungry, the way you would: an ordinary food item out of the hand, or out of the
+     * hotbar if nothing is in a task's way. Never a golden apple, a chorus fruit or anything else
+     * that is worth saving, and never anything that applies an effect - see {@code EatPolicy}.
+     */
+    public final Setting<Boolean> autoEat = new Setting<>(true);
+
+    /**
+     * How empty the bar has to get before {@link #autoEat} does something about it, out of 20.
+     * Fifteen is three quarters gone: early enough that eating is a meal rather than an emergency,
+     * and late enough that a bot with a full bar does not spend the game chewing.
+     */
+    public final Setting<Integer> autoEatThreshold = new Setting<>(15);
+
+    /**
      * Wait this many ticks between InventoryBehavior moving inventory items
      */
     public final Setting<Integer> ticksBetweenInventoryMoves = new Setting<>(1);

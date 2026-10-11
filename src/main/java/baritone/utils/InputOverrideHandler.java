@@ -57,6 +57,13 @@ public final class InputOverrideHandler extends Behavior implements IInputOverri
     private final KeyBeat keyBeat = new KeyBeat();
 
     /**
+     * Whether something is asking for the use button this tick, and whether the button is down because
+     * this file put it there. See {@link #holdTheUseButton()}.
+     */
+    private boolean useButtonAskedFor;
+    private boolean holdingTheUseButton;
+
+    /**
      * The crouch a person keeps while their footing is not certain, held here for the same reason the key
      * beat is held here: the crossing it covers outlives the movement that asked for it. A movement that
      * has to place the block it is stepping onto is the ask, and the walk onto the block it just placed is
@@ -101,10 +108,34 @@ public final class InputOverrideHandler extends Behavior implements IInputOverri
 
     /**
      * Clears the override state for all keys
+     * <p>
+     * Deliberately not the held use button: see {@link #holdTheUseButton()} for why it is a lease and
+     * why every movement rebuilding the task's own keys every tick must not lift somebody's bite.
      */
     @Override
     public final void clearAllKeys() {
         this.inputForceStateMap.clear();
+    }
+
+    /**
+     * Hold the game's use button down for this tick, the way a thumb does - ask again next tick to keep
+     * holding.
+     * <p>
+     * The click helpers in this tick are the wrong shape for a use that lasts rather than lands: they
+     * re-click on a cadence, and re-clicking a block is another block while re-clicking a mouthful is a
+     * mouthful started over and re-clicking a bow is an arrow that is never drawn. A sustained use wants
+     * the button down and held, because vanilla completes a consumable over its own ticking time and
+     * abandons it the instant that key comes up - a bite that is not held is not a bite at all.
+     * <p>
+     * It is a lease rather than a switch: the ask is spent by the tick that reads it, so the button can
+     * only stay down while somebody is asking for it every tick, and a holder that goes away - a
+     * behaviour that stops ticking, a world that closes - cannot leave it down by forgetting. It is also
+     * why {@link #clearAllKeys()} does not touch it: that is called by every movement, every tick of a
+     * walk, to rebuild the task's own keys, and a meal eaten while walking would come off the player's
+     * mouth twenty times a second if it were.
+     */
+    public void holdTheUseButton() {
+        this.useButtonAskedFor = true;
     }
 
     @Override
@@ -121,6 +152,18 @@ public final class InputOverrideHandler extends Behavior implements IInputOverri
         final boolean handReady = !baritone.getInventoryBehavior().switchingHands();
         blockBreakHelper.tick(isInputForcedDown(Input.CLICK_LEFT), handReady);
         blockPlaceHelper.tick(isInputForcedDown(Input.CLICK_RIGHT), handReady);
+        // The use that lasts, as opposed to the two clicks above: the ask is spent by this tick, and the
+        // button follows it. Nothing here is a click - the click was made once, by whoever started the
+        // use - so this only keeps the game from taking the mouthful away while it is still being chewed
+        final boolean holdTheUse = this.useButtonAskedFor;
+        this.useButtonAskedFor = false;
+        if (holdTheUse && !ctx.minecraft().options.keyUse.isDown()) {
+            ctx.minecraft().options.keyUse.setDown(true);
+            this.holdingTheUseButton = true;
+        } else if (!holdTheUse && this.holdingTheUseButton) {
+            ctx.minecraft().options.keyUse.setDown(false);
+            this.holdingTheUseButton = false;
+        }
 
         if (!baritone.getPathingBehavior().isPathing()) {
             footing.reset(); // a crossing that ended while nobody was asking is not one being walked

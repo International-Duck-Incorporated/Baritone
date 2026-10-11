@@ -70,6 +70,15 @@ public class ButtonWritesTest {
             "src/main/java/baritone/utils/BlockBreakHelper.java",
             // the right button: the beat, then the click, then the arm
             "src/main/java/baritone/utils/BlockPlaceHelper.java",
+            // eating: the one held-item use in the fork that is not aimed at a block, so it cannot go
+            // through BlockPlaceHelper - that helper's whole condition is a block under the crosshair.
+            // It reaches for the mod's own controller, like everything above it, and it waits for the
+            // item in the hand the same way the helpers do: the slot is asked for through
+            // InventoryBehavior and the bite is not started until the switch has landed, and food that
+            // is already in the hand is the case that needs no switch at all. What it does not do is
+            // reach into the hand of a task that is using it, which is the reason it is a behaviour and
+            // not a process: a meal is never worth the slot a mine is in the middle of
+            "src/main/java/baritone/behavior/EatBehavior.java",
             // the inventory swap: the beat behind InventorySwap, then the window click
             "src/main/java/baritone/behavior/InventoryBehavior.java",
             // the idle fidget and the arm that swings while the aim holds still: animation packets with no
@@ -93,6 +102,10 @@ public class ButtonWritesTest {
     private static final String[][] SHAPES = {
             {"src/main/java/baritone/utils/BlockBreakHelper.java", "this.sightSettle.waiting("},
             {"src/main/java/baritone/utils/BlockPlaceHelper.java", "this.sightSettle.waiting("},
+            // eating waits for the item that was asked for, and drops the attempt instead of pressing
+            // at a hand that never arrived (the window bounds the wait, the budget bounds the retries)
+            {"src/main/java/baritone/behavior/EatBehavior.java", "baritone.getInventoryBehavior().switchingHands()"},
+            {"src/main/java/baritone/behavior/EatBehavior.java", "player.getInventory().getSelectedSlot() == targetSlot"},
             {"src/main/java/baritone/behavior/InventoryBehavior.java", "this.swap.tick()"},
             // the arm that swings at nothing: the packet and the swing, and no click in the file at all
             {"src/main/java/baritone/behavior/LookBehavior.java", "ServerboundPunchPacket.INSTANCE"},

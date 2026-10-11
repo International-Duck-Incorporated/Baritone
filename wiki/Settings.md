@@ -35,6 +35,8 @@ Settings are saved to `minecraft/baritone/settings.txt`. Delete this file to res
 | `allowWaterBucketFall` | true | Use water bucket for long falls |
 | `allowVines` | false | Allow climbing and traversing vines |
 | `allowDiagonalAscend` | false | Allow diagonal ascending movements |
+| `autoEat` | true | Eat when hungry: an ordinary food item from the hand or the hotbar, never a special one |
+| `autoEatThreshold` | 15 | How empty the bar gets, out of 20, before `autoEat` eats |
 | `assumeSafeWalk` | false | Assume safe walk (no crouch on bridges) |
 | `sprintInWater` | true | Sprint while in water |
 

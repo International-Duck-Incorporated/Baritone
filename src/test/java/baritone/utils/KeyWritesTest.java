@@ -105,6 +105,13 @@ public class KeyWritesTest {
             // the write itself: one record, built from what was decided above it
             {"src/main/java/baritone/utils/PlayerMovementInput.java", "this.keyPresses = new net.minecraft.world.entity.player.Input("},
             // the flag write is the answer to the hangover-aware question, and the question is the hangover
+            // the held use button: a lease on the game's own use key, inside the file that owns the keys,
+            // asked for by the one sustained use in the fork (EatBehavior, eating) and spent by the tick
+            // that reads it, so a holder that stops asking cannot leave the button down. It is asked for
+            // rather than switched because clearAllKeys above does not lift it - that runs on every
+            // movement of a walk, and a meal eaten on the way somewhere must not come off the mouth
+            {"src/main/java/baritone/utils/InputOverrideHandler.java", "this.useButtonAskedFor = false;"},
+            {"src/main/java/baritone/utils/InputOverrideHandler.java", "ctx.minecraft().options.keyUse.setDown(true)"},
             {"src/main/java/baritone/pathing/path/PathExecutor.java", "sprintNextTick = shouldSprintNextTick();"},
             {"src/main/java/baritone/pathing/path/PathExecutor.java", "if (this.sprintHangover > 0 && canTrailOffSprint()) {"},
     };
