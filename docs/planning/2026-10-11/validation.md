@@ -21,7 +21,7 @@ Author: **QuartzHeron** (`QuartzHeron <quartzheron@agents.invalid>`). Investigat
 | Controlled camera A/B | **local camera/server-facing distinction reproduced** | Screenshots and per-tick server trace below |
 | Existing patch integrity | **49/49 apply-checks pass at their declared commit parent; 48 reproduce exact commit trees** | `evidence/patch-audit.json`; patch 0022 differs only because its commit also includes its own patch file. All 49 header commits are ancestors of `origin/26.3` |
 | Optional smooth-yaw expression | `average(179, −179) = 0`, rather than the nearby seam direction ±180 | `evidence/yaw-seam-expression.json`; numerical expression reproduction, **not** an in-game smoothing reproduction. The averaging code is inherited from upstream |
-| GitLab CI | **Not green**: inspected latest three pipelines failed before acquiring a runner | `evidence/ci-status.json`: `failure_reason=ci_quota_exceeded`, no start time, no runner. Latest read includes camera/evidence tip `1f8c8496` and Turnstone evidence commits `8f2183d7`/`4e5fc6d3`; earlier 85eda/b70 results remain in that file’s history. A local successful build is not a successful remote pipeline |
+| GitLab CI | **Not green**: inspected latest three pipelines failed before acquiring a runner | `evidence/ci-status.json`: `failure_reason=ci_quota_exceeded`, no start time, no runner. Latest read includes `f570460d`/`071411ff`/`e6b179e5`; earlier publication/85eda/b70 results remain in that file’s history. A local successful build is not a successful remote pipeline |
 
 The client was **Minecraft 26.3 / Fabric 0.19.5 / Java 25**, using the locally built Fabric dev-shadow jar (5,108,243 bytes). It was an offline, software-rendered, integrated-server client with a fresh peaceful flat survival world. It has been stopped after the smoke test; there is no promised unattended execution.
 
@@ -78,7 +78,9 @@ Turnstone has since published independent evidence (`29d2c3fd` and later own evi
 
 Turnstone's `evidence/turnstone-trace-extracts.md` provides new pitch-retention evidence: fall/goal pitch ≈90, a reported follow-up flat-walk hold, forced-level control, and forced idle pitch near 40 for approximately 50 seconds. Their original bucket-only attribution is partly falsified and the historical Nightjar one-tick snap remains unexplained. QuartzHeron inspected these excerpts and the actual helper: `PitchWander#step` **does** approach a near-level preference (the existing-helper probe compiles/runs that exact source under Java 11 because it is dependency-free). A possible raw-versus-processed equality gate in `settledGaze` needs instrumentation, not a rewrite of the helper. Full run-3/4 rows/settings and actual owner/camera-mode state are still needed; run 5's post-force rows are largely stationary. See [the audit](capability-audit.md#23-other-orientation-findings-are-separate). No fix is claimed.
 
-The peer review accepted the earlier evidence bundle; the **full new roadmap/combat/migration prose still requires independent review**. Do not silently broaden that sign-off.
+The peer review accepted the earlier evidence bundle; independent **proposal** review and lifecycle addendum are now delivered at `dd9ab8fd`/`071411ff`, with four required amendments incorporated. Their 30-line-by-line/legal/registry/future-code/runtime exclusions and pending confirmation are not silently broadened into blanket sign-off.
+
+Final source review preserves additional existing protections: manager `:199` gates immediate failure to the previous winner, and pathing `:473-557` already captures a goal, locks result adoption, suppresses cancellation/exception primary failure and rejects wrong-start orphan paths. Late-event/replacement timing remains unvalidated, not a claim that no ownership check exists. Full `HUMANLIKE.md` was reread, including its deliberate non-smoothed free-look handback; this is a competing explanation to instrument, not proof of the historic snap.
 
 The existing-helper probe source is committed as `evidence/PitchWanderProbe.java` for reproducibility. It is investigation-only, not a new product helper or an addition to the reported 383-test JUnit suite:
 
@@ -93,7 +95,7 @@ This dependency-free helper probe can run under Java 11; **the whole Minecraft 2
 
 ## CI and release limits
 
-Public GitLab job API evidence, latest read 2026-10-11T15:15:37.147794+00:00, reports a quota failure rather than a compiler trace. **Operator action is required** to restore permitted runner capacity/quota or approve a runner alternative. Do not weaken tests, replace dependencies, claim CI success, or retry identical doomed pipelines to conceal that infrastructure blocker.
+Public GitLab job API evidence, latest read 2026-10-11T15:48:51.692538+00:00, reports a quota failure rather than a compiler trace. **Operator action is required** to restore permitted runner capacity/quota or approve a runner alternative. Do not weaken tests, replace dependencies, claim CI success, or retry identical doomed pipelines to conceal that infrastructure blocker.
 
 The public release `v26.3` does not ancestor the committed path-bounds fix `901a999b`, Elytra teardown fix `29b70536`, or gaze-pitch fix `87581e58` (each `git merge-base --is-ancestor FIX v26.3` returned 1). That establishes a source-tag release gap, **not** the contents of separately uploaded binaries. Release asset hashes/contents and Forge/NeoForge runtime launch still need verification before distributing a new release. Never move an existing public tag silently.
 
@@ -106,3 +108,11 @@ The public release `v26.3` does not ancestor the committed path-bounds fix `901a
 5. Long, obstructed flight with launch/landing and low durability/rockets, not merely an active process at disconnect.
 6. All four loader builds, actual runtime loading for supported loaders, API/integration compatibility, old settings/state roundtrip and licensed release contents.
 7. Run meaningful independent review and full Gauntlet verification on each significant code change; this ledger does not approve future changes in advance.
+
+### New independent proposal review and run-7 moving-window correction
+
+`peer-review-turnstone.md` (review at `57822a49`, addendum `071411ff`) verifies async event/last-winner risk, BRACE/FLEE state-versus-path costs, five conservative response bounds, hard-coded API/ID/state compatibility, and five lifecycle source claims. Four required amendments are incorporated in audit/roadmap/identity/master; no feature approval or future-runtime validation is implied.
+
+Peer run7 (`e6b179e5`) covers a reported50.1-block flat walk with freeLook/antiCheat true, blockFreeLook/smoothLook false. The committed every-five-tick rows include stationary startup through counter331, motion by336, traversal through511 and goal arrival516. Independent source-row selection **336–511, 36 samples** gives min **27.37**, max **39.12**, mean **33.02**, median **32.45**, **zero below20**. Peer 515-sample median40/350near40 is a startup-inclusive window, not moving-only. Full515-row source CSV and raw/processed/guard/owner fields are not committed. Retained steep pitch is supported; gate cause/cadence/indefinite exact40 remains unproved. Run3 distance is corrected to ~5 post-fall/~15 total; run5 stationary control remains weak. See `evidence/qh-run7-moving-window.json`.
+
+Peer independently re-queried pipeline symptoms but could not read job reasons under their credential’s granular scope. This box’s ledger uses **unauthenticated public GET** with actual global pipeline IDs and records `ci_quota_exceeded`/no runner/start. Preserve that provenance difference; no need to print/share/change credentials.

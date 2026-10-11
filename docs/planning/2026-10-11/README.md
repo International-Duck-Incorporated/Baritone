@@ -6,13 +6,13 @@
 
 1. **Keep the existing pathfinding and useful fork work.** Matching upstream `26.3` at `25111dae` is an ancestor of product baseline `f1058fa8`: 0 upstream-only / 281 fork-only commits. Inspected A* changes are logging, not a new solver. This fork already has substantial movement/look/interaction cadence, safe gates, tests and a real-client harness.
 2. **The primary local walking/mining orientation discrepancy is reproduced and explained.** Default `freeLook=true` gives walking SERVER mode (local camera restored), while `blockFreeLook=false` gives mining CLIENT mode. Controlled eastward runs show local yaw 0 versus −89.7 when toggling free look, while server-facing motion follows the route. The existing `freeLook=false` option is the smallest visible-camera profile; do not create another look controller or silently change manual-control defaults.
-3. **A separate pitch-retention issue has real peer evidence, not a uniquely confirmed root cause.** Turnstone's fall/goal traces and controls show retained steep pitch. Their bucket-only attribution was partly falsified. The actual PitchWander helper already returns toward a near-level preference; a noisy processed-versus-raw equality guard/ownership boundary needs instrumentation and a minimal fix. The historic one-tick snap and third-person body/head rendering remain open.
+3. **A separate pitch-retention issue has real peer evidence, not a uniquely confirmed root cause.** Turnstone's fall/goal traces and controls show retained steep pitch. Their bucket-only attribution was partly falsified; their old 30-block claim is corrected, and run7 now tests ~50.1 blocks. The actual PitchWander helper already returns toward a near-level preference; a noisy processed-versus-raw equality guard/ownership boundary needs instrumentation and a minimal fix. The historic one-tick snap and third-person body/head rendering remain open.
 4. **Entity detection exists; autonomous entity combat does not in the inspected fork.** Look/Avoidance/Follow observe entities for distinct purposes; avoidance is optional broad-Mob path-cost bias, not a full classifier. A guessed damage-gaze culprit is not attack authorization. The explicit **30-answer combat table** covers passive/hostile/neutral classification, deliberate attacks, health/equipment/cooldown/multi-threat/task-resume and loop prevention.
 5. **Build/test evidence is strong but scoped.** QuartzHeron executed **383 tests / 47 classes / zero failures/errors/skips**, full build exit 0, six scenes 6/6, disconnect smoke exit 0 and camera A/B. Turnstone independently reproduced tests, patches, ancestry/naming and scenes. Hostiles, full flight and all-loader runtime compatibility are not claimed validated. Current inspected CI failed pre-run because of **`ci_quota_exceeded`**; local green is not CI green.
 6. **Implement reliability before fighting.** First milestone: Gauntlet, CI/release lineage, inventory cleanup ownership, safe temporary-goal/failure/resume contracts, sprint/air safety and pitch/profile correctness; then optional deterministic perception + AVOID. Restricted DEFEND, new resource actions/durable jobs and public namespace/state migration are additional explicitly gated scopes.
 7. **Recommend one new product name: Wayquill.** Six consistently scored/researched candidates; strongest three **Wayquill (93), VoxelHelm (83), Trailwarden (76)**. Display/provenance-first branding preserves `baritone.*` API, Fabric `baritone`, Forge/NeoForge **`baritoe`**, commands/settings/cache paths, licences/authors/history. Research is not legal/registry/domain clearance.
 
-**Status:** consolidated planning proposal, with substantive independent evidence review already incorporated. **The full new roadmap/combat/migration prose still needs independent review and human scope approval. No new product feature or applied rebrand is authorized or implemented by this package.** Authentication for publishing does not approve implementation.
+**Status:** consolidated planning proposal, with substantive independent evidence review already incorporated. **Independent review at `dd9ab8fd`/`071411ff` is delivered, with four required amendments incorporated here; reviewer confirmation of this revised text and human scope approval remain pending. No new product feature or applied rebrand is authorized or implemented by this package.** Authentication for publishing does not approve implementation.
 
 ## Read the package
 
@@ -32,13 +32,26 @@ Product baseline: **`f1058fa8345ff26a1c7e95cb1fd9f522bcc661d2`**. Initial shared
 | Category | Examples / decision consequence |
 |---|---|
 | **Runtime/test confirmed** | Existing baseline/build/peaceful scenes/smoke; local/server camera-mode split; peer fall/goal pitch retention within recorded windows |
-| **Source confirmed** | Temporary priority/pause arbitration, food >6 sprint and item-saver/flight guards, broad optional Avoidance, guessed visual culprit, block-only raytrace, absent autonomous entity attack call path in inspected scope |
+| **Source confirmed** | Temporary priority/pause/last-winner failure arbitration, food >6 sprint and item-saver/flight guards, broad optional Avoidance, guessed visual culprit, block-only raytrace, absent autonomous entity attack call path in inspected scope |
 | **Confirmed expression-level defect** | Inherited optional arithmetic yaw average across 179/−179 gives opposite-side 0; default smoothing off, live optional-mode reproduction pending |
 | **Source-confirmed risk, scenario unvalidated** | Begun inventory queue under a foreign menu can be preserved while its ticking Elytra owner is released; no duplicate/lost-item runtime outcome claimed |
 | **Hypotheses requiring discriminating evidence** | Exact retained-pitch writer/processed equality gate; historic 89.9→0 snap; optional interest provoking neutral gaze; repeated task failure without shared budget |
 | **Missing in inspected scope** | Unified conservative threat classifier, autonomous fight/flee task response, entity weapon/reach/cooldown loop, general ground health/food planner and universal durable task checkpointing |
 | **Proposed, not implemented** | All new threat/response/checkpoint tasks and Wayquill application; no LLM/rewritten A*/competing controller requirement |
 | **Operational blocker** | GitLab job `ci_quota_exceeded`; operator capacity required; `v26.3` source tag excludes three later fixes, uploaded asset contents not yet checked |
+
+## Independent review and required amendment disposition
+
+[Turnstone’s separately authored review](peer-review-turnstone.md) accepts the proposal **with four required amendments before implementation**; lifecycle §5 was subsequently checked in its addendum. It explicitly excludes line-by-line derivation of all 30 combat answers, legal/registry clearance, future runtime behaviour and CI/release sufficiency. Those limits remain visible.
+
+| Amendment | Integrated planning contract | Validation still required |
+|---|---|---|
+| A1: async failure requester identity | P0-03 preserves last-winner guard, but requires requester/task/world/calc attribution from request through event delivery before FLEE. Source gap confirmed; actual cross-owner poisoning not runtime-reproduced. | Adversarial late/after-tick/pause/same-process-new-task/world fixtures, normal failure still reaches original requester |
+| A2: BRACE versus FLEE | BRACE `REQUEST_PAUSE` retains original path/no travel; FLEE safely discards original path/state retained; hand-back uses fresh original goal, normal re-plan not failure | Both shapes, safe boundary, stale response path and physical/user/inventory precedence |
+| A3: five DEFEND bounds | OFF/deny-by-default whitelist; bounded return; no screen/container/transaction/unsettled hand; MVP already-held suitable weapon only; P0 failure protection first | No held-slot/inventory theft, entity/LOS/cooldown/reach/health/resource/user/world guard matrix and hostile runtime |
+| A4: before/after compatibility map | Five explicit **unchanged** rows for Fabric `baritone`, Forge/NeoForge `baritoe`, API/provider, state dirs and settings; licences/authors/patch history preserved | API/loader/state/command fixtures; technical migration deferred |
+
+Requested long-walk evidence is credited but corrected quantitatively: the peer’s 515-sample median40 includes startup stationary through counter331. Independently recomputed 36 committed moving samples (336–511) remain steep and never below20; their moving-only statistics are in `evidence/qh-run7-moving-window.json`. This supports retention, not a uniquely proven gate cause or indefinite exact40. No complete raw/processed/owner trace is claimed available.
 
 ## 18-deliverable traceability index
 
@@ -86,7 +99,7 @@ Audit-worded questions provide navigable coverage of the requested mission; they
 | 13 | What humanisation already exists? | Aim easing/tempo, pitch/gaze/sway/glances/idle, dig/click/item/approach/landing/sprint/key/crouch/follow/work-order machinery; don't layer arbitrary mistakes. Audit §1/§2.4. |
 | 14 | Does sprint wind-up already exempt hazards? | Yes, existing exclusions/tests; edge/hangover/flight scenario gaps remain. Audit §2.4 / P0-04. |
 | 15 | Do green write-count tests prove natural/safe behaviour? | No, shapes/timing/intents and wiring need property/scenario evidence. Turnstone census incorporated with this limit. G-01 / workflow tests. |
-| 16 | How are tasks activated and prioritised? | Registered IBaritoneProcess and existing priority/temporary manager; non-temporary replacement tears lower owners down. Audit §5 / P0-03. |
+| 16 | How are tasks activated and prioritised? | Registered IBaritoneProcess and existing priority/temporary manager; non-temporary replacement tears lower owners down; last-winner failure gate retained, manual/cleanup/flight priorities respected. Audit §5 / P0-03. |
 | 17 | What stuck detection exists? | Movement timeout/off-path cancellation, invalid-path discard/recalculation and process-specific handling; no universal success promise. Audit §5. |
 | 18 | Are retries/recovery globally bounded? | Specific mine blacklist/rescan and movement guards exist; shared no-progress/task budget missing, unbounded runtime loop not assumed. P3-01. |
 | 19 | Can current tasks be interrupted? | User pause/resume and temporary arbitration exist; no combat interrupt currently wired. Audit §3 Q27 / §5. |
@@ -109,7 +122,7 @@ Audit-worded questions provide navigable coverage of the requested mission; they
 | 36 | Which name wins after serious research/scoring? | Six consistent candidates; **Wayquill 93** winner, VoxelHelm 83 fallback, Trailwarden 76 conflict-heavy third; no legal clearance claim. Identity. |
 | 37 | How rebrand without breaking integrations/licences/state? | Display/provenance first; retain `baritone.*`, `baritone`/`baritoe`, commands/settings/state; aliases next, major migration deferred with backup/rollback; preserve licences/authors/history. Identity §4–5. |
 | 38 | Who does what and how are checks/review/handoffs continuous? | Proposed roles/file locks, actual fresh agents, layered tests/Gauntlet, unique real patches, correct authors, fetch/reconcile/push/verify, inactive recovery and redundant handoff. Workflow. |
-| 39 | What must the human approve and what is the next action? | Foundation scope, optional DEFEND/P3 capabilities, name stages/camera default, operator CI/hosting/release decisions; integrate independent full-plan review then claim next approved task. Decisions below / workflow §6. |
+| 39 | What must the human approve and what is the next action? | Foundation scope, optional DEFEND/P3 capabilities, name stages/camera default, operator CI/hosting/release decisions; confirm the integrated review amendments then claim the next explicitly approved task. Decisions below / workflow §6. |
 
 ## Explicit approval request and remaining work
 
@@ -119,7 +132,7 @@ Audit-worded questions provide navigable coverage of the requested mission; they
 
 **Operator blocker:** restore CI quota/runner capacity and authorize a new source-aligned release when validation is ready. Do not mistake the supplied publication credential for permission to change runner settings, tags/assets, features or brand.
 
-**Still unverified:** full new-plan independent review; exact pitch retention/snap cause and full settings/owner traces; foreign-menu inventory cleanup; hostile/task-resume/cooldown/neutral scenarios; full flight; supported-loader/downstream runtime matrix; release asset contents; external brand registration/legal/domain checks. Each is assigned an evidence-driven gate, not swept into “done.”
+**Still unverified:** reviewer confirmation of incorporated amendments (30 combat lines and legal/registry side were not independently re-derived); exact pitch retention/snap cause and full settings/owner traces; foreign-menu inventory cleanup; hostile/task-resume/cooldown/neutral scenarios; full flight; supported-loader/downstream runtime matrix; release asset contents; external brand registration/legal/domain checks. Each is assigned an evidence-driven gate, not swept into “done.”
 
 ## What changed / what did not
 

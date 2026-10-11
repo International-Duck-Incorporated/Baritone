@@ -1,0 +1,19 @@
+{
+  "checked_at_utc": "2026-10-11T16:05:30.600858+00:00",
+  "source_commit": "e6b179e56344a35e0a922994892ba56a313c94b6",
+  "source_file": "turnstone-trace-extracts.md run 7",
+  "source_sha256": "9f83b388fc8c72fd4be98b0deb8489145e267ce5717d5970944b6b1e6a0fcca9",
+  "method": "Committed 5-tick excerpt only. Startup stationary through run counter 331; movement begins by 336; last pre-arrival traversal sample 511; goal arrival 516. Select inclusive 336..511, do NOT count startup/goal-idle as moving or pretend full 515-row CSV is committed.",
+  "excerpt_rows": 199,
+  "moving_window_rows": 36,
+  "window_counter_min": 336,
+  "window_counter_max": 511,
+  "moving_pitch_min": 27.37,
+  "moving_pitch_max": 39.12,
+  "moving_pitch_mean": 33.01694444444445,
+  "moving_pitch_median": 32.45,
+  "moving_samples_below_20": 0,
+  "reported_full_515_sample_statistics": "Peer reports median40/350near40 across a goal-active interval that includes the long stationary startup. These are not moving-only statistics.",
+  "reported_walk_distance_blocks": 50.1,
+  "verdict": "Steep pitch persists throughout the substantial walking excerpt, but 40.00/515 is not the moving-only median. Gate mechanism remains hypothesis without raw/processed/owner trace."
+}

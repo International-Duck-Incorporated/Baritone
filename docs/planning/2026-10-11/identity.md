@@ -96,6 +96,18 @@ A committed read-only census, `evidence/identity-references.json`, maps **475 tr
 
 This inventory distinguishes implemented technical identity from proposed display identity. It deliberately leaves legacy `baritone` and `baritoe` visible where compatibility/attribution needs them. No rename tool has been run.
 
+### Explicit Stage 1–2 compatibility mapping (Turnstone review amendment A4)
+
+| Surface | Current value / exact source | Stage 1–2 value | Required decision |
+|---|---|---|---|
+| Fabric ID | `baritone`; `fabric/src/main/resources/fabric.mod.json:3` | **`baritone` unchanged** | Display Wayquill does not change dependency/network identity |
+| Forge/NeoForge ID | `baritoe`; `BaritoneForgeModXD.java:20/23`, Forge `mods.toml:16,34` | **`baritoe` unchanged** | Historical mismatch is deliberate compatibility, never silently tidy it |
+| API/provider bootstrap | `baritone.*` / `baritone.BaritoneProvider`; `src/api/java/baritone/api/BaritoneAPI.java:38` | **Unchanged** | Hard-coded reflective bootstrap and downstream class descriptors protected |
+| Global/per-world state directory | `baritone`; `Baritone.java:97`, `cache/WorldProvider.java:137,155-157` | **Unchanged** | No cosmetic cache/settings/waypoint migration, merge/delete or empty fresh directory |
+| Settings filename/keys | `settings.txt`; `SettingsUtil.java:54,116` | **Unchanged** | Existing settings/scripts roundtrip, no reset or key rename |
+
+These directories/filenames were already inventoried in §4; the before/after mapping removes ambiguity. `0xFFshell`'s and all inherited contributors' historical authorship, original commits and `patches/` headers/bodies/hashes remain unchanged. New QuartzHeron commits never impersonate that reserved human identity.
+
 ## 5. Staged migration, gates and rollback
 
 ### Stage 0 — Decide and inventory (this planning phase)

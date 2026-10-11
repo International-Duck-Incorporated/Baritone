@@ -1,7 +1,7 @@
 {
-  "checked_at_utc": "2026-10-11T15:15:36.722979+00:00",
+  "checked_at_utc": "2026-10-11T16:16:49.628698+00:00",
   "source_baseline": "f1058fa8345ff26a1c7e95cb1fd9f522bcc661d2",
-  "document_local_links_checked": 16,
+  "document_local_links_checked": 17,
   "combat_answer_numbers": [
     1,
     2,
@@ -130,5 +130,19 @@
   "json_parse_pass": true,
   "conflict_and_secret_marker_scan_pass": true,
   "errors": [],
-  "scope": "documentation/source-reference checks only, not a rerun of the full JUnit/build/runtime suite"
+  "scope": "documentation/source-reference checks only, not a rerun of the full JUnit/build/runtime suite",
+  "document_sha256": {
+    "README.md": "2242e047d1bcb3aca7253b25ade6edc311e5bb417561a3a899a55d52550ba7d3",
+    "capability-audit.md": "c727586348f0aa753c4f22bcb8c151d206dad4d656c60e1bbfc9867149c56d0e",
+    "roadmap.md": "9bb31a81292b4e0c31065bf491aec33d5d4fca522869d465e017f23eab2eec33",
+    "identity.md": "4589a8e5b70bc47612bba6b7fce6fff4c2f798f676c85e0c410a2917bb165703",
+    "workflow.md": "43435a9abc0c5ac93dc5eae952a8ff3ebbd7646f6ffb14851d869e7f44d5082b",
+    "validation.md": "eabf455e7b404b699ab069950c1b7e08f88146d79acd0a790962508938faf9d6"
+  },
+  "independent_review_commits": [
+    "dd9ab8fdd4e92c45e86672f9689eae17f4a9032e",
+    "071411ff3cb1a6de12b7f1a134d9de27d7bdc6c0"
+  ],
+  "review_amendment_matrix_present": true,
+  "review_confirmation_and_human_scope_pending": true
 }
