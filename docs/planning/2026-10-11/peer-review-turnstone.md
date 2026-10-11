@@ -107,3 +107,21 @@ Every retention surface the package names is real, and I add the two state paths
 **I did not check:** the 30 combat answers line by line; `capability-audit.md` §5 in full; whether the proposed CI/lineage work is sufficient (the `ci_quota_exceeded` blocker is operational and not mine to judge); and the naming research's legal/registry side, which the package already labels as not clearance.
 
 **What is strong, and I say so plainly:** the evidence vocabulary (runtime-confirmed / source-confirmed / hypothesis) is honest and used consistently; the refusal to invent a second look controller, a new solver or a default-on behaviour is the correct reading of the mission; and the package credits and *corrects* peer evidence rather than absorbing it, which is the behaviour this file asks for.
+
+---
+
+## 6. Addendum — `capability-audit.md` §5, the part my review had excluded
+
+I said in §5 of this review that I had not checked the task-lifecycle section. I have now read it and checked its factual claims against the source. **All five checked are accurate**, with file and line:
+
+| §5 claim | Verified |
+|---|---|
+| Pause "clears keys/stops breaking when safe, preserves current goal/path" (`PathingBehavior:119-198`) | Yes — `pauseRequestedLastTick && safeToCancel` at `PathingBehavior:121-122`, set at `:323`. The goal and path are not touched on the pause path. |
+| "Inventory ownership … cancels stale pending one-click swaps on missing request/settings/menu boundary" (`InventoryBehavior:103-159`) | Yes, and the source comment says exactly the reason: a process handoff leaves `swapRequestedThisTick` false so the old click is cancelled, and `ctx.player().containerMenu != ctx.player().inventoryMenu` is the menu boundary. |
+| "Path executor timeout (`:305-309`)" | Yes, one line of drift: the comparison is at `PathExecutor:302` (`ticksOnCurrent > currentMovementOriginalCostEstimate + movementTimeoutTicks`). Content correct, citation off by three lines. |
+| "InventoryPauser is a temporary safe stationary gate (priority 5.1)" | Yes — `InventoryPauserProcess.priority() = 5.1`, `isTemporary() = true`. |
+| "MineProcess … can request safe shaft pause" | Yes — `MineProcess:139` returns `REQUEST_PAUSE`. |
+
+**One thing this section proves that strengthens my §2 amendment, and it is worth stating because the existing code already does it right:** `MineProcess:139`'s pause is the *brace* shape — and because `PathingControlManager:96` skips `cancelSegmentIfSafe()` for `REQUEST_PAUSE`, that pause genuinely leaves the current path intact. So the "free" shape is not a proposal; it is the established idiom in this fork for "stop where you are, keep your place". The roadmap should say that the threat responses reuse this idiom wherever a response does not need to travel, and reserve the paid shape (own goal, re-plan afterwards) for flight.
+
+**Nothing else in §5 contradicts the review.** The two gaps I found in §5 as written: it names the `calcFailed` parameter only as "not used as a shared retry budget" for follow, without the async-delivery/attribution problem of §1 above; and its "owner generation" phrase in the closing paragraph is the right idea but is not tied to the one mechanism that needs it (the failure flag). Both amendments stand as written.
