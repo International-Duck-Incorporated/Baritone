@@ -22,6 +22,7 @@ import baritone.utils.accessor.IPlayerControllerMP;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.BlockPos;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.core.Direction;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
@@ -85,6 +86,11 @@ public final class BaritonePlayerController implements IPlayerController {
     @Override
     public InteractionResult processRightClick(LocalPlayer player, Level world, InteractionHand hand) {
         return mc.gameMode.useItem(player, hand);
+    }
+
+    @Override
+    public void attackEntity(Player player, Entity target) {
+        mc.gameMode.attack(player, target);
     }
 
     @Override

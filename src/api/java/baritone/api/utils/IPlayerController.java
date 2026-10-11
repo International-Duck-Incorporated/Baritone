@@ -23,6 +23,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.level.GameType;
@@ -50,6 +51,18 @@ public interface IPlayerController {
     InteractionResult processRightClickBlock(LocalPlayer player, Level world, InteractionHand hand, BlockHitResult result);
 
     InteractionResult processRightClick(LocalPlayer player, Level world, InteractionHand hand);
+
+    /**
+     * Swing at an entity, the way a left click aims at one rather than at a block.
+     * <p>
+     * It is here rather than reached for directly for the same reason the block clicks are: the game's own
+     * controller is called from one wrapper and nowhere else, so that everything above it can be answered
+     * without a game. Defence needs the click and neither helper can express it - a click on an entity has
+     * no block under the crosshair, which is {@link #processRightClick}'s whole condition and
+     * {@code BlockPlaceHelper}'s, and no block to break, which is {@code BlockBreakHelper}'s. Eating is the
+     * other click in the fork that is not aimed at a block and it is here for the same reason.
+     */
+    void attackEntity(Player player, Entity target);
 
     boolean clickBlock(BlockPos loc, Direction face);
 

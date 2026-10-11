@@ -111,6 +111,7 @@ public class Baritone implements IBaritone {
             // After the inventory behaviour, so a slot this one asks for is on its way the same
             // tick, and before the input handler, so nothing is pressed while the hand is moving
             this.registerBehavior(EatBehavior::new);
+            this.registerBehavior(DefendBehavior::new);
             this.inputOverrideHandler = this.registerBehavior(InputOverrideHandler::new);
             this.registerBehavior(WaypointBehavior::new);
         }

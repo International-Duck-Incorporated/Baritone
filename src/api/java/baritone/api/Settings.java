@@ -108,6 +108,22 @@ public final class Settings {
     public final Setting<Integer> autoEatThreshold = new Setting<>(15);
 
     /**
+     * Whether the bot answers a hostile mob that is coming for it.
+     * <p>
+     * Off by default, and deliberately: this is the only thing in the fork that takes an action another
+     * player reads as aggression, and a bot that starts fights on its own is a different product from
+     * the one the rest of these settings build. Turn it on when you want a bodyguard; leave it alone and
+     * nothing about your bot changes.
+     * <p>
+     * What it will hit is narrow by construction - hostile by nature only, never a detonating mob, never
+     * an angered neutral, never a player, one target at a time, and not while nearly dead, empty-handed
+     * or outnumbered. It also only swings at a mob the client can see is targeting you: when the game has
+     * not told the client what a mob is after, the answer is "unknown" and unknown is not permission. See
+     * {@code DefendBehavior} for why that is the honest reading and what it costs.
+     */
+    public final Setting<Boolean> autoDefend = new Setting<>(false);
+
+    /**
      * Wait this many ticks between InventoryBehavior moving inventory items
      */
     public final Setting<Integer> ticksBetweenInventoryMoves = new Setting<>(1);

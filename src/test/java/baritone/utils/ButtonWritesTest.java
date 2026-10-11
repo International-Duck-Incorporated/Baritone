@@ -102,6 +102,14 @@ public class ButtonWritesTest {
     private static final String[][] SHAPES = {
             {"src/main/java/baritone/utils/BlockBreakHelper.java", "this.sightSettle.waiting("},
             {"src/main/java/baritone/utils/BlockPlaceHelper.java", "this.sightSettle.waiting("},
+            // defence clicks on an entity, and neither helper can express that click (no block under the
+            // crosshair, none to break) - the same case eating is on the list for. It is not on ALLOWED
+            // because the click goes through the mod's own controller like everything above the wrapper,
+            // but the beat is pinned here anyway: the swing is sent only once the head has already arrived
+            // on the mob, and only once the weapon has come back up. Without these two lines the click is
+            // a machine's click and this file is a licence for it.
+            {"src/main/java/baritone/behavior/DefendBehavior.java", "baritone.getLookBehavior().hasArrivedAt(rotation)"},
+            {"src/main/java/baritone/behavior/DefendBehavior.java", "player.getAttackStrengthScale(0.0F) < SWING_WHEN_RECOVERED"},
             // eating waits for the item that was asked for, and drops the attempt instead of pressing
             // at a hand that never arrived (the window bounds the wait, the budget bounds the retries)
             {"src/main/java/baritone/behavior/EatBehavior.java", "baritone.getInventoryBehavior().switchingHands()"},

@@ -37,6 +37,7 @@ Settings are saved to `minecraft/baritone/settings.txt`. Delete this file to res
 | `allowDiagonalAscend` | false | Allow diagonal ascending movements |
 | `autoEat` | true | Eat when hungry: an ordinary food item from the hand or the hotbar, never a special one |
 | `autoEatThreshold` | 15 | How empty the bar gets, out of 20, before `autoEat` eats |
+| `autoDefend` | false | Answer a hostile mob that is coming for you: hostile by nature only, one target, and never a player, a pet, livestock or an angered neutral |
 | `assumeSafeWalk` | false | Assume safe walk (no crouch on bridges) |
 | `sprintInWater` | true | Sprint while in water |
 
