@@ -221,3 +221,80 @@ versions" sounds like it costs:
 - **The end-to-end cost is still unmeasured.** Compiling is not running: V3/V4 (artefacts, and the headless
   harness against each target) remain, and a symbol that compiles can still be a symbol that behaves
   differently. The claim this section supports is exactly the claim the probe supports — *the source compiles*.
+
+---
+
+## 5. CORRECTION to §4: the drift is 71 error sites, not six. The earlier number was a measurement artefact.
+
+**My own correction, 2026-10-11, and it matters because §4 above is wrong.** I published "six symbols in three
+files, all peripheral glue" and withdrew the multiversion-build design on the strength of it. That number came
+from `./gradlew compileJava -Pminecraft_version=26.1`, and **that task does not compile the whole tree.**
+
+The root build declares `sourceSets { api { ... } main { compileClasspath += api.output } }`, so `compileJava` has
+to resolve the `api` project first. It stopped at the six `api` errors and **never compiled `src/main/java` at
+all**. The six errors were real; they were the `api` project's six. The main tree was never asked.
+
+### The corrected measurement
+
+`./gradlew compileJava compileLaunchJava -Pminecraft_version=26.1 --continue` — `--continue` so that the task
+that fails first does not hide the rest. Raw log kept at
+`docs/planning/2026-10-11/evidence/turnstone-261-main-compile.log`.
+
+| | |
+|---|---|
+| error lines in the log | **142** (the compiler prints each twice) |
+| **distinct error sites** | **71** |
+| **distinct causes** | **20** |
+| files | **13** |
+
+By file, and the shape of it is the important part:
+
+| file | sites | what it is |
+|---|---|---|
+| `utils/IRenderer.java` | 43 | the **whole rendering pipeline API** |
+| `utils/accessor/IRenderPipelines.java` | 5 | the same |
+| `utils/PathRenderer.java` | 3 | the same |
+| `command/defaults/RenderCommand.java` | 1 | the same |
+| `behavior/LookBehavior.java` | 4 | `swing(...)`, the punch packet, `screen()` (see below) |
+| `utils/BlockBreakHelper.java` | 3 | `swing(...)`, the punch packet |
+| `utils/pathing/Avoidance.java` | 3 | `Enderman` |
+| `cache/CachedChunk.java` | 2 | `DYED_SHULKER_BOX`, `BED` |
+| `process/FarmProcess.java` | 2 | `BonemealSource` |
+| `utils/BlockPlaceHelper.java` | 2 | `swing(...)` |
+| `process/elytra/ElytraBehavior.java` | 1 | `swing(...)` |
+| `Baritone.java` | 1 | `setScreen(...)` signature |
+| `command/ExampleBaritoneControl.java` | 1 | `openUri(...)` |
+
+**52 of the 71 are one subsystem** — the renderer. And it is not a rename: 26.1 has no
+`net.minecraft.client.renderer.BindGroupLayouts`, no `StagedVertexBuffer`, and no
+`com.mojang.renderpearl.api.pipeline.RenderPipeline` at all, while 26.3's IRenderer is built on all three.
+That is a rendering port, not a spelling difference, and it is by far the largest single piece of the version
+work. The remaining 19 sites are a genuine mix of renames (`swing` gained an argument; `ServerboundPunchPacket`
+was `ServerboundSwingPacket`; `screen()`; `openUri`), constants that moved (`DYED_SHULKER_BOX`, `BED`,
+`BonemealSource`, `levelExtractor`) and one entity class (`Enderman`).
+
+### What is actually done, and what the honest state is
+
+**The five `api` symbols are fixed and verified** (§4's list was right as far as it went). The seam is
+`api/utils/VersionCompat.java`: `vanillaPack()`, `worldDataLayer()`, `worldDataRegistries()`, `chat(Gui)` and
+`toasts(Minecraft)`, each one shape-based rather than name-based, with every lookup asserting that it found
+exactly one candidate rather than taking the first. All three of the seams reachable from a Fabric jar were then
+**verified in a live client on 26.3**: Baritone's own chat lines render through `chat()`, `#mine minecraft:stone`
+parsed a block and printed it through the registry path (which is `worldDataLayer()` and
+`worldDataRegistries()` doing their job - the block-parse path is the one that needs a registry access), and the
+toast path put "[Baritone] true" on the screen through `toasts()`. No new exception appears anywhere in the log.
+
+**The other 19 symbols are inventoried, not fixed.** So:
+
+- **The `api` half of multi-version support is done.** `./gradlew compileApiJava -Pminecraft_version=26.1` is
+  green.
+- **The `main` half is not.** `compileJava` against 26.1 is 71 error sites, 52 of them the renderer.
+- **V2 is therefore L, not the S/M that §4 implied**, and the rendering subsystem is its own piece of work with
+  its own size. Anyone picking this up should start from the log rather than from §4's table.
+- **The multiversion-build design stays withdrawn, but for a different reason than §4 gave.** Not because the
+  drift is trivial - it is not - but because 52 of 71 sites are in one subsystem, which a per-version
+  abstraction handles and a second build system does not. If the renderer turns out to need genuinely different
+  code per version rather than a different name, that conclusion should be revisited rather than inherited.
+- **What is unchanged:** the pathfinder, the path execution, the movement rules, the process framework and the
+  whole humanlike layer are **not** in the 71. That part of §4 holds, and it is the part that matters for the
+  project's future - the rendering layer is paint, and the walk is the product.

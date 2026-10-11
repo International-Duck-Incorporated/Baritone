@@ -302,25 +302,28 @@ public final class BlockOptionalMeta {
         }
 
         public static CompletableFuture<RegistryAccess> load() {
-            // Simplified from {@link net.minecraft.server.WorldLoader#load()}
+            // Simplified from {@link net.minecraft.server.WorldLoader#load()}, and the two things this
+            // version of it cannot spell the same way as the last are asked for by shape instead of by
+            // name - see VersionCompat: the world's data layer, and the registries that go in it.
             CloseableResourceManager closeableResourceManager = new MultiPackResourceManager(
                 PackType.SERVER_DATA,
-                List.of(ServerPacksSource.createVanillaPackSource().fullResources())
+                List.of(VersionCompat.vanillaPack())
             );
+            RegistryLayer worldData = VersionCompat.worldDataLayer();
             LayeredRegistryAccess<RegistryLayer> baseLayeredRegistry = RegistryLayer.createRegistryAccess();
             List<Registry.PendingTags<?>> pendingTags = TagLoader.loadTagsForExistingRegistries(
                 closeableResourceManager, baseLayeredRegistry.getLayer(RegistryLayer.STATIC)
             );
             List<HolderLookup.RegistryLookup<?>> worldGenRegistryLookupList = TagLoader.buildUpdatedLookups(
-                baseLayeredRegistry.getAccessForLoading(RegistryLayer.WORLD),
+                baseLayeredRegistry.getAccessForLoading(worldData),
                 pendingTags
             );
             LayeredRegistryAccess<RegistryLayer> layeredRegistryAccess = baseLayeredRegistry.replaceFrom(
-                RegistryLayer.WORLD,
+                worldData,
                 RegistryDataLoader.load(
                     closeableResourceManager,
                     worldGenRegistryLookupList,
-                    RegistryDataLoader.WORLD_REGISTRIES,
+                    VersionCompat.worldDataRegistries(),
                     ForkJoinPool.commonPool()
                 ).join()
             );
