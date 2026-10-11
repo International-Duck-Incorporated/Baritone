@@ -1,0 +1,1349 @@
+From 50d5db5a5e1519cc49a62789d6211c55fb58d4ca Mon Sep 17 00:00:00 2001
+From: Turnstone <turnstone@agents.invalid>
+Date: Sun, 11 Oct 2026 17:28:34 +0000
+Subject: [PATCH] Turnstone: the version seam for the five api symbols, and a
+ correction to my own drift number
+
+Two things, and the second one is the more important.
+
+THE SEAM. New api/utils/VersionCompat holds the whole of the api half of 26.1..26.3
+support: vanillaPack(), worldDataLayer(), worldDataRegistries(), chat(Gui) and
+toasts(Minecraft). Each asks for what the thing IS rather than what it is called -
+its type, its return type, its position in a layering, which registries it contains
+- because a released Fabric jar is remapped to intermediary names, and remapping
+rewrites the references in the byte code and not the strings in the constants, so a
+lookup by name that works on a dev box would not work in the jar. Every lookup
+asserts it found exactly one candidate rather than taking the first: a silent wrong
+answer here is a crash inside a remapped jar with no line number to point at. The
+world's registries are found by the fact that the set carries the world presets and
+not the level stem - checked in both jars' static initialisers, where the client's
+synchronised set is a strict subset (28 of 45, and 32 of 51) and the dimension set is
+the one with the level stem. Four layers, order verified in both jars, not assumed.
+
+Verified in a live client on 26.3, because these paths cannot be unit-tested: the
+vanilla registries will not initialise in a plain JUnit JVM at all (I tried, and the
+failure was environmental - RegistryLayer.<clinit> at line 18 - so the test was
+removed rather than left failing or faked). Instead: Baritone's own chat lines render
+through chat(); `#mine minecraft:stone` parses a block and prints it through the
+registry path; and the toast path puts "[Baritone] true" on the screen through
+toasts(). No new exception in the log. compileApiJava -Pminecraft_version=26.1 is
+green.
+
+THE CORRECTION. My published "six symbols in three files, all peripheral glue" was a
+measurement artefact and I have retracted it in the plan. compileJava does NOT compile
+the whole tree: the root build makes main depend on the api project's output, so the
+task stopped at the six api errors and never compiled src/main/java at all. With
+`compileJava compileLaunchJava --continue` the real figure is 71 error sites, 20
+distinct causes, 13 files - and 52 of the 71 are one subsystem, the renderer, where
+26.1 has no StagedVertexBuffer, no BindGroupLayouts and no renderpearl RenderPipeline
+at all. That is a port, not a rename. The rest is a genuine mix: swing() gained an
+argument (5 sites), ServerboundPunchPacket was ServerboundSwingPacket (4), screen()
+and openUri() and setScreen() changed shape, and a few constants and one entity class
+moved.
+
+What that changes: the api half of multi-version support is DONE, the main half is
+not, V2 is L rather than S/M, and anyone picking it up should start from
+docs/planning/2026-10-11/evidence/turnstone-261-main-compile.log rather than from my
+earlier table. The multiversion-build design stays withdrawn, but for a better reason
+than I first gave: not because the drift is small - it is not - but because 52 of 71
+sites sit in one subsystem, which a per-version abstraction handles and a second build
+system does not. What is unchanged and still true: the pathfinder, path execution, the
+movement rules, the process framework and the humanlike layer are not in the 71.
+
+26.3 suite green throughout: 407 tests, 0 failures.
+---
+ .../evidence/turnstone-261-main-compile.log   | 811 ++++++++++++++++++
+ .../plan-addendum-versions-fabric-defend.md   |  77 ++
+ src/api/java/baritone/api/Settings.java       |   3 +-
+ .../baritone/api/utils/BlockOptionalMeta.java |  13 +-
+ .../baritone/api/utils/VersionCompat.java     | 295 +++++++
+ .../baritone/api/utils/gui/BaritoneToast.java |   3 +-
+ 6 files changed, 1195 insertions(+), 7 deletions(-)
+ create mode 100644 docs/planning/2026-10-11/evidence/turnstone-261-main-compile.log
+ create mode 100644 src/api/java/baritone/api/utils/VersionCompat.java
+
+diff --git a/docs/planning/2026-10-11/evidence/turnstone-261-main-compile.log b/docs/planning/2026-10-11/evidence/turnstone-261-main-compile.log
+new file mode 100644
+index 00000000..74fc6f2d
+--- /dev/null
++++ b/docs/planning/2026-10-11/evidence/turnstone-261-main-compile.log
+@@ -0,0 +1,811 @@
++To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.14.4/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
++Daemon will be stopped at the end of the build 
++> Task :buildSrc:compileJava UP-TO-DATE
++> Task :buildSrc:compileGroovy NO-SOURCE
++> Task :buildSrc:processResources NO-SOURCE
++> Task :buildSrc:classes UP-TO-DATE
++> Task :buildSrc:jar UP-TO-DATE
++
++> Configure project :
++[Unimined] Plugin Version: 1.4.2-dabcdf3-SNAPSHOT
++
++[Unimined] You have less than 2GB of memory allocated to gradle.
++[Unimined] This may cause issues with remapping and other tasks.
++[Unimined] Please allocate more memory to gradle by adding: 
++[Unimined]   org.gradle.jvmargs=-Xmx2G
++[Unimined] to your gradle.properties file.
++
++Detected version 26.3-59-g862a1b61-dirty
++[Unimined] Plugin Version: 1.4.2-dabcdf3-SNAPSHOT
++
++[Unimined] You have less than 2GB of memory allocated to gradle.
++[Unimined] This may cause issues with remapping and other tasks.
++[Unimined] Please allocate more memory to gradle by adding: 
++[Unimined]   org.gradle.jvmargs=-Xmx2G
++[Unimined] to your gradle.properties file.
++
++Detected version 26.3-59-g862a1b61-dirty
++[Unimined/Minecraft ::main] Applying minecraft config for source set 'main'
++[Unimined/MinecraftDownloader] retrieving version metadata
++[Unimined/Minecraft ::main] Applying NoTransformMinecraftTransformer
++[Unimined/Minecraft ::main] Applying run configs
++
++> Configure project :fabric
++[Unimined/Minecraft :fabric:main] Applying minecraft config for source set 'main'
++[Unimined/MinecraftDownloader] retrieving version metadata
++[Unimined/Minecraft :fabric:main] Applying OfficialFabricMinecraftTransformer
++[Unimined/Minecraft :fabric:main] Applying run configs
++
++> Task :compileApiJava UP-TO-DATE
++> Task :processApiResources NO-SOURCE
++> Task :apiClasses UP-TO-DATE
++> Task :compileSchematica_apiJava UP-TO-DATE
++> Task :processSchematica_apiResources NO-SOURCE
++> Task :schematica_apiClasses UP-TO-DATE
++
++> Task :compileJava
++/home/user/Baritone/src/main/java/baritone/behavior/LookBehavior.java:46: error: cannot find symbol
++import net.minecraft.network.protocol.game.ServerboundPunchPacket;
++                                          ^
++  symbol:   class ServerboundPunchPacket
++  location: package net.minecraft.network.protocol.game
++/home/user/Baritone/src/main/java/baritone/utils/BlockBreakHelper.java:23: error: cannot find symbol
++import net.minecraft.network.protocol.game.ServerboundPunchPacket;
++                                          ^
++  symbol:   class ServerboundPunchPacket
++  location: package net.minecraft.network.protocol.game
++/home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:31: error: cannot find symbol
++import net.minecraft.client.renderer.BindGroupLayouts;
++                                    ^
++  symbol:   class BindGroupLayouts
++  location: package net.minecraft.client.renderer
++/home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:33: error: cannot find symbol
++import net.minecraft.client.renderer.StagedVertexBuffer;
++                                    ^
++  symbol:   class StagedVertexBuffer
++  location: package net.minecraft.client.renderer
++/home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:51: error: cannot find symbol
++    StagedVertexBuffer stagedVertexBuffer = new StagedVertexBuffer(() -> "Baritone Render", 256);
++    ^
++  symbol:   class StagedVertexBuffer
++  location: interface IRenderer
++/home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:54: error: package RenderPipeline does not exist
++    RenderPipeline.Snippet BARITONE_LINES_SNIPPET = RenderPipeline.builder(((IRenderPipelines) new RenderPipelines()).getLinesSnippet())
++                  ^
++/home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:65: error: package RenderPipeline does not exist
++    RenderPipeline.Snippet BARITONE_BEACON_BEAM_SNIPPET = RenderPipeline.builder(((IRenderPipelines) new RenderPipelines()).getMatricesFogSnippet())
++                  ^
++/home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:73: error: cannot find symbol
++    RenderPipeline BEACON_BEAM_OPAQUE = ((IRenderPipelines) new RenderPipelines()).baritone$registerPipeline(RenderPipeline.builder(BARITONE_BEACON_BEAM_SNIPPET)
++    ^
++  symbol:   class RenderPipeline
++  location: interface IRenderer
++/home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:80: error: cannot find symbol
++    RenderPipeline BEACON_BEAM_TRANSLUCENT = ((IRenderPipelines) new RenderPipelines()).baritone$registerPipeline(RenderPipeline.builder(BARITONE_BEACON_BEAM_SNIPPET)
++    ^
++  symbol:   class RenderPipeline
++  location: interface IRenderer
++/home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:114: error: package StagedVertexBuffer does not exist
++    StagedVertexBuffer.Draw[] draw = {null};
++                      ^
++/home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:29: error: package com.mojang.renderpearl.api.pipeline does not exist
++import com.mojang.renderpearl.api.pipeline.*;
++                                 ^
++/home/user/Baritone/src/main/java/baritone/process/elytra/NetherPathfinderContext.java:38: warning: Unsafe is internal proprietary API and may be removed in a future release
++import sun.misc.Unsafe;
++               ^
++/home/user/Baritone/src/main/java/baritone/utils/pathing/Avoidance.java:26: error: cannot find symbol
++import net.minecraft.world.entity.monster.Enderman;
++                                         ^
++  symbol:   class Enderman
++  location: package net.minecraft.world.entity.monster
++/home/user/Baritone/src/main/java/baritone/utils/accessor/IRenderPipelines.java:20: error: package com.mojang.renderpearl.api.pipeline does not exist
++import com.mojang.renderpearl.api.pipeline.RenderPipeline;
++                                          ^
++/home/user/Baritone/src/main/java/baritone/utils/accessor/IRenderPipelines.java:23: error: package RenderPipeline does not exist
++    RenderPipeline.Snippet getLinesSnippet();
++                  ^
++/home/user/Baritone/src/main/java/baritone/utils/accessor/IRenderPipelines.java:24: error: package RenderPipeline does not exist
++    RenderPipeline.Snippet getMatricesFogSnippet();
++                  ^
++/home/user/Baritone/src/main/java/baritone/utils/accessor/IRenderPipelines.java:26: error: cannot find symbol
++    RenderPipeline baritone$registerPipeline(RenderPipeline pipeline);
++                                             ^
++  symbol:   class RenderPipeline
++  location: interface IRenderPipelines
++/home/user/Baritone/src/main/java/baritone/utils/accessor/IRenderPipelines.java:26: error: cannot find symbol
++    RenderPipeline baritone$registerPipeline(RenderPipeline pipeline);
++    ^
++  symbol:   class RenderPipeline
++  location: interface IRenderPipelines
++/home/user/Baritone/src/main/java/baritone/cache/CachedChunk.java:82: error: cannot find symbol
++        ).addAll(Blocks.DYED_SHULKER_BOX.asList())
++                       ^
++  symbol:   variable DYED_SHULKER_BOX
++  location: class Blocks
++/home/user/Baritone/src/main/java/baritone/cache/CachedChunk.java:83: error: cannot find symbol
++        .addAll(Blocks.BED.asList())
++                      ^
++  symbol:   variable BED
++  location: class Blocks
++/home/user/Baritone/src/main/java/baritone/Baritone.java:251: error: cannot find symbol
++                mc.execute(() -> mc.gui.setScreen(new GuiClick()));
++                                       ^
++  symbol:   method setScreen(GuiClick)
++  location: variable gui of type Gui
++/home/user/Baritone/src/main/java/baritone/behavior/LookBehavior.java:784: error: no suitable method found for swing(InteractionHand,SwingAnimation,boolean)
++                    ctx.player().swing(InteractionHand.MAIN_HAND, SwingAnimation.DEFAULT, false);
++                                ^
++    method LivingEntity.swing(InteractionHand,boolean) is not applicable
++      (actual and formal argument lists differ in length)
++    method LocalPlayer.swing(InteractionHand) is not applicable
++      (actual and formal argument lists differ in length)
++/home/user/Baritone/src/main/java/baritone/behavior/LookBehavior.java:785: error: cannot find symbol
++                    ctx.player().connection.send(ServerboundPunchPacket.INSTANCE);
++                                                 ^
++  symbol:   variable ServerboundPunchPacket
++  location: class LookBehavior
++/home/user/Baritone/src/main/java/baritone/behavior/LookBehavior.java:1118: error: cannot find symbol
++        if (ctx.minecraft().gui.screen() != null) {
++                               ^
++  symbol:   method screen()
++  location: variable gui of type Gui
++/home/user/Baritone/src/main/java/baritone/process/FarmProcess.java:266: error: cannot find symbol
++                if (ig.isValidBonemealTarget(ctx.world(), pos, state, BonemealSource.INTERACTION) && ig.isBonemealSuccess(ctx.world(), ctx.world().getRandom(), pos, state, BonemealSource.INTERACTION)) {
++                                                                      ^
++  symbol:   variable BonemealSource
++  location: class FarmProcess
++/home/user/Baritone/src/main/java/baritone/process/FarmProcess.java:266: error: cannot find symbol
++                if (ig.isValidBonemealTarget(ctx.world(), pos, state, BonemealSource.INTERACTION) && ig.isBonemealSuccess(ctx.world(), ctx.world().getRandom(), pos, state, BonemealSource.INTERACTION)) {
++                                                                                                                                                                            ^
++  symbol:   variable BonemealSource
++  location: class FarmProcess
++/home/user/Baritone/src/main/java/baritone/utils/BlockBreakHelper.java:84: error: no suitable method found for swing(InteractionHand,SwingAnimation,boolean)
++        ctx.player().swing(InteractionHand.MAIN_HAND, SwingAnimation.DEFAULT, false);
++                    ^
++    method LivingEntity.swing(InteractionHand,boolean) is not applicable
++      (actual and formal argument lists differ in length)
++    method LocalPlayer.swing(InteractionHand) is not applicable
++      (actual and formal argument lists differ in length)
++/home/user/Baritone/src/main/java/baritone/utils/BlockBreakHelper.java:85: error: cannot find symbol
++        ctx.player().connection.send(ServerboundPunchPacket.INSTANCE);
++                                     ^
++  symbol:   variable ServerboundPunchPacket
++  location: class BlockBreakHelper
++/home/user/Baritone/src/main/java/baritone/utils/BlockPlaceHelper.java:73: error: no suitable method found for swing(InteractionHand,SwingAnimation,boolean)
++                ctx.player().swing(hand, SwingAnimation.DEFAULT, false);
++                            ^
++    method LivingEntity.swing(InteractionHand,boolean) is not applicable
++      (actual and formal argument lists differ in length)
++    method LocalPlayer.swing(InteractionHand) is not applicable
++      (actual and formal argument lists differ in length)
++/home/user/Baritone/src/main/java/baritone/utils/BlockPlaceHelper.java:81: error: no suitable method found for swing(InteractionHand,SwingAnimation,boolean)
++                ctx.player().swing(hand, SwingAnimation.DEFAULT, false);
++                            ^
++    method LivingEntity.swing(InteractionHand,boolean) is not applicable
++      (actual and formal argument lists differ in length)
++    method LocalPlayer.swing(InteractionHand) is not applicable
++      (actual and formal argument lists differ in length)
++/home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:51: error: cannot find symbol
++    StagedVertexBuffer stagedVertexBuffer = new StagedVertexBuffer(() -> "Baritone Render", 256);
++                                                ^
++  symbol:   class StagedVertexBuffer
++  location: interface IRenderer
++/home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:61: error: cannot find symbol
++        .withDepthStencilState(new DepthStencilState(CompareOp.LESS_THAN_OR_EQUAL, false))
++                                   ^
++  symbol:   class DepthStencilState
++  location: interface IRenderer
++/home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:61: error: cannot find symbol
++        .withDepthStencilState(new DepthStencilState(CompareOp.LESS_THAN_OR_EQUAL, false))
++                                                     ^
++  symbol:   variable CompareOp
++  location: interface IRenderer
++/home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:55: error: cannot find symbol
++        .withColorTargetState(new ColorTargetState(new BlendFunction(
++                                  ^
++  symbol:   class ColorTargetState
++  location: interface IRenderer
++/home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:55: error: cannot find symbol
++        .withColorTargetState(new ColorTargetState(new BlendFunction(
++                                                       ^
++  symbol:   class BlendFunction
++  location: interface IRenderer
++/home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:56: error: cannot find symbol
++            BlendFactor.SRC_ALPHA,
++            ^
++  symbol:   variable BlendFactor
++  location: interface IRenderer
++/home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:57: error: cannot find symbol
++            BlendFactor.ONE_MINUS_SRC_ALPHA,
++            ^
++  symbol:   variable BlendFactor
++  location: interface IRenderer
++/home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:58: error: cannot find symbol
++            BlendFactor.ONE,
++            ^
++  symbol:   variable BlendFactor
++  location: interface IRenderer
++/home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:59: error: cannot find symbol
++            BlendFactor.ZERO
++            ^
++  symbol:   variable BlendFactor
++  location: interface IRenderer
++/home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:54: error: cannot find symbol
++    RenderPipeline.Snippet BARITONE_LINES_SNIPPET = RenderPipeline.builder(((IRenderPipelines) new RenderPipelines()).getLinesSnippet())
++                                                    ^
++  symbol:   variable RenderPipeline
++  location: interface IRenderer
++/home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:70: error: cannot find symbol
++            .withPrimitiveTopology(PrimitiveTopology.QUADS)
++                                   ^
++  symbol:   variable PrimitiveTopology
++  location: interface IRenderer
++/home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:68: error: cannot find symbol
++            .withBindGroupLayout(BindGroupLayouts.SAMPLER0)
++                                 ^
++  symbol:   variable BindGroupLayouts
++  location: interface IRenderer
++/home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:65: error: cannot find symbol
++    RenderPipeline.Snippet BARITONE_BEACON_BEAM_SNIPPET = RenderPipeline.builder(((IRenderPipelines) new RenderPipelines()).getMatricesFogSnippet())
++                                                          ^
++  symbol:   variable RenderPipeline
++  location: interface IRenderer
++/home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:76: error: cannot find symbol
++            .withDepthStencilState(new DepthStencilState(CompareOp.ALWAYS_PASS, false))
++                                       ^
++  symbol:   class DepthStencilState
++  location: interface IRenderer
++/home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:76: error: cannot find symbol
++            .withDepthStencilState(new DepthStencilState(CompareOp.ALWAYS_PASS, false))
++                                                         ^
++  symbol:   variable CompareOp
++  location: interface IRenderer
++/home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:75: error: cannot find symbol
++            .withColorTargetState(new ColorTargetState(BlendFunction.TRANSLUCENT))
++                                      ^
++  symbol:   class ColorTargetState
++  location: interface IRenderer
++/home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:75: error: cannot find symbol
++            .withColorTargetState(new ColorTargetState(BlendFunction.TRANSLUCENT))
++                                                       ^
++  symbol:   variable BlendFunction
++  location: interface IRenderer
++/home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:73: error: cannot find symbol
++    RenderPipeline BEACON_BEAM_OPAQUE = ((IRenderPipelines) new RenderPipelines()).baritone$registerPipeline(RenderPipeline.builder(BARITONE_BEACON_BEAM_SNIPPET)
++                                                                                                             ^
++  symbol:   variable RenderPipeline
++  location: interface IRenderer
++/home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:83: error: cannot find symbol
++            .withDepthStencilState(new DepthStencilState(CompareOp.ALWAYS_PASS, false))
++                                       ^
++  symbol:   class DepthStencilState
++  location: interface IRenderer
++/home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:83: error: cannot find symbol
++            .withDepthStencilState(new DepthStencilState(CompareOp.ALWAYS_PASS, false))
++                                                         ^
++  symbol:   variable CompareOp
++  location: interface IRenderer
++/home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:82: error: cannot find symbol
++            .withColorTargetState(new ColorTargetState(BlendFunction.TRANSLUCENT))
++                                      ^
++  symbol:   class ColorTargetState
++  location: interface IRenderer
++/home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:82: error: cannot find symbol
++            .withColorTargetState(new ColorTargetState(BlendFunction.TRANSLUCENT))
++                                                       ^
++  symbol:   variable BlendFunction
++  location: interface IRenderer
++/home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:80: error: cannot find symbol
++    RenderPipeline BEACON_BEAM_TRANSLUCENT = ((IRenderPipelines) new RenderPipelines()).baritone$registerPipeline(RenderPipeline.builder(BARITONE_BEACON_BEAM_SNIPPET)
++                                                                                                                  ^
++  symbol:   variable RenderPipeline
++  location: interface IRenderer
++/home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:91: error: cannot find symbol
++            .withDepthStencilState(new DepthStencilState(CompareOp.LESS_THAN_OR_EQUAL, false))
++                                       ^
++  symbol:   class DepthStencilState
++  location: interface IRenderer
++/home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:91: error: cannot find symbol
++            .withDepthStencilState(new DepthStencilState(CompareOp.LESS_THAN_OR_EQUAL, false))
++                                                         ^
++  symbol:   variable CompareOp
++  location: interface IRenderer
++/home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:89: error: cannot find symbol
++        RenderSetup.builder(RenderPipeline.builder(BARITONE_LINES_SNIPPET)
++                            ^
++  symbol:   variable RenderPipeline
++  location: interface IRenderer
++/home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:99: error: cannot find symbol
++                .withDepthStencilState(new DepthStencilState(CompareOp.ALWAYS_PASS, false))
++                                           ^
++  symbol:   class DepthStencilState
++  location: interface IRenderer
++/home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:99: error: cannot find symbol
++                .withDepthStencilState(new DepthStencilState(CompareOp.ALWAYS_PASS, false))
++                                                             ^
++  symbol:   variable CompareOp
++  location: interface IRenderer
++/home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:97: error: cannot find symbol
++        RenderSetup.builder(RenderPipeline.builder(BARITONE_LINES_SNIPPET)
++                            ^
++  symbol:   variable RenderPipeline
++  location: interface IRenderer
++/home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:127: error: cannot find symbol
++        draw[0] = stagedVertexBuffer.appendDraw(DefaultVertexFormat.POSITION_COLOR_NORMAL_LINE_WIDTH, PrimitiveTopology.LINES);
++                                                                                                      ^
++  symbol:   variable PrimitiveTopology
++  location: interface IRenderer
++/home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:140: error: cannot find symbol
++        draw[0] = stagedVertexBuffer.appendDraw(DefaultVertexFormat.BLOCK, PrimitiveTopology.QUADS);
++                                                                           ^
++  symbol:   variable PrimitiveTopology
++  location: interface IRenderer
++/home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:146: error: package StagedVertexBuffer does not exist
++        StagedVertexBuffer.ExecuteInfo info = stagedVertexBuffer.getExecuteInfo(draw[0]);
++                          ^
++/home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:148: error: cannot find symbol
++            var preparedRenderType = renderType.prepare();
++                                               ^
++  symbol:   method prepare()
++  location: variable renderType of type RenderType
++/home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:149: error: cannot find symbol
++            var renderTarget = Minecraft.getInstance().gameRenderer.mainRenderTarget();
++                                                                   ^
++  symbol:   method mainRenderTarget()
++  location: variable gameRenderer of type GameRenderer
++/home/user/Baritone/src/main/java/baritone/process/elytra/ElytraBehavior.java:805: error: no suitable method found for swing(InteractionHand,SwingAnimation,boolean)
++            ctx.player().swing(fireworkHand, SwingAnimation.DEFAULT, false);
++                        ^
++    method LivingEntity.swing(InteractionHand,boolean) is not applicable
++      (actual and formal argument lists differ in length)
++    method LocalPlayer.swing(InteractionHand) is not applicable
++      (actual and formal argument lists differ in length)
++/home/user/Baritone/src/main/java/baritone/process/elytra/NetherPathfinderContext.java:55: warning: Unsafe is internal proprietary API and may be removed in a future release
++    private static final Unsafe UNSAFE;
++                         ^
++/home/user/Baritone/src/main/java/baritone/process/elytra/NetherPathfinderContext.java:58: warning: Unsafe is internal proprietary API and may be removed in a future release
++            Field f = Unsafe.class.getDeclaredField("theUnsafe");
++                      ^
++/home/user/Baritone/src/main/java/baritone/process/elytra/NetherPathfinderContext.java:60: warning: Unsafe is internal proprietary API and may be removed in a future release
++            UNSAFE = (Unsafe) f.get(null);
++                      ^
++/home/user/Baritone/src/main/java/baritone/process/elytra/NetherPathfinderContext.java:326: warning: [removal] setMemory(long,long,byte) in Unsafe has been deprecated and marked for removal
++                    UNSAFE.setMemory(chunkPtr + (y0 * bytesInSection), bytesInSection, (byte) 0xFF);
++                          ^
++/home/user/Baritone/src/main/java/baritone/command/ExampleBaritoneControl.java:100: error: cannot find symbol
++                Blaze3D.openUri(URI.create("https://www.dominos.com/en/pages/order/"));
++                       ^
++  symbol:   method openUri(URI)
++  location: class Blaze3D
++/home/user/Baritone/src/main/java/baritone/command/defaults/RenderCommand.java:41: error: cannot find symbol
++        ctx.minecraft().levelExtractor.setBlocksDirty(
++                       ^
++  symbol:   variable levelExtractor
++  location: class Minecraft
++/home/user/Baritone/src/main/java/baritone/utils/pathing/Avoidance.java:79: error: cannot find symbol
++                    .filter(entity -> !(entity instanceof Enderman) || ((Enderman) entity).isCreepy())
++                                                          ^
++  symbol:   class Enderman
++  location: class Avoidance
++/home/user/Baritone/src/main/java/baritone/utils/pathing/Avoidance.java:79: error: cannot find symbol
++                    .filter(entity -> !(entity instanceof Enderman) || ((Enderman) entity).isCreepy())
++                                                                         ^
++  symbol:   class Enderman
++  location: class Avoidance
++/home/user/Baritone/src/main/java/baritone/utils/PathRenderer.java:77: error: cannot find symbol
++        if (ctx.minecraft().gui.screen() instanceof GuiClick) {
++                               ^
++  symbol:   method screen()
++  location: variable gui of type Gui
++/home/user/Baritone/src/main/java/baritone/utils/PathRenderer.java:78: error: cannot find symbol
++            ((GuiClick) ctx.minecraft().gui.screen()).onRender(event.getModelViewStack(), event.getProjectionMatrix());
++                                           ^
++  symbol:   method screen()
++  location: variable gui of type Gui
++/home/user/Baritone/src/main/java/baritone/utils/PathRenderer.java:367: error: cannot find symbol
++            stack.rotateDegrees(Axis.YP, time * 2.25F - 45.0F);
++                 ^
++  symbol:   method rotateDegrees(Axis,float)
++  location: variable stack of type PoseStack
++Note: Some input files use or override a deprecated API.
++Note: Recompile with -Xlint:deprecation for details.
++Note: Some input files use unchecked or unsafe operations.
++Note: Recompile with -Xlint:unchecked for details.
++71 errors
++5 warnings
++
++> Task :compileJava FAILED
++> Task :processResources NO-SOURCE
++> Task :processLaunchResources UP-TO-DATE
++
++[Incubating] Problems report is available at: file:///home/user/Baritone/build/reports/problems/problems-report.html
++
++FAILURE: Build failed with an exception.
++
++* What went wrong:
++Execution failed for task ':compileJava'.
++> Compilation failed; see the compiler output below.
++  /home/user/Baritone/src/main/java/baritone/process/elytra/NetherPathfinderContext.java:38: warning: Unsafe is internal proprietary API and may be removed in a future release
++  import sun.misc.Unsafe;
++                 ^
++  /home/user/Baritone/src/main/java/baritone/process/elytra/NetherPathfinderContext.java:55: warning: Unsafe is internal proprietary API and may be removed in a future release
++      private static final Unsafe UNSAFE;
++                           ^
++  /home/user/Baritone/src/main/java/baritone/process/elytra/NetherPathfinderContext.java:58: warning: Unsafe is internal proprietary API and may be removed in a future release
++              Field f = Unsafe.class.getDeclaredField("theUnsafe");
++                        ^
++  /home/user/Baritone/src/main/java/baritone/process/elytra/NetherPathfinderContext.java:60: warning: Unsafe is internal proprietary API and may be removed in a future release
++              UNSAFE = (Unsafe) f.get(null);
++                        ^
++  /home/user/Baritone/src/main/java/baritone/behavior/LookBehavior.java:784: error: no suitable method found for swing(InteractionHand,SwingAnimation,boolean)
++                      ctx.player().swing(InteractionHand.MAIN_HAND, SwingAnimation.DEFAULT, false);
++                                  ^
++      method LivingEntity.swing(InteractionHand,boolean) is not applicable
++        (actual and formal argument lists differ in length)
++      method LocalPlayer.swing(InteractionHand) is not applicable
++        (actual and formal argument lists differ in length)
++  /home/user/Baritone/src/main/java/baritone/utils/BlockBreakHelper.java:84: error: no suitable method found for swing(InteractionHand,SwingAnimation,boolean)
++          ctx.player().swing(InteractionHand.MAIN_HAND, SwingAnimation.DEFAULT, false);
++                      ^
++      method LivingEntity.swing(InteractionHand,boolean) is not applicable
++        (actual and formal argument lists differ in length)
++      method LocalPlayer.swing(InteractionHand) is not applicable
++        (actual and formal argument lists differ in length)
++  /home/user/Baritone/src/main/java/baritone/utils/BlockPlaceHelper.java:73: error: no suitable method found for swing(InteractionHand,SwingAnimation,boolean)
++                  ctx.player().swing(hand, SwingAnimation.DEFAULT, false);
++                              ^
++      method LivingEntity.swing(InteractionHand,boolean) is not applicable
++        (actual and formal argument lists differ in length)
++      method LocalPlayer.swing(InteractionHand) is not applicable
++        (actual and formal argument lists differ in length)
++  /home/user/Baritone/src/main/java/baritone/utils/BlockPlaceHelper.java:81: error: no suitable method found for swing(InteractionHand,SwingAnimation,boolean)
++                  ctx.player().swing(hand, SwingAnimation.DEFAULT, false);
++                              ^
++      method LivingEntity.swing(InteractionHand,boolean) is not applicable
++        (actual and formal argument lists differ in length)
++      method LocalPlayer.swing(InteractionHand) is not applicable
++        (actual and formal argument lists differ in length)
++  /home/user/Baritone/src/main/java/baritone/process/elytra/ElytraBehavior.java:805: error: no suitable method found for swing(InteractionHand,SwingAnimation,boolean)
++              ctx.player().swing(fireworkHand, SwingAnimation.DEFAULT, false);
++                          ^
++      method LivingEntity.swing(InteractionHand,boolean) is not applicable
++        (actual and formal argument lists differ in length)
++      method LocalPlayer.swing(InteractionHand) is not applicable
++        (actual and formal argument lists differ in length)
++  Note: Recompile with -Xlint:deprecation for details.
++  /home/user/Baritone/src/main/java/baritone/behavior/LookBehavior.java:46: error: cannot find symbol
++  import net.minecraft.network.protocol.game.ServerboundPunchPacket;
++                                            ^
++    symbol:   class ServerboundPunchPacket
++    location: package net.minecraft.network.protocol.game
++  /home/user/Baritone/src/main/java/baritone/utils/BlockBreakHelper.java:23: error: cannot find symbol
++  import net.minecraft.network.protocol.game.ServerboundPunchPacket;
++                                            ^
++    symbol:   class ServerboundPunchPacket
++    location: package net.minecraft.network.protocol.game
++  /home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:31: error: cannot find symbol
++  import net.minecraft.client.renderer.BindGroupLayouts;
++                                      ^
++    symbol:   class BindGroupLayouts
++    location: package net.minecraft.client.renderer
++  /home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:33: error: cannot find symbol
++  import net.minecraft.client.renderer.StagedVertexBuffer;
++                                      ^
++    symbol:   class StagedVertexBuffer
++    location: package net.minecraft.client.renderer
++  /home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:51: error: cannot find symbol
++      StagedVertexBuffer stagedVertexBuffer = new StagedVertexBuffer(() -> "Baritone Render", 256);
++      ^
++    symbol:   class StagedVertexBuffer
++    location: interface IRenderer
++  /home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:73: error: cannot find symbol
++      RenderPipeline BEACON_BEAM_OPAQUE = ((IRenderPipelines) new RenderPipelines()).baritone$registerPipeline(RenderPipeline.builder(BARITONE_BEACON_BEAM_SNIPPET)
++      ^
++    symbol:   class RenderPipeline
++    location: interface IRenderer
++  /home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:80: error: cannot find symbol
++      RenderPipeline BEACON_BEAM_TRANSLUCENT = ((IRenderPipelines) new RenderPipelines()).baritone$registerPipeline(RenderPipeline.builder(BARITONE_BEACON_BEAM_SNIPPET)
++      ^
++    symbol:   class RenderPipeline
++    location: interface IRenderer
++  /home/user/Baritone/src/main/java/baritone/utils/pathing/Avoidance.java:26: error: cannot find symbol
++  import net.minecraft.world.entity.monster.Enderman;
++                                           ^
++    symbol:   class Enderman
++    location: package net.minecraft.world.entity.monster
++  /home/user/Baritone/src/main/java/baritone/utils/accessor/IRenderPipelines.java:26: error: cannot find symbol
++      RenderPipeline baritone$registerPipeline(RenderPipeline pipeline);
++                                               ^
++    symbol:   class RenderPipeline
++    location: interface IRenderPipelines
++  /home/user/Baritone/src/main/java/baritone/utils/accessor/IRenderPipelines.java:26: error: cannot find symbol
++      RenderPipeline baritone$registerPipeline(RenderPipeline pipeline);
++      ^
++    symbol:   class RenderPipeline
++    location: interface IRenderPipelines
++  /home/user/Baritone/src/main/java/baritone/cache/CachedChunk.java:82: error: cannot find symbol
++          ).addAll(Blocks.DYED_SHULKER_BOX.asList())
++                         ^
++    symbol:   variable DYED_SHULKER_BOX
++    location: class Blocks
++  /home/user/Baritone/src/main/java/baritone/cache/CachedChunk.java:83: error: cannot find symbol
++          .addAll(Blocks.BED.asList())
++                        ^
++    symbol:   variable BED
++    location: class Blocks
++  /home/user/Baritone/src/main/java/baritone/behavior/LookBehavior.java:785: error: cannot find symbol
++                      ctx.player().connection.send(ServerboundPunchPacket.INSTANCE);
++                                                   ^
++    symbol:   variable ServerboundPunchPacket
++    location: class LookBehavior
++  /home/user/Baritone/src/main/java/baritone/process/FarmProcess.java:266: error: cannot find symbol
++                  if (ig.isValidBonemealTarget(ctx.world(), pos, state, BonemealSource.INTERACTION) && ig.isBonemealSuccess(ctx.world(), ctx.world().getRandom(), pos, state, BonemealSource.INTERACTION)) {
++                                                                        ^
++    symbol:   variable BonemealSource
++    location: class FarmProcess
++  /home/user/Baritone/src/main/java/baritone/process/FarmProcess.java:266: error: cannot find symbol
++                  if (ig.isValidBonemealTarget(ctx.world(), pos, state, BonemealSource.INTERACTION) && ig.isBonemealSuccess(ctx.world(), ctx.world().getRandom(), pos, state, BonemealSource.INTERACTION)) {
++                                                                                                                                                                              ^
++    symbol:   variable BonemealSource
++    location: class FarmProcess
++  /home/user/Baritone/src/main/java/baritone/utils/BlockBreakHelper.java:85: error: cannot find symbol
++          ctx.player().connection.send(ServerboundPunchPacket.INSTANCE);
++                                       ^
++    symbol:   variable ServerboundPunchPacket
++    location: class BlockBreakHelper
++  /home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:51: error: cannot find symbol
++      StagedVertexBuffer stagedVertexBuffer = new StagedVertexBuffer(() -> "Baritone Render", 256);
++                                                  ^
++    symbol:   class StagedVertexBuffer
++    location: interface IRenderer
++  /home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:61: error: cannot find symbol
++          .withDepthStencilState(new DepthStencilState(CompareOp.LESS_THAN_OR_EQUAL, false))
++                                     ^
++    symbol:   class DepthStencilState
++    location: interface IRenderer
++  /home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:61: error: cannot find symbol
++          .withDepthStencilState(new DepthStencilState(CompareOp.LESS_THAN_OR_EQUAL, false))
++                                                       ^
++    symbol:   variable CompareOp
++    location: interface IRenderer
++  /home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:55: error: cannot find symbol
++          .withColorTargetState(new ColorTargetState(new BlendFunction(
++                                    ^
++    symbol:   class ColorTargetState
++    location: interface IRenderer
++  /home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:55: error: cannot find symbol
++          .withColorTargetState(new ColorTargetState(new BlendFunction(
++                                                         ^
++    symbol:   class BlendFunction
++    location: interface IRenderer
++  /home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:56: error: cannot find symbol
++              BlendFactor.SRC_ALPHA,
++              ^
++    symbol:   variable BlendFactor
++    location: interface IRenderer
++  /home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:57: error: cannot find symbol
++              BlendFactor.ONE_MINUS_SRC_ALPHA,
++              ^
++    symbol:   variable BlendFactor
++    location: interface IRenderer
++  /home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:58: error: cannot find symbol
++              BlendFactor.ONE,
++              ^
++    symbol:   variable BlendFactor
++    location: interface IRenderer
++  /home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:59: error: cannot find symbol
++              BlendFactor.ZERO
++              ^
++    symbol:   variable BlendFactor
++    location: interface IRenderer
++  /home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:54: error: cannot find symbol
++      RenderPipeline.Snippet BARITONE_LINES_SNIPPET = RenderPipeline.builder(((IRenderPipelines) new RenderPipelines()).getLinesSnippet())
++                                                      ^
++    symbol:   variable RenderPipeline
++    location: interface IRenderer
++  /home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:70: error: cannot find symbol
++              .withPrimitiveTopology(PrimitiveTopology.QUADS)
++                                     ^
++    symbol:   variable PrimitiveTopology
++    location: interface IRenderer
++  /home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:68: error: cannot find symbol
++              .withBindGroupLayout(BindGroupLayouts.SAMPLER0)
++                                   ^
++    symbol:   variable BindGroupLayouts
++    location: interface IRenderer
++  /home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:65: error: cannot find symbol
++      RenderPipeline.Snippet BARITONE_BEACON_BEAM_SNIPPET = RenderPipeline.builder(((IRenderPipelines) new RenderPipelines()).getMatricesFogSnippet())
++                                                            ^
++    symbol:   variable RenderPipeline
++    location: interface IRenderer
++  /home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:76: error: cannot find symbol
++              .withDepthStencilState(new DepthStencilState(CompareOp.ALWAYS_PASS, false))
++                                         ^
++    symbol:   class DepthStencilState
++    location: interface IRenderer
++  /home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:76: error: cannot find symbol
++              .withDepthStencilState(new DepthStencilState(CompareOp.ALWAYS_PASS, false))
++                                                           ^
++    symbol:   variable CompareOp
++    location: interface IRenderer
++  /home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:75: error: cannot find symbol
++              .withColorTargetState(new ColorTargetState(BlendFunction.TRANSLUCENT))
++                                        ^
++    symbol:   class ColorTargetState
++    location: interface IRenderer
++  /home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:75: error: cannot find symbol
++              .withColorTargetState(new ColorTargetState(BlendFunction.TRANSLUCENT))
++                                                         ^
++    symbol:   variable BlendFunction
++    location: interface IRenderer
++  /home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:73: error: cannot find symbol
++      RenderPipeline BEACON_BEAM_OPAQUE = ((IRenderPipelines) new RenderPipelines()).baritone$registerPipeline(RenderPipeline.builder(BARITONE_BEACON_BEAM_SNIPPET)
++                                                                                                               ^
++    symbol:   variable RenderPipeline
++    location: interface IRenderer
++  /home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:83: error: cannot find symbol
++              .withDepthStencilState(new DepthStencilState(CompareOp.ALWAYS_PASS, false))
++                                         ^
++    symbol:   class DepthStencilState
++    location: interface IRenderer
++  /home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:83: error: cannot find symbol
++              .withDepthStencilState(new DepthStencilState(CompareOp.ALWAYS_PASS, false))
++                                                           ^
++    symbol:   variable CompareOp
++    location: interface IRenderer
++  /home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:82: error: cannot find symbol
++              .withColorTargetState(new ColorTargetState(BlendFunction.TRANSLUCENT))
++                                        ^
++    symbol:   class ColorTargetState
++    location: interface IRenderer
++  /home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:82: error: cannot find symbol
++              .withColorTargetState(new ColorTargetState(BlendFunction.TRANSLUCENT))
++                                                         ^
++    symbol:   variable BlendFunction
++    location: interface IRenderer
++  /home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:80: error: cannot find symbol
++      RenderPipeline BEACON_BEAM_TRANSLUCENT = ((IRenderPipelines) new RenderPipelines()).baritone$registerPipeline(RenderPipeline.builder(BARITONE_BEACON_BEAM_SNIPPET)
++                                                                                                                    ^
++    symbol:   variable RenderPipeline
++    location: interface IRenderer
++  /home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:91: error: cannot find symbol
++              .withDepthStencilState(new DepthStencilState(CompareOp.LESS_THAN_OR_EQUAL, false))
++                                         ^
++    symbol:   class DepthStencilState
++    location: interface IRenderer
++  /home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:91: error: cannot find symbol
++              .withDepthStencilState(new DepthStencilState(CompareOp.LESS_THAN_OR_EQUAL, false))
++                                                           ^
++    symbol:   variable CompareOp
++    location: interface IRenderer
++  /home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:89: error: cannot find symbol
++          RenderSetup.builder(RenderPipeline.builder(BARITONE_LINES_SNIPPET)
++                              ^
++    symbol:   variable RenderPipeline
++    location: interface IRenderer
++  /home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:99: error: cannot find symbol
++                  .withDepthStencilState(new DepthStencilState(CompareOp.ALWAYS_PASS, false))
++                                             ^
++    symbol:   class DepthStencilState
++    location: interface IRenderer
++  /home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:99: error: cannot find symbol
++                  .withDepthStencilState(new DepthStencilState(CompareOp.ALWAYS_PASS, false))
++                                                               ^
++    symbol:   variable CompareOp
++    location: interface IRenderer
++  /home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:97: error: cannot find symbol
++          RenderSetup.builder(RenderPipeline.builder(BARITONE_LINES_SNIPPET)
++                              ^
++    symbol:   variable RenderPipeline
++    location: interface IRenderer
++  /home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:127: error: cannot find symbol
++          draw[0] = stagedVertexBuffer.appendDraw(DefaultVertexFormat.POSITION_COLOR_NORMAL_LINE_WIDTH, PrimitiveTopology.LINES);
++                                                                                                        ^
++    symbol:   variable PrimitiveTopology
++    location: interface IRenderer
++  /home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:140: error: cannot find symbol
++          draw[0] = stagedVertexBuffer.appendDraw(DefaultVertexFormat.BLOCK, PrimitiveTopology.QUADS);
++                                                                             ^
++    symbol:   variable PrimitiveTopology
++    location: interface IRenderer
++  /home/user/Baritone/src/main/java/baritone/command/defaults/RenderCommand.java:41: error: cannot find symbol
++          ctx.minecraft().levelExtractor.setBlocksDirty(
++                         ^
++    symbol:   variable levelExtractor
++    location: class Minecraft
++  /home/user/Baritone/src/main/java/baritone/utils/pathing/Avoidance.java:79: error: cannot find symbol
++                      .filter(entity -> !(entity instanceof Enderman) || ((Enderman) entity).isCreepy())
++                                                            ^
++    symbol:   class Enderman
++    location: class Avoidance
++  /home/user/Baritone/src/main/java/baritone/utils/pathing/Avoidance.java:79: error: cannot find symbol
++                      .filter(entity -> !(entity instanceof Enderman) || ((Enderman) entity).isCreepy())
++                                                                           ^
++    symbol:   class Enderman
++    location: class Avoidance
++  Note: Recompile with -Xlint:unchecked for details.
++  Note: Some input files use or override a deprecated API.
++  /home/user/Baritone/src/main/java/baritone/process/elytra/NetherPathfinderContext.java:326: warning: [removal] setMemory(long,long,byte) in Unsafe has been deprecated and marked for removal
++                      UNSAFE.setMemory(chunkPtr + (y0 * bytesInSection), bytesInSection, (byte) 0xFF);
++                            ^
++  Note: Some input files use unchecked or unsafe operations.
++  /home/user/Baritone/src/main/java/baritone/Baritone.java:251: error: cannot find symbol
++                  mc.execute(() -> mc.gui.setScreen(new GuiClick()));
++                                         ^
++    symbol:   method setScreen(GuiClick)
++    location: variable gui of type Gui
++  /home/user/Baritone/src/main/java/baritone/behavior/LookBehavior.java:1118: error: cannot find symbol
++          if (ctx.minecraft().gui.screen() != null) {
++                                 ^
++    symbol:   method screen()
++    location: variable gui of type Gui
++  /home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:148: error: cannot find symbol
++              var preparedRenderType = renderType.prepare();
++                                                 ^
++    symbol:   method prepare()
++    location: variable renderType of type RenderType
++  /home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:149: error: cannot find symbol
++              var renderTarget = Minecraft.getInstance().gameRenderer.mainRenderTarget();
++                                                                     ^
++    symbol:   method mainRenderTarget()
++    location: variable gameRenderer of type GameRenderer
++  /home/user/Baritone/src/main/java/baritone/command/ExampleBaritoneControl.java:100: error: cannot find symbol
++                  Blaze3D.openUri(URI.create("https://www.dominos.com/en/pages/order/"));
++                         ^
++    symbol:   method openUri(URI)
++    location: class Blaze3D
++  /home/user/Baritone/src/main/java/baritone/utils/PathRenderer.java:77: error: cannot find symbol
++          if (ctx.minecraft().gui.screen() instanceof GuiClick) {
++                                 ^
++    symbol:   method screen()
++    location: variable gui of type Gui
++  /home/user/Baritone/src/main/java/baritone/utils/PathRenderer.java:78: error: cannot find symbol
++              ((GuiClick) ctx.minecraft().gui.screen()).onRender(event.getModelViewStack(), event.getProjectionMatrix());
++                                             ^
++    symbol:   method screen()
++    location: variable gui of type Gui
++  /home/user/Baritone/src/main/java/baritone/utils/PathRenderer.java:367: error: cannot find symbol
++              stack.rotateDegrees(Axis.YP, time * 2.25F - 45.0F);
++                   ^
++    symbol:   method rotateDegrees(Axis,float)
++    location: variable stack of type PoseStack
++  /home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:54: error: package RenderPipeline does not exist
++      RenderPipeline.Snippet BARITONE_LINES_SNIPPET = RenderPipeline.builder(((IRenderPipelines) new RenderPipelines()).getLinesSnippet())
++                    ^
++  /home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:65: error: package RenderPipeline does not exist
++      RenderPipeline.Snippet BARITONE_BEACON_BEAM_SNIPPET = RenderPipeline.builder(((IRenderPipelines) new RenderPipelines()).getMatricesFogSnippet())
++                    ^
++  /home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:114: error: package StagedVertexBuffer does not exist
++      StagedVertexBuffer.Draw[] draw = {null};
++                        ^
++  /home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:29: error: package com.mojang.renderpearl.api.pipeline does not exist
++  import com.mojang.renderpearl.api.pipeline.*;
++                                   ^
++  /home/user/Baritone/src/main/java/baritone/utils/accessor/IRenderPipelines.java:20: error: package com.mojang.renderpearl.api.pipeline does not exist
++  import com.mojang.renderpearl.api.pipeline.RenderPipeline;
++                                            ^
++  /home/user/Baritone/src/main/java/baritone/utils/accessor/IRenderPipelines.java:23: error: package RenderPipeline does not exist
++      RenderPipeline.Snippet getLinesSnippet();
++                    ^
++  /home/user/Baritone/src/main/java/baritone/utils/accessor/IRenderPipelines.java:24: error: package RenderPipeline does not exist
++      RenderPipeline.Snippet getMatricesFogSnippet();
++                    ^
++  /home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:146: error: package StagedVertexBuffer does not exist
++          StagedVertexBuffer.ExecuteInfo info = stagedVertexBuffer.getExecuteInfo(draw[0]);
++                            ^
++  71 errors
++  5 warnings
++
++* Try:
++> Check your code and dependencies to fix the compilation error(s)
++> Run with --scan to get full insights.
++
++Deprecated Gradle features were used in this build, making it incompatible with Gradle 9.0.
++
++You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
++
++For more on this, please refer to https://docs.gradle.org/8.14.4/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
++
++BUILD FAILED in 13s
++6 actionable tasks: 1 executed, 5 up-to-date
+diff --git a/docs/planning/2026-10-11/plan-addendum-versions-fabric-defend.md b/docs/planning/2026-10-11/plan-addendum-versions-fabric-defend.md
+index e449b99a..db4dbf4e 100644
+--- a/docs/planning/2026-10-11/plan-addendum-versions-fabric-defend.md
++++ b/docs/planning/2026-10-11/plan-addendum-versions-fabric-defend.md
+@@ -221,3 +221,80 @@ versions" sounds like it costs:
+ - **The end-to-end cost is still unmeasured.** Compiling is not running: V3/V4 (artefacts, and the headless
+   harness against each target) remain, and a symbol that compiles can still be a symbol that behaves
+   differently. The claim this section supports is exactly the claim the probe supports — *the source compiles*.
++
++---
++
++## 5. CORRECTION to §4: the drift is 71 error sites, not six. The earlier number was a measurement artefact.
++
++**My own correction, 2026-10-11, and it matters because §4 above is wrong.** I published "six symbols in three
++files, all peripheral glue" and withdrew the multiversion-build design on the strength of it. That number came
++from `./gradlew compileJava -Pminecraft_version=26.1`, and **that task does not compile the whole tree.**
++
++The root build declares `sourceSets { api { ... } main { compileClasspath += api.output } }`, so `compileJava` has
++to resolve the `api` project first. It stopped at the six `api` errors and **never compiled `src/main/java` at
++all**. The six errors were real; they were the `api` project's six. The main tree was never asked.
++
++### The corrected measurement
++
++`./gradlew compileJava compileLaunchJava -Pminecraft_version=26.1 --continue` — `--continue` so that the task
++that fails first does not hide the rest. Raw log kept at
++`docs/planning/2026-10-11/evidence/turnstone-261-main-compile.log`.
++
++| | |
++|---|---|
++| error lines in the log | **142** (the compiler prints each twice) |
++| **distinct error sites** | **71** |
++| **distinct causes** | **20** |
++| files | **13** |
++
++By file, and the shape of it is the important part:
++
++| file | sites | what it is |
++|---|---|---|
++| `utils/IRenderer.java` | 43 | the **whole rendering pipeline API** |
++| `utils/accessor/IRenderPipelines.java` | 5 | the same |
++| `utils/PathRenderer.java` | 3 | the same |
++| `command/defaults/RenderCommand.java` | 1 | the same |
++| `behavior/LookBehavior.java` | 4 | `swing(...)`, the punch packet, `screen()` (see below) |
++| `utils/BlockBreakHelper.java` | 3 | `swing(...)`, the punch packet |
++| `utils/pathing/Avoidance.java` | 3 | `Enderman` |
++| `cache/CachedChunk.java` | 2 | `DYED_SHULKER_BOX`, `BED` |
++| `process/FarmProcess.java` | 2 | `BonemealSource` |
++| `utils/BlockPlaceHelper.java` | 2 | `swing(...)` |
++| `process/elytra/ElytraBehavior.java` | 1 | `swing(...)` |
++| `Baritone.java` | 1 | `setScreen(...)` signature |
++| `command/ExampleBaritoneControl.java` | 1 | `openUri(...)` |
++
++**52 of the 71 are one subsystem** — the renderer. And it is not a rename: 26.1 has no
++`net.minecraft.client.renderer.BindGroupLayouts`, no `StagedVertexBuffer`, and no
++`com.mojang.renderpearl.api.pipeline.RenderPipeline` at all, while 26.3's IRenderer is built on all three.
++That is a rendering port, not a spelling difference, and it is by far the largest single piece of the version
++work. The remaining 19 sites are a genuine mix of renames (`swing` gained an argument; `ServerboundPunchPacket`
++was `ServerboundSwingPacket`; `screen()`; `openUri`), constants that moved (`DYED_SHULKER_BOX`, `BED`,
++`BonemealSource`, `levelExtractor`) and one entity class (`Enderman`).
++
++### What is actually done, and what the honest state is
++
++**The five `api` symbols are fixed and verified** (§4's list was right as far as it went). The seam is
++`api/utils/VersionCompat.java`: `vanillaPack()`, `worldDataLayer()`, `worldDataRegistries()`, `chat(Gui)` and
++`toasts(Minecraft)`, each one shape-based rather than name-based, with every lookup asserting that it found
++exactly one candidate rather than taking the first. All three of the seams reachable from a Fabric jar were then
++**verified in a live client on 26.3**: Baritone's own chat lines render through `chat()`, `#mine minecraft:stone`
++parsed a block and printed it through the registry path (which is `worldDataLayer()` and
++`worldDataRegistries()` doing their job - the block-parse path is the one that needs a registry access), and the
++toast path put "[Baritone] true" on the screen through `toasts()`. No new exception appears anywhere in the log.
++
++**The other 19 symbols are inventoried, not fixed.** So:
++
++- **The `api` half of multi-version support is done.** `./gradlew compileApiJava -Pminecraft_version=26.1` is
++  green.
++- **The `main` half is not.** `compileJava` against 26.1 is 71 error sites, 52 of them the renderer.
++- **V2 is therefore L, not the S/M that §4 implied**, and the rendering subsystem is its own piece of work with
++  its own size. Anyone picking this up should start from the log rather than from §4's table.
++- **The multiversion-build design stays withdrawn, but for a different reason than §4 gave.** Not because the
++  drift is trivial - it is not - but because 52 of 71 sites are in one subsystem, which a per-version
++  abstraction handles and a second build system does not. If the renderer turns out to need genuinely different
++  code per version rather than a different name, that conclusion should be revisited rather than inherited.
++- **What is unchanged:** the pathfinder, the path execution, the movement rules, the process framework and the
++  whole humanlike layer are **not** in the 71. That part of §4 holds, and it is the part that matters for the
++  project's future - the rendering layer is paint, and the walk is the product.
+diff --git a/src/api/java/baritone/api/Settings.java b/src/api/java/baritone/api/Settings.java
+index df583eb6..bf6900cf 100644
+--- a/src/api/java/baritone/api/Settings.java
++++ b/src/api/java/baritone/api/Settings.java
+@@ -21,6 +21,7 @@ import baritone.api.utils.Helper;
+ import baritone.api.utils.NotificationHelper;
+ import baritone.api.utils.SettingsUtil;
+ import baritone.api.utils.TypeUtils;
++import baritone.api.utils.VersionCompat;
+ import baritone.api.utils.gui.BaritoneToast;
+ import net.minecraft.client.Minecraft;
+ import net.minecraft.client.multiplayer.chat.GuiMessageTag;
+@@ -1297,7 +1298,7 @@ public final class Settings {
+     public final Setting<Consumer<Component>> logger = new Setting<>((msg) -> {
+         try {
+             final GuiMessageTag tag = useMessageTag.value ? Helper.MESSAGE_TAG : null;
+-            Minecraft.getInstance().gui.hud.getChat().addPlayerMessage(msg, null, tag);
++            VersionCompat.chat(Minecraft.getInstance().gui).addPlayerMessage(msg, null, tag);
+         } catch (Throwable t) {
+             LOGGER.warn("Failed to log message to chat: " + msg.getString(), t);
+         }
+diff --git a/src/api/java/baritone/api/utils/BlockOptionalMeta.java b/src/api/java/baritone/api/utils/BlockOptionalMeta.java
+index 1505a448..ba85ae98 100644
+--- a/src/api/java/baritone/api/utils/BlockOptionalMeta.java
++++ b/src/api/java/baritone/api/utils/BlockOptionalMeta.java
+@@ -302,25 +302,28 @@ public final class BlockOptionalMeta {
+         }
+ 
+         public static CompletableFuture<RegistryAccess> load() {
+-            // Simplified from {@link net.minecraft.server.WorldLoader#load()}
++            // Simplified from {@link net.minecraft.server.WorldLoader#load()}, and the two things this
++            // version of it cannot spell the same way as the last are asked for by shape instead of by
++            // name - see VersionCompat: the world's data layer, and the registries that go in it.
+             CloseableResourceManager closeableResourceManager = new MultiPackResourceManager(
+                 PackType.SERVER_DATA,
+-                List.of(ServerPacksSource.createVanillaPackSource().fullResources())
++                List.of(VersionCompat.vanillaPack())
+             );
++            RegistryLayer worldData = VersionCompat.worldDataLayer();
+             LayeredRegistryAccess<RegistryLayer> baseLayeredRegistry = RegistryLayer.createRegistryAccess();
+             List<Registry.PendingTags<?>> pendingTags = TagLoader.loadTagsForExistingRegistries(
+                 closeableResourceManager, baseLayeredRegistry.getLayer(RegistryLayer.STATIC)
+             );
+             List<HolderLookup.RegistryLookup<?>> worldGenRegistryLookupList = TagLoader.buildUpdatedLookups(
+-                baseLayeredRegistry.getAccessForLoading(RegistryLayer.WORLD),
++                baseLayeredRegistry.getAccessForLoading(worldData),
+                 pendingTags
+             );
+             LayeredRegistryAccess<RegistryLayer> layeredRegistryAccess = baseLayeredRegistry.replaceFrom(
+-                RegistryLayer.WORLD,
++                worldData,
+                 RegistryDataLoader.load(
+                     closeableResourceManager,
+                     worldGenRegistryLookupList,
+-                    RegistryDataLoader.WORLD_REGISTRIES,
++                    VersionCompat.worldDataRegistries(),
+                     ForkJoinPool.commonPool()
+                 ).join()
+             );
+diff --git a/src/api/java/baritone/api/utils/VersionCompat.java b/src/api/java/baritone/api/utils/VersionCompat.java
+new file mode 100644
+index 00000000..5b4eb46b
+--- /dev/null
++++ b/src/api/java/baritone/api/utils/VersionCompat.java
+@@ -0,0 +1,295 @@
++/*
++ * This file is part of Baritone.
++ *
++ * Baritone is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU Lesser General Public License as published by
++ * the Free Software Foundation, either version 3 of the License, or
++ * (at your option) any later version.
++ *
++ * Baritone is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public License
++ * along with Baritone.  If not, see <https://www.gnu.org/licenses/>.
++ */
++
++package baritone.api.utils;
++
++import net.minecraft.client.Minecraft;
++import net.minecraft.client.gui.Gui;
++import net.minecraft.client.gui.components.ChatComponent;
++import net.minecraft.client.gui.components.toasts.ToastManager;
++import net.minecraft.core.registries.Registries;
++import net.minecraft.resources.RegistryDataLoader;
++import net.minecraft.server.RegistryLayer;
++import net.minecraft.server.packs.PackResources;
++import net.minecraft.server.packs.VanillaPackResources;
++import net.minecraft.server.packs.repository.ServerPacksSource;
++
++import java.lang.reflect.Field;
++import java.lang.reflect.InvocationTargetException;
++import java.lang.reflect.Method;
++import java.lang.reflect.Modifier;
++import java.util.ArrayList;
++import java.util.HashSet;
++import java.util.LinkedHashSet;
++import java.util.List;
++import java.util.Set;
++
++/**
++ * The five things that are called one name on one Minecraft version and another name on the next, and
++ * the whole of the difference between them.
++ * <p>
++ * This fork builds the same source against 26.1, 26.1.2, 26.2 and 26.3, so the source has to compile
++ * against all four. Five symbols do not: measured by compiling this tree against 26.1 and reading the
++ * six errors it produced (four call sites of two symbols, plus two in the client's screen), and then by
++ * reading both named jars directly:
++ * <table>
++ *   <caption>the five, and their two spellings</caption>
++ *   <tr><th>what</th><th>up to 26.1</th><th>26.3</th></tr>
++ *   <tr><td>the vanilla pack, as resources</td><td>{@code createVanillaPackSource()} is itself a
++ *       {@link PackResources}</td><td>{@code .fullResources()} hands them out</td></tr>
++ *   <tr><td>the world's data layer</td><td>{@code RegistryLayer.WORLDGEN}</td>
++ *       <td>{@code RegistryLayer.WORLD}</td></tr>
++ *   <tr><td>the registries that layer holds</td><td>{@code RegistryDataLoader.WORLDGEN_REGISTRIES}</td>
++ *       <td>{@code RegistryDataLoader.WORLD_REGISTRIES}</td></tr>
++ *   <tr><td>the chat</td><td>{@code Gui#getChat()}</td><td>{@code Gui.hud.getChat()}</td></tr>
++ *   <tr><td>the toast manager</td><td>{@code Minecraft#getToastManager()}</td>
++ *       <td>{@code Gui#toastManager()}</td></tr>
++ * </table>
++ * <p>
++ * <b>Why this is resolved at run time, and why it is not resolved by name.</b> A name would be the
++ * obvious way to ask for both spellings - try one, catch, try the other - and on a development box it
++ * would even work. In a released Fabric jar it would not. The release jar is remapped to intermediary
++ * names, and remapping rewrites the <em>references</em> in the byte code, not the <em>strings</em> in
++ * the constants: after remapping, a field looks like {@code field_12345} and no longer answers to
++ * {@code WORLD_REGISTRIES}. So every lookup below asks for what the thing <em>is</em> - its type, its
++ * return type, its position in a layering, which registries it contains - and never for what it is
++ * called. Types are remapped along with everything else, so a search by type survives the trip intact.
++ * <p>
++ * That also means these lookups do not care which name 26.2 chose, or whether a future version renames
++ * one of them again: they ask for the {@code PackResources}-shaped thing, the chat-shaped thing, the
++ * list that holds the world's presets. Where a version could plausibly answer twice, the code says so
++ * and refuses rather than guessing, because a silent wrong answer here is a crash inside a remapped jar
++ * with no line number to point at.
++ * <p>
++ * <b>What this is not.</b> It is not a compatibility layer, and it should not grow into one. If a sixth
++ * difference appears, this file gains one method with its two spellings written down; if the versions
++ * start differing in <em>behaviour</em> rather than in names, that is a different problem and a
++ * preprocessing toolchain, not another accessor here.
++ */
++public final class VersionCompat {
++
++    private VersionCompat() {}
++
++    /**
++     * The vanilla data pack, as the thing a {@code MultiPackResourceManager} takes.
++     * <p>
++     * Up to 26.1 {@code ServerPacksSource.createVanillaPackSource()} <em>is</em> a {@link PackResources}
++     * and can be handed straight over, which is the branch that runs there and costs no reflection at
++     * all. From 26.3 the same call returns a holder, and the resources come out of it.
++     */
++    public static PackResources vanillaPack() {
++        VanillaPackResources vanilla = ServerPacksSource.createVanillaPackSource();
++        if (vanilla instanceof PackResources pack) {
++            return pack;
++        }
++        return invoke(uniqueMethod(VanillaPackResources.class, PackResources.class), vanilla);
++    }
++
++    /**
++     * The layer of {@link RegistryLayer} a world's own data lives in - {@code WORLDGEN} up to 26.1,
++     * {@code WORLD} from 26.3.
++     * <p>
++     * Found by position rather than by name, and the position is not arbitrary: the four layers are a
++     * layering, each built on the one before it ({@code STATIC}, then the world's data, then the
++     * dimensions, then the reloadable registries), and both jars declare them in exactly that order -
++     * read out of the two class files, not assumed. So the second layer is the world's data layer
++     * whichever name it is wearing.
++     */
++    public static RegistryLayer worldDataLayer() {
++        RegistryLayer[] layers = RegistryLayer.values();
++        if (layers.length != 4) {
++            // A version with a different layering is not something to guess at: the layer that gets
++            // replaced below holds the registries, and replacing the wrong one would load the world's
++            // data over the top of something else.
++            throw new IllegalStateException("RegistryLayer has " + layers.length
++                    + " layers rather than the four this fork knows (static, world, dimensions, reloadable)");
++        }
++        return layers[1];
++    }
++
++    /**
++     * The registries that belong in {@link #worldDataLayer()} - {@code WORLDGEN_REGISTRIES} up to 26.1,
++     * {@code WORLD_REGISTRIES} from 26.3.
++     * <p>
++     * Found by what the list holds, because there is no other way to tell them apart: they are all
++     * public static lists of the same type on the same class. The list wanted is the one that holds the
++     * world presets, which is exactly what the world-generation set is, and which is unique in both
++     * jars - the client's synchronised set is a strict subset of it (28 of 45 registries up to 26.1,
++     * 32 of 51 from 26.3), and the dimension set is the one holding the level stem, so the second test
++     * below keeps that one out. Two independent anchors, both true in both jars, both checked here
++     * rather than assumed.
++     */
++    public static List<RegistryDataLoader.RegistryData<?>> worldDataRegistries() {
++        return WorldData.REGISTRIES;
++    }
++
++    /**
++     * The player's chat, wherever the version keeps it: on the screen itself up to 26.1, one hop away
++     * on the HUD from 26.3.
++     */
++    public static ChatComponent chat(Gui gui) {
++        Method onTheScreen = methodOrNull(Gui.class, ChatComponent.class);
++        if (onTheScreen != null) {
++            return invoke(onTheScreen, gui);
++        }
++        List<Object> found = new ArrayList<>();
++        for (Field field : Gui.class.getFields()) {
++            if (Modifier.isStatic(field.getModifiers())) {
++                continue;
++            }
++            Method onTheField = methodOrNull(field.getType(), ChatComponent.class);
++            if (onTheField == null) {
++                continue;
++            }
++            try {
++                found.add(invoke(onTheField, field.get(gui)));
++            } catch (IllegalAccessException e) {
++                throw new IllegalStateException("the chat is on " + field.getName() + " and it will not open", e);
++            }
++        }
++        if (found.size() != 1) {
++            throw new IllegalStateException("the chat is reachable " + found.size() + " ways from the screen"
++                    + " rather than one, so which one is the player's is a question this file cannot answer");
++        }
++        return (ChatComponent) found.get(0);
++    }
++
++    /**
++     * The toast manager, wherever the version keeps it: on the client up to 26.1, on the screen from
++     * 26.3.
++     */
++    public static ToastManager toasts(Minecraft minecraft) {
++        if (minecraft.gui != null) {
++            Method onTheScreen = methodOrNull(Gui.class, ToastManager.class);
++            if (onTheScreen != null) {
++                return invoke(onTheScreen, minecraft.gui);
++            }
++        }
++        Method onTheClient = methodOrNull(Minecraft.class, ToastManager.class);
++        if (onTheClient != null) {
++            return invoke(onTheClient, minecraft);
++        }
++        throw new IllegalStateException("no toast manager on the screen or on the client");
++    }
++
++    /**
++     * The unique public method of {@code owner} that takes nothing and returns the wanted kind of
++     * thing, or {@code null} if there is none. Two candidates is not a thing to break the tie on.
++     */
++    private static Method methodOrNull(Class<?> owner, Class<?> returns) {
++        Method found = null;
++        for (Method method : owner.getMethods()) {
++            if (method.getParameterCount() != 0 || !returns.isAssignableFrom(method.getReturnType())) {
++                continue;
++            }
++            if (found != null) {
++                throw new IllegalStateException(owner.getSimpleName() + " answers a "
++                        + returns.getSimpleName() + " twice (" + found.getName() + " and " + method.getName()
++                        + "), so which one is meant is a question this file cannot answer");
++            }
++            found = method;
++        }
++        return found;
++    }
++
++    private static Method uniqueMethod(Class<?> owner, Class<?> returns) {
++        Method found = methodOrNull(owner, returns);
++        if (found == null) {
++            throw new IllegalStateException(owner.getSimpleName() + " has nothing returning a "
++                    + returns.getSimpleName());
++        }
++        return found;
++    }
++
++    @SuppressWarnings("unchecked")
++    private static <T> T invoke(Method method, Object target) {
++        try {
++            return (T) method.invoke(target);
++        } catch (IllegalAccessException | InvocationTargetException e) {
++            throw new IllegalStateException(method.getDeclaringClass().getSimpleName() + "#" + method.getName()
++                    + " would not answer", e);
++        }
++    }
++
++    /**
++     * The world's registry list, worked out once, the first time anything asks for it. In its own class
++     * so that the search happens on first use and not when this file is loaded - a version that cannot
++     * answer one of these questions should still be able to use the other four.
++     */
++    private static final class WorldData {
++
++        private static final List<RegistryDataLoader.RegistryData<?>> REGISTRIES = resolve();
++
++        @SuppressWarnings("unchecked")
++        private static List<RegistryDataLoader.RegistryData<?>> resolve() {
++            List<RegistryDataLoader.RegistryData<?>> world = null;
++            for (Field field : RegistryDataLoader.class.getFields()) {
++                if (!Modifier.isStatic(field.getModifiers()) || !List.class.isAssignableFrom(field.getType())) {
++                    continue;
++                }
++                List<?> candidate;
++                try {
++                    candidate = (List<?>) field.get(null);
++                } catch (IllegalAccessException e) {
++                    continue;
++                }
++                if (candidate == null || candidate.isEmpty()) {
++                    continue;
++                }
++                Set<Object> keys = registryKeys(candidate);
++                if (!keys.contains(Registries.WORLD_PRESET)) {
++                    continue; // not the set that carries the world's presets
++                }
++                if (keys.contains(Registries.LEVEL_STEM)) {
++                    continue; // that one is the dimensions, which are loaded into their own layer
++                }
++                if (world != null) {
++                    throw new IllegalStateException("two of the registry lists carry the world's presets ("
++                            + world.size() + " registries and " + candidate.size() + ")");
++                }
++                world = (List<RegistryDataLoader.RegistryData<?>>) candidate;
++            }
++            if (world == null) {
++                throw new IllegalStateException("none of the registry lists carries the world's presets, so the"
++                        + " world-generation set is not where this fork expects it");
++            }
++            return world;
++        }
++
++        /**
++         * The registry keys a list of {@code RegistryData} holds. The record keeps its key behind the
++         * consumer it offers for exactly this purpose - {@code runWithArguments} hands out the key and
++         * the codec together - so this reads it the way the class intends rather than by reflection
++         * into a field.
++         */
++        @SuppressWarnings("unchecked")
++        private static Set<Object> registryKeys(List<?> registries) {
++            Set<Object> keys = new LinkedHashSet<>();
++            for (Object element : registries) {
++                if (element instanceof RegistryDataLoader.RegistryData<?> data) {
++                    ((RegistryDataLoader.RegistryData<Object>) data).runWithArguments((key, codec) -> keys.add(key));
++                }
++            }
++            return keys;
++        }
++    }
++
++    /** Kept so that a reader can see what the search above is looking for, and that it is not empty. */
++    static {
++        assert new HashSet<>(List.of(Registries.WORLD_PRESET, Registries.LEVEL_STEM)).size() == 2;
++    }
++}
+diff --git a/src/api/java/baritone/api/utils/gui/BaritoneToast.java b/src/api/java/baritone/api/utils/gui/BaritoneToast.java
+index 25e1318c..54aeabb9 100644
+--- a/src/api/java/baritone/api/utils/gui/BaritoneToast.java
++++ b/src/api/java/baritone/api/utils/gui/BaritoneToast.java
+@@ -17,6 +17,7 @@
+ 
+ package baritone.api.utils.gui;
+ 
++import baritone.api.utils.VersionCompat;
+ import net.minecraft.client.Minecraft;
+ import net.minecraft.client.gui.components.toasts.SystemToast;
+ import net.minecraft.network.chat.Component;
+@@ -24,6 +25,6 @@ import net.minecraft.network.chat.Component;
+ public class BaritoneToast {
+     private static final SystemToast.SystemToastId BARITONE_TOAST_ID = new SystemToast.SystemToastId(5000L);
+     public static void addOrUpdate(Component title, Component subtitle) {
+-        SystemToast.addOrUpdate(Minecraft.getInstance().gui.toastManager(), BARITONE_TOAST_ID, title, subtitle);
++        SystemToast.addOrUpdate(VersionCompat.toasts(Minecraft.getInstance()), BARITONE_TOAST_ID, title, subtitle);
+     }
+ }
+-- 
+2.47.3
+
