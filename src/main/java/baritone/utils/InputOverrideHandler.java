@@ -127,19 +127,57 @@ public final class InputOverrideHandler extends Behavior implements IInputOverri
      * the button down and held, because vanilla completes a consumable over its own ticking time and
      * abandons it the instant that key comes up - a bite that is not held is not a bite at all.
      * <p>
-     * It is a lease rather than a switch: the ask is spent by the tick that reads it, so the button can
-     * only stay down while somebody is asking for it every tick, and a holder that goes away - a
-     * behaviour that stops ticking, a world that closes - cannot leave it down by forgetting. It is also
-     * why {@link #clearAllKeys()} does not touch it: that is called by every movement, every tick of a
-     * walk, to rebuild the task's own keys, and a meal eaten while walking would come off the player's
-     * mouth twenty times a second if it were.
+     * It is a lease rather than a switch: the ask is spent by the next tick that reads it, so the button
+     * can only stay down while somebody is asking for it every tick. It is also why
+     * {@link #clearAllKeys()} does not touch it: that is called by every movement, every tick of a walk,
+     * to rebuild the task's own keys, and a meal eaten while walking would come off the player's mouth
+     * twenty times a second if it were.
+     * <p>
+     * The holds are only taken and spent on an in-world tick, and the button is given back when the world
+     * goes - see {@link #onTick}. That is not bookkeeping: Sandpiper's second read (2026-10-11 17:17)
+     * pointed out that the first version of this could leave the key down out of world, because
+     * {@link #onTick} returns early on an outside tick and a holder that stopped asking would never be
+     * spent. An outside tick now releases instead of returning.
      */
     public void holdTheUseButton() {
         this.useButtonAskedFor = true;
     }
 
+    /**
+     * Whether the use button is down because this file put it there, rather than because somebody is
+     * holding it.
+     * <p>
+     * It exists because the button is the only piece of the player's own state that a behaviour of ours
+     * ever sets, and one reader cannot tell the two apart without it: {@code LookBehavior}
+     * asks whether the person is at the keyboard partly by looking at this key, and a bot holding it to
+     * finish a bite is not a person arriving. Sandpiper's read is where that was found - the latch in
+     * {@code Unattended#glanceIsOurs} is released by the next job, so a single idle meal was enough to
+     * silence the bot's idle look until something started a path.
+     */
+    /**
+     * Give the use button back, if it was ours to give. Called when the ask stops and when the world
+     * goes; never touches a button somebody else is holding.
+     */
+    private void releaseTheUseButton() {
+        if (!this.holdingTheUseButton) {
+            return;
+        }
+        this.holdingTheUseButton = false;
+        ctx.minecraft().options.keyUse.setDown(false);
+    }
+
+    public boolean isUseButtonHeldForUs() {
+        return this.holdingTheUseButton;
+    }
+
     @Override
     public final void onTick(TickEvent event) {
+        if (ctx.player() == null || ctx.world() == null) {
+            // Nothing is in the world to be holding anything, and nothing will be asking again: give the
+            // button back rather than leaving it down for whoever is at the keyboard next.
+            releaseTheUseButton();
+            return;
+        }
         if (event.getType() == TickEvent.Type.OUT) {
             return;
         }
@@ -160,9 +198,8 @@ public final class InputOverrideHandler extends Behavior implements IInputOverri
         if (holdTheUse && !ctx.minecraft().options.keyUse.isDown()) {
             ctx.minecraft().options.keyUse.setDown(true);
             this.holdingTheUseButton = true;
-        } else if (!holdTheUse && this.holdingTheUseButton) {
-            ctx.minecraft().options.keyUse.setDown(false);
-            this.holdingTheUseButton = false;
+        } else if (!holdTheUse) {
+            releaseTheUseButton();
         }
 
         if (!baritone.getPathingBehavior().isPathing()) {

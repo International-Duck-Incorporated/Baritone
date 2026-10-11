@@ -1118,7 +1118,14 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
         if (ctx.minecraft().gui.screen() != null) {
             return true;
         }
-        if (ctx.minecraft().options.keyAttack.isDown() || ctx.minecraft().options.keyUse.isDown()) {
+        // The use button is the one key a behaviour of ours sets: eating holds it for the length of a
+        // bite. A button we are holding is not somebody arriving, and counting it as though it were cost
+        // the idle look its whole repertoire for as long as nothing was running, because the latch this
+        // feeds (Unattended#glanceIsOurs) is only released by the next job. Found by Sandpiper's second
+        // read, 2026-10-11 17:17.
+        if (ctx.minecraft().options.keyAttack.isDown()
+                || (ctx.minecraft().options.keyUse.isDown()
+                    && !baritone.getInputOverrideHandler().isUseButtonHeldForUs())) {
             return true;
         }
         final net.minecraft.world.entity.player.Input keys = ctx.player().input.keyPresses;
