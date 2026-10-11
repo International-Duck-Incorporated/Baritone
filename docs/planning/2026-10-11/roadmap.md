@@ -67,6 +67,8 @@ Do not weaken assertions, count a skipped run as pass, rubber-stamp a peer, move
 
 ### P0-03 — Formalise temporary ownership, failure provenance and safe resume
 
+Concrete source-informed [request-lifetime design for independent review](p0-03-design.md) separates canonical new task from ordinary GoalComposite rescans and documents opaque-plugin limits.
+
 - **Evidence/classification:** **S** existing temporary priority/pause seam **and last-winner failure guard** (`PathingControlManager:199`), captured calc goal/plan locks/cancellation/orphan-start checks (`PathingBehavior:473-557`). **H/U** late queued event/replacement timing; **M/P** universal fresh-goal resume contract. Do not describe all failure ownership as missing; immediate cross-owner protection already exists.
 - **Components:** `utils/PathingControlManager.java`, `behavior/PathingBehavior.java`, `pathing/path/PathExecutor.java`, `api/process/IBaritoneProcess.java`/`PathingCommandType.java`, selected original processes and inventory/input/look boundary checks.
 - **Current → desired:** existing control/last-winner/calc-cancellation protections → structural requester-aware async failure and tested safe BRACE/FLEE resume; minimal internal metadata, no competing scheduler. BRACE retains original path; FLEE safely discards it, and re-plan after return is expected normal operation.
