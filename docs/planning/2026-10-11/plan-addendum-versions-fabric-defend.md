@@ -298,3 +298,24 @@ toast path put "[Baritone] true" on the screen through `toasts()`. No new except
 - **What is unchanged:** the pathfinder, the path execution, the movement rules, the process framework and the
   whole humanlike layer are **not** in the 71. That part of §4 holds, and it is the part that matters for the
   project's future - the rendering layer is paint, and the walk is the product.
+
+## 6. V0 completion: compile probes for 26.2 and 26.1.2 (Sandpiper, 2026-10-11)
+
+Method, as Turnstone recorded it: `./gradlew compileJava compileLaunchJava -Pminecraft_version=<V> --no-daemon --max-workers=1 -Dorg.gradle.jvmargs="-Xmx1200m -XX:MaxMetaspaceSize=448m" --continue`, on JDK 25 (`openjdk-25-jdk-headless`, Debian 25.0.4.1), Gradle 8.14.4 wrapper, `GRADLE_USER_HOME=/home/user/.cache/gradle`, fabric-only build. Raw logs are committed next to this file: `evidence/sandpiper-probe-263-control.log`, `evidence/sandpiper-probe-262.log`, `evidence/sandpiper-probe-2612.log`.
+
+| Version | Result | javac errors | Where |
+|---|---|---|---|
+| 26.3 (control) | **BUILD SUCCESSFUL** in 1m 08s | 0 | - |
+| 26.2 | `compileApiJava` ok; `compileJava` **FAILED** | 56 | renderer 40 (`IRenderer` 35, `IRenderPipelines` 5); other 16 across 8 files (includes `PathRenderer` 1) |
+| 26.1.2 | `compileApiJava` ok; `compileJava` **FAILED** | 71 | renderer 51 (`IRenderer` 43, `IRenderPipelines` 5, `PathRenderer` 3); `RenderCommand` 1; other 19 across 9 files |
+
+What the two probes establish:
+
+- **The harness works.** The 26.3 control compiles clean with the same command, so the failures are the versions' and not the probe's.
+- **26.1.2 is the same target as 26.1, by measurement and not by assumption.** Comparing the distinct error messages (path normalised, line numbers dropped) of `turnstone-261-main-compile.log` and `sandpiper-probe-2612.log` gives **40 and 40 distinct messages with an empty difference in both directions.** The raw error counts also agree in shape (71 for 26.1.2 against Turnstone's 71 for 26.1).
+- **26.2 is not 26.1 with less drift.** It has one message that 26.1 does not (`IRenderer`: `no suitable method found for drawFromBuffer(ExecuteInfo,RenderPass)`), and it lacks the 26.1-only messages for `Baritone.java`, `cache/CachedChunk.java`, `command/defaults/RenderCommand.java` and `StagedVertexBuffer`. So 26.2 has its own, mostly renderer, drift. This was **not** visible in the earlier 26.1 analysis and is why the 26.2 figure is a measurement here.
+- **Non-renderer drift is smaller than the renderer's in every probe**, but it is not zero: `Avoidance`, `BlockBreakHelper`, `BlockPlaceHelper`, `LookBehavior`, `FarmProcess`, `ElytraBehavior` and `ExampleBaritoneControl` fail in 26.2 as well. Those are the six-accessor seam's territory (Turnstone's item 2), not the renderer's.
+
+What these probes do **not** establish: a compile is not a run. Neither 26.2 nor 26.1.2 has been launched, and no game, no harness scene and no artefact has been produced for either. Under the agreed rule ("supported" means observed to work) **neither version is supported yet**; both are "source does not compile against this version", with the errors above.
+
+Consequence for the plan: the renderer port (about 40 to 51 sites in every version probed) is the single largest item for all three non-26.3 targets. The seam (item 2) cannot make any version "supported" by itself.

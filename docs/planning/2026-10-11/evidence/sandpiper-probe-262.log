@@ -1,0 +1,711 @@
+Downloading https://services.gradle.org/distributions/gradle-8.14.4-bin.zip
+.............10%.............20%.............30%.............40%.............50%.............60%.............70%.............80%.............90%..............100%
+
+Welcome to Gradle 8.14.4!
+
+Here are the highlights of this release:
+ - Java 24 support
+ - GraalVM Native Image toolchain selection
+ - Enhancements to test reporting
+ - Build Authoring improvements
+
+For more details see https://docs.gradle.org/8.14.4/release-notes.html
+
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.14.4/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+> Task :buildSrc:compileJava
+Note: Some input files use or override a deprecated API.
+Note: Recompile with -Xlint:deprecation for details.
+
+> Task :buildSrc:compileGroovy NO-SOURCE
+> Task :buildSrc:processResources NO-SOURCE
+> Task :buildSrc:classes
+> Task :buildSrc:jar
+
+> Configure project :
+[Unimined] Plugin Version: 1.4.2-dabcdf3-SNAPSHOT
+
+[Unimined] You have less than 2GB of memory allocated to gradle.
+[Unimined] This may cause issues with remapping and other tasks.
+[Unimined] Please allocate more memory to gradle by adding: 
+[Unimined]   org.gradle.jvmargs=-Xmx2G
+[Unimined] to your gradle.properties file.
+
+Detected version 26.3-74-ge44085be
+[Unimined] Plugin Version: 1.4.2-dabcdf3-SNAPSHOT
+
+[Unimined] You have less than 2GB of memory allocated to gradle.
+[Unimined] This may cause issues with remapping and other tasks.
+[Unimined] Please allocate more memory to gradle by adding: 
+[Unimined]   org.gradle.jvmargs=-Xmx2G
+[Unimined] to your gradle.properties file.
+
+Detected version 26.3-74-ge44085be
+[Unimined/Minecraft ::main] Applying minecraft config for source set 'main'
+[Unimined/MinecraftDownloader] retrieving version metadata
+[Unimined/Minecraft ::main] Applying NoTransformMinecraftTransformer
+[Unimined/Minecraft ::main] Applying run configs
+
+> Configure project :fabric
+[Unimined/Minecraft :fabric:main] Applying minecraft config for source set 'main'
+[Unimined/MinecraftDownloader] retrieving version metadata
+[Unimined/Minecraft :fabric:main] Applying OfficialFabricMinecraftTransformer
+[Unimined/Minecraft :fabric:main] Applying run configs
+
+> Task :compileApiJava
+/home/user/Baritone/src/api/java/baritone/api/utils/BlockOptionalMeta.java:59: warning: Unsafe is internal proprietary API and may be removed in a future release
+import sun.misc.Unsafe;
+               ^
+/home/user/Baritone/src/api/java/baritone/api/utils/BlockOptionalMeta.java:260: warning: Unsafe is internal proprietary API and may be removed in a future release
+        private static Unsafe unsafe = getUnsafe();
+                       ^
+/home/user/Baritone/src/api/java/baritone/api/utils/BlockOptionalMeta.java:294: warning: Unsafe is internal proprietary API and may be removed in a future release
+        public static Unsafe getUnsafe() {
+                      ^
+/home/user/Baritone/src/api/java/baritone/api/utils/BlockOptionalMeta.java:296: warning: Unsafe is internal proprietary API and may be removed in a future release
+                Field theUnsafe = Unsafe.class.getDeclaredField("theUnsafe");
+                                  ^
+/home/user/Baritone/src/api/java/baritone/api/utils/BlockOptionalMeta.java:298: warning: Unsafe is internal proprietary API and may be removed in a future release
+                return (Unsafe) theUnsafe.get(null);
+                        ^
+Note: /home/user/Baritone/src/api/java/baritone/api/BaritoneAPI.java uses or overrides a deprecated API.
+Note: Recompile with -Xlint:deprecation for details.
+Note: Some input files use unchecked or unsafe operations.
+Note: Recompile with -Xlint:unchecked for details.
+5 warnings
+
+> Task :processApiResources NO-SOURCE
+> Task :apiClasses
+> Task :compileSchematica_apiJava
+> Task :processSchematica_apiResources NO-SOURCE
+> Task :schematica_apiClasses
+
+> Task :compileJava
+/home/user/Baritone/src/main/java/baritone/behavior/LookBehavior.java:46: error: cannot find symbol
+import net.minecraft.network.protocol.game.ServerboundPunchPacket;
+                                          ^
+  symbol:   class ServerboundPunchPacket
+  location: package net.minecraft.network.protocol.game
+/home/user/Baritone/src/main/java/baritone/utils/BlockBreakHelper.java:23: error: cannot find symbol
+import net.minecraft.network.protocol.game.ServerboundPunchPacket;
+                                          ^
+  symbol:   class ServerboundPunchPacket
+  location: package net.minecraft.network.protocol.game
+/home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:54: error: package RenderPipeline does not exist
+    RenderPipeline.Snippet BARITONE_LINES_SNIPPET = RenderPipeline.builder(((IRenderPipelines) new RenderPipelines()).getLinesSnippet())
+                  ^
+/home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:65: error: package RenderPipeline does not exist
+    RenderPipeline.Snippet BARITONE_BEACON_BEAM_SNIPPET = RenderPipeline.builder(((IRenderPipelines) new RenderPipelines()).getMatricesFogSnippet())
+                  ^
+/home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:73: error: cannot find symbol
+    RenderPipeline BEACON_BEAM_OPAQUE = ((IRenderPipelines) new RenderPipelines()).baritone$registerPipeline(RenderPipeline.builder(BARITONE_BEACON_BEAM_SNIPPET)
+    ^
+  symbol:   class RenderPipeline
+  location: interface IRenderer
+/home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:80: error: cannot find symbol
+    RenderPipeline BEACON_BEAM_TRANSLUCENT = ((IRenderPipelines) new RenderPipelines()).baritone$registerPipeline(RenderPipeline.builder(BARITONE_BEACON_BEAM_SNIPPET)
+    ^
+  symbol:   class RenderPipeline
+  location: interface IRenderer
+/home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:29: error: package com.mojang.renderpearl.api.pipeline does not exist
+import com.mojang.renderpearl.api.pipeline.*;
+                                 ^
+/home/user/Baritone/src/main/java/baritone/process/elytra/NetherPathfinderContext.java:38: warning: Unsafe is internal proprietary API and may be removed in a future release
+import sun.misc.Unsafe;
+               ^
+/home/user/Baritone/src/main/java/baritone/utils/pathing/Avoidance.java:26: error: cannot find symbol
+import net.minecraft.world.entity.monster.Enderman;
+                                         ^
+  symbol:   class Enderman
+  location: package net.minecraft.world.entity.monster
+/home/user/Baritone/src/main/java/baritone/utils/accessor/IRenderPipelines.java:20: error: package com.mojang.renderpearl.api.pipeline does not exist
+import com.mojang.renderpearl.api.pipeline.RenderPipeline;
+                                          ^
+/home/user/Baritone/src/main/java/baritone/utils/accessor/IRenderPipelines.java:23: error: package RenderPipeline does not exist
+    RenderPipeline.Snippet getLinesSnippet();
+                  ^
+/home/user/Baritone/src/main/java/baritone/utils/accessor/IRenderPipelines.java:24: error: package RenderPipeline does not exist
+    RenderPipeline.Snippet getMatricesFogSnippet();
+                  ^
+/home/user/Baritone/src/main/java/baritone/utils/accessor/IRenderPipelines.java:26: error: cannot find symbol
+    RenderPipeline baritone$registerPipeline(RenderPipeline pipeline);
+                                             ^
+  symbol:   class RenderPipeline
+  location: interface IRenderPipelines
+/home/user/Baritone/src/main/java/baritone/utils/accessor/IRenderPipelines.java:26: error: cannot find symbol
+    RenderPipeline baritone$registerPipeline(RenderPipeline pipeline);
+    ^
+  symbol:   class RenderPipeline
+  location: interface IRenderPipelines
+/home/user/Baritone/src/main/java/baritone/behavior/LookBehavior.java:784: error: no suitable method found for swing(InteractionHand,SwingAnimation,boolean)
+                    ctx.player().swing(InteractionHand.MAIN_HAND, SwingAnimation.DEFAULT, false);
+                                ^
+    method LivingEntity.swing(InteractionHand,boolean) is not applicable
+      (actual and formal argument lists differ in length)
+    method LocalPlayer.swing(InteractionHand) is not applicable
+      (actual and formal argument lists differ in length)
+/home/user/Baritone/src/main/java/baritone/behavior/LookBehavior.java:785: error: cannot find symbol
+                    ctx.player().connection.send(ServerboundPunchPacket.INSTANCE);
+                                                 ^
+  symbol:   variable ServerboundPunchPacket
+  location: class LookBehavior
+/home/user/Baritone/src/main/java/baritone/process/FarmProcess.java:266: error: cannot find symbol
+                if (ig.isValidBonemealTarget(ctx.world(), pos, state, BonemealSource.INTERACTION) && ig.isBonemealSuccess(ctx.world(), ctx.world().getRandom(), pos, state, BonemealSource.INTERACTION)) {
+                                                                      ^
+  symbol:   variable BonemealSource
+  location: class FarmProcess
+/home/user/Baritone/src/main/java/baritone/process/FarmProcess.java:266: error: cannot find symbol
+                if (ig.isValidBonemealTarget(ctx.world(), pos, state, BonemealSource.INTERACTION) && ig.isBonemealSuccess(ctx.world(), ctx.world().getRandom(), pos, state, BonemealSource.INTERACTION)) {
+                                                                                                                                                                            ^
+  symbol:   variable BonemealSource
+  location: class FarmProcess
+/home/user/Baritone/src/main/java/baritone/utils/BlockBreakHelper.java:84: error: no suitable method found for swing(InteractionHand,SwingAnimation,boolean)
+        ctx.player().swing(InteractionHand.MAIN_HAND, SwingAnimation.DEFAULT, false);
+                    ^
+    method LivingEntity.swing(InteractionHand,boolean) is not applicable
+      (actual and formal argument lists differ in length)
+    method LocalPlayer.swing(InteractionHand) is not applicable
+      (actual and formal argument lists differ in length)
+/home/user/Baritone/src/main/java/baritone/utils/BlockBreakHelper.java:85: error: cannot find symbol
+        ctx.player().connection.send(ServerboundPunchPacket.INSTANCE);
+                                     ^
+  symbol:   variable ServerboundPunchPacket
+  location: class BlockBreakHelper
+/home/user/Baritone/src/main/java/baritone/utils/BlockPlaceHelper.java:73: error: no suitable method found for swing(InteractionHand,SwingAnimation,boolean)
+                ctx.player().swing(hand, SwingAnimation.DEFAULT, false);
+                            ^
+    method LivingEntity.swing(InteractionHand,boolean) is not applicable
+      (actual and formal argument lists differ in length)
+    method LocalPlayer.swing(InteractionHand) is not applicable
+      (actual and formal argument lists differ in length)
+/home/user/Baritone/src/main/java/baritone/utils/BlockPlaceHelper.java:81: error: no suitable method found for swing(InteractionHand,SwingAnimation,boolean)
+                ctx.player().swing(hand, SwingAnimation.DEFAULT, false);
+                            ^
+    method LivingEntity.swing(InteractionHand,boolean) is not applicable
+      (actual and formal argument lists differ in length)
+    method LocalPlayer.swing(InteractionHand) is not applicable
+      (actual and formal argument lists differ in length)
+/home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:61: error: cannot find symbol
+        .withDepthStencilState(new DepthStencilState(CompareOp.LESS_THAN_OR_EQUAL, false))
+                                   ^
+  symbol:   class DepthStencilState
+  location: interface IRenderer
+/home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:61: error: cannot find symbol
+        .withDepthStencilState(new DepthStencilState(CompareOp.LESS_THAN_OR_EQUAL, false))
+                                                     ^
+  symbol:   variable CompareOp
+  location: interface IRenderer
+/home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:55: error: cannot find symbol
+        .withColorTargetState(new ColorTargetState(new BlendFunction(
+                                  ^
+  symbol:   class ColorTargetState
+  location: interface IRenderer
+/home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:55: error: cannot find symbol
+        .withColorTargetState(new ColorTargetState(new BlendFunction(
+                                                       ^
+  symbol:   class BlendFunction
+  location: interface IRenderer
+/home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:56: error: cannot find symbol
+            BlendFactor.SRC_ALPHA,
+            ^
+  symbol:   variable BlendFactor
+  location: interface IRenderer
+/home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:57: error: cannot find symbol
+            BlendFactor.ONE_MINUS_SRC_ALPHA,
+            ^
+  symbol:   variable BlendFactor
+  location: interface IRenderer
+/home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:58: error: cannot find symbol
+            BlendFactor.ONE,
+            ^
+  symbol:   variable BlendFactor
+  location: interface IRenderer
+/home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:59: error: cannot find symbol
+            BlendFactor.ZERO
+            ^
+  symbol:   variable BlendFactor
+  location: interface IRenderer
+/home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:54: error: cannot find symbol
+    RenderPipeline.Snippet BARITONE_LINES_SNIPPET = RenderPipeline.builder(((IRenderPipelines) new RenderPipelines()).getLinesSnippet())
+                                                    ^
+  symbol:   variable RenderPipeline
+  location: interface IRenderer
+/home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:70: error: cannot find symbol
+            .withPrimitiveTopology(PrimitiveTopology.QUADS)
+                                   ^
+  symbol:   variable PrimitiveTopology
+  location: interface IRenderer
+/home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:65: error: cannot find symbol
+    RenderPipeline.Snippet BARITONE_BEACON_BEAM_SNIPPET = RenderPipeline.builder(((IRenderPipelines) new RenderPipelines()).getMatricesFogSnippet())
+                                                          ^
+  symbol:   variable RenderPipeline
+  location: interface IRenderer
+/home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:76: error: cannot find symbol
+            .withDepthStencilState(new DepthStencilState(CompareOp.ALWAYS_PASS, false))
+                                       ^
+  symbol:   class DepthStencilState
+  location: interface IRenderer
+/home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:76: error: cannot find symbol
+            .withDepthStencilState(new DepthStencilState(CompareOp.ALWAYS_PASS, false))
+                                                         ^
+  symbol:   variable CompareOp
+  location: interface IRenderer
+/home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:75: error: cannot find symbol
+            .withColorTargetState(new ColorTargetState(BlendFunction.TRANSLUCENT))
+                                      ^
+  symbol:   class ColorTargetState
+  location: interface IRenderer
+/home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:75: error: cannot find symbol
+            .withColorTargetState(new ColorTargetState(BlendFunction.TRANSLUCENT))
+                                                       ^
+  symbol:   variable BlendFunction
+  location: interface IRenderer
+/home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:73: error: cannot find symbol
+    RenderPipeline BEACON_BEAM_OPAQUE = ((IRenderPipelines) new RenderPipelines()).baritone$registerPipeline(RenderPipeline.builder(BARITONE_BEACON_BEAM_SNIPPET)
+                                                                                                             ^
+  symbol:   variable RenderPipeline
+  location: interface IRenderer
+/home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:83: error: cannot find symbol
+            .withDepthStencilState(new DepthStencilState(CompareOp.ALWAYS_PASS, false))
+                                       ^
+  symbol:   class DepthStencilState
+  location: interface IRenderer
+/home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:83: error: cannot find symbol
+            .withDepthStencilState(new DepthStencilState(CompareOp.ALWAYS_PASS, false))
+                                                         ^
+  symbol:   variable CompareOp
+  location: interface IRenderer
+/home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:82: error: cannot find symbol
+            .withColorTargetState(new ColorTargetState(BlendFunction.TRANSLUCENT))
+                                      ^
+  symbol:   class ColorTargetState
+  location: interface IRenderer
+/home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:82: error: cannot find symbol
+            .withColorTargetState(new ColorTargetState(BlendFunction.TRANSLUCENT))
+                                                       ^
+  symbol:   variable BlendFunction
+  location: interface IRenderer
+/home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:80: error: cannot find symbol
+    RenderPipeline BEACON_BEAM_TRANSLUCENT = ((IRenderPipelines) new RenderPipelines()).baritone$registerPipeline(RenderPipeline.builder(BARITONE_BEACON_BEAM_SNIPPET)
+                                                                                                                  ^
+  symbol:   variable RenderPipeline
+  location: interface IRenderer
+/home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:91: error: cannot find symbol
+            .withDepthStencilState(new DepthStencilState(CompareOp.LESS_THAN_OR_EQUAL, false))
+                                       ^
+  symbol:   class DepthStencilState
+  location: interface IRenderer
+/home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:91: error: cannot find symbol
+            .withDepthStencilState(new DepthStencilState(CompareOp.LESS_THAN_OR_EQUAL, false))
+                                                         ^
+  symbol:   variable CompareOp
+  location: interface IRenderer
+/home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:89: error: cannot find symbol
+        RenderSetup.builder(RenderPipeline.builder(BARITONE_LINES_SNIPPET)
+                            ^
+  symbol:   variable RenderPipeline
+  location: interface IRenderer
+/home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:99: error: cannot find symbol
+                .withDepthStencilState(new DepthStencilState(CompareOp.ALWAYS_PASS, false))
+                                           ^
+  symbol:   class DepthStencilState
+  location: interface IRenderer
+/home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:99: error: cannot find symbol
+                .withDepthStencilState(new DepthStencilState(CompareOp.ALWAYS_PASS, false))
+                                                             ^
+  symbol:   variable CompareOp
+  location: interface IRenderer
+/home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:97: error: cannot find symbol
+        RenderSetup.builder(RenderPipeline.builder(BARITONE_LINES_SNIPPET)
+                            ^
+  symbol:   variable RenderPipeline
+  location: interface IRenderer
+/home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:127: error: cannot find symbol
+        draw[0] = stagedVertexBuffer.appendDraw(DefaultVertexFormat.POSITION_COLOR_NORMAL_LINE_WIDTH, PrimitiveTopology.LINES);
+                                                                                                      ^
+  symbol:   variable PrimitiveTopology
+  location: interface IRenderer
+/home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:140: error: cannot find symbol
+        draw[0] = stagedVertexBuffer.appendDraw(DefaultVertexFormat.BLOCK, PrimitiveTopology.QUADS);
+                                                                           ^
+  symbol:   variable PrimitiveTopology
+  location: interface IRenderer
+/home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:157: error: no suitable method found for drawFromBuffer(ExecuteInfo,RenderPass)
+                preparedRenderType.drawFromBuffer(info, renderPass);
+                                  ^
+    method PreparedRenderType.drawFromBuffer(ExecuteInfo) is not applicable
+      (actual and formal argument lists differ in length)
+    method PreparedRenderType.drawFromBuffer(GpuBuffer,GpuBuffer,IndexType,int,int,int) is not applicable
+      (actual and formal argument lists differ in length)
+/home/user/Baritone/src/main/java/baritone/process/elytra/ElytraBehavior.java:805: error: no suitable method found for swing(InteractionHand,SwingAnimation,boolean)
+            ctx.player().swing(fireworkHand, SwingAnimation.DEFAULT, false);
+                        ^
+    method LivingEntity.swing(InteractionHand,boolean) is not applicable
+      (actual and formal argument lists differ in length)
+    method LocalPlayer.swing(InteractionHand) is not applicable
+      (actual and formal argument lists differ in length)
+/home/user/Baritone/src/main/java/baritone/process/elytra/NetherPathfinderContext.java:55: warning: Unsafe is internal proprietary API and may be removed in a future release
+    private static final Unsafe UNSAFE;
+                         ^
+/home/user/Baritone/src/main/java/baritone/process/elytra/NetherPathfinderContext.java:58: warning: Unsafe is internal proprietary API and may be removed in a future release
+            Field f = Unsafe.class.getDeclaredField("theUnsafe");
+                      ^
+/home/user/Baritone/src/main/java/baritone/process/elytra/NetherPathfinderContext.java:60: warning: Unsafe is internal proprietary API and may be removed in a future release
+            UNSAFE = (Unsafe) f.get(null);
+                      ^
+/home/user/Baritone/src/main/java/baritone/process/elytra/NetherPathfinderContext.java:326: warning: [removal] setMemory(long,long,byte) in Unsafe has been deprecated and marked for removal
+                    UNSAFE.setMemory(chunkPtr + (y0 * bytesInSection), bytesInSection, (byte) 0xFF);
+                          ^
+/home/user/Baritone/src/main/java/baritone/command/ExampleBaritoneControl.java:100: error: cannot find symbol
+                Blaze3D.openUri(URI.create("https://www.dominos.com/en/pages/order/"));
+                       ^
+  symbol:   method openUri(URI)
+  location: class Blaze3D
+/home/user/Baritone/src/main/java/baritone/utils/pathing/Avoidance.java:79: error: cannot find symbol
+                    .filter(entity -> !(entity instanceof Enderman) || ((Enderman) entity).isCreepy())
+                                                          ^
+  symbol:   class Enderman
+  location: class Avoidance
+/home/user/Baritone/src/main/java/baritone/utils/pathing/Avoidance.java:79: error: cannot find symbol
+                    .filter(entity -> !(entity instanceof Enderman) || ((Enderman) entity).isCreepy())
+                                                                         ^
+  symbol:   class Enderman
+  location: class Avoidance
+/home/user/Baritone/src/main/java/baritone/utils/PathRenderer.java:367: error: cannot find symbol
+            stack.rotateDegrees(Axis.YP, time * 2.25F - 45.0F);
+                 ^
+  symbol:   method rotateDegrees(Axis,float)
+  location: variable stack of type PoseStack
+Note: Some input files use or override a deprecated API.
+Note: Recompile with -Xlint:deprecation for details.
+Note: Some input files use unchecked or unsafe operations.
+Note: Recompile with -Xlint:unchecked for details.
+56 errors
+5 warnings
+
+> Task :compileJava FAILED
+> Task :processResources NO-SOURCE
+> Task :processLaunchResources
+
+[Incubating] Problems report is available at: file:///home/user/Baritone/build/reports/problems/problems-report.html
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':compileJava'.
+> Compilation failed; see the compiler output below.
+  /home/user/Baritone/src/main/java/baritone/process/elytra/NetherPathfinderContext.java:38: warning: Unsafe is internal proprietary API and may be removed in a future release
+  import sun.misc.Unsafe;
+                 ^
+  /home/user/Baritone/src/main/java/baritone/process/elytra/NetherPathfinderContext.java:55: warning: Unsafe is internal proprietary API and may be removed in a future release
+      private static final Unsafe UNSAFE;
+                           ^
+  /home/user/Baritone/src/main/java/baritone/process/elytra/NetherPathfinderContext.java:58: warning: Unsafe is internal proprietary API and may be removed in a future release
+              Field f = Unsafe.class.getDeclaredField("theUnsafe");
+                        ^
+  /home/user/Baritone/src/main/java/baritone/process/elytra/NetherPathfinderContext.java:60: warning: Unsafe is internal proprietary API and may be removed in a future release
+              UNSAFE = (Unsafe) f.get(null);
+                        ^
+  /home/user/Baritone/src/main/java/baritone/behavior/LookBehavior.java:784: error: no suitable method found for swing(InteractionHand,SwingAnimation,boolean)
+                      ctx.player().swing(InteractionHand.MAIN_HAND, SwingAnimation.DEFAULT, false);
+                                  ^
+      method LivingEntity.swing(InteractionHand,boolean) is not applicable
+        (actual and formal argument lists differ in length)
+      method LocalPlayer.swing(InteractionHand) is not applicable
+        (actual and formal argument lists differ in length)
+  /home/user/Baritone/src/main/java/baritone/utils/BlockBreakHelper.java:84: error: no suitable method found for swing(InteractionHand,SwingAnimation,boolean)
+          ctx.player().swing(InteractionHand.MAIN_HAND, SwingAnimation.DEFAULT, false);
+                      ^
+      method LivingEntity.swing(InteractionHand,boolean) is not applicable
+        (actual and formal argument lists differ in length)
+      method LocalPlayer.swing(InteractionHand) is not applicable
+        (actual and formal argument lists differ in length)
+  /home/user/Baritone/src/main/java/baritone/utils/BlockPlaceHelper.java:73: error: no suitable method found for swing(InteractionHand,SwingAnimation,boolean)
+                  ctx.player().swing(hand, SwingAnimation.DEFAULT, false);
+                              ^
+      method LivingEntity.swing(InteractionHand,boolean) is not applicable
+        (actual and formal argument lists differ in length)
+      method LocalPlayer.swing(InteractionHand) is not applicable
+        (actual and formal argument lists differ in length)
+  /home/user/Baritone/src/main/java/baritone/utils/BlockPlaceHelper.java:81: error: no suitable method found for swing(InteractionHand,SwingAnimation,boolean)
+                  ctx.player().swing(hand, SwingAnimation.DEFAULT, false);
+                              ^
+      method LivingEntity.swing(InteractionHand,boolean) is not applicable
+        (actual and formal argument lists differ in length)
+      method LocalPlayer.swing(InteractionHand) is not applicable
+        (actual and formal argument lists differ in length)
+  /home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:157: error: no suitable method found for drawFromBuffer(ExecuteInfo,RenderPass)
+                  preparedRenderType.drawFromBuffer(info, renderPass);
+                                    ^
+      method PreparedRenderType.drawFromBuffer(ExecuteInfo) is not applicable
+        (actual and formal argument lists differ in length)
+      method PreparedRenderType.drawFromBuffer(GpuBuffer,GpuBuffer,IndexType,int,int,int) is not applicable
+        (actual and formal argument lists differ in length)
+  /home/user/Baritone/src/main/java/baritone/process/elytra/ElytraBehavior.java:805: error: no suitable method found for swing(InteractionHand,SwingAnimation,boolean)
+              ctx.player().swing(fireworkHand, SwingAnimation.DEFAULT, false);
+                          ^
+      method LivingEntity.swing(InteractionHand,boolean) is not applicable
+        (actual and formal argument lists differ in length)
+      method LocalPlayer.swing(InteractionHand) is not applicable
+        (actual and formal argument lists differ in length)
+  Note: Recompile with -Xlint:deprecation for details.
+  /home/user/Baritone/src/main/java/baritone/behavior/LookBehavior.java:46: error: cannot find symbol
+  import net.minecraft.network.protocol.game.ServerboundPunchPacket;
+                                            ^
+    symbol:   class ServerboundPunchPacket
+    location: package net.minecraft.network.protocol.game
+  /home/user/Baritone/src/main/java/baritone/utils/BlockBreakHelper.java:23: error: cannot find symbol
+  import net.minecraft.network.protocol.game.ServerboundPunchPacket;
+                                            ^
+    symbol:   class ServerboundPunchPacket
+    location: package net.minecraft.network.protocol.game
+  /home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:73: error: cannot find symbol
+      RenderPipeline BEACON_BEAM_OPAQUE = ((IRenderPipelines) new RenderPipelines()).baritone$registerPipeline(RenderPipeline.builder(BARITONE_BEACON_BEAM_SNIPPET)
+      ^
+    symbol:   class RenderPipeline
+    location: interface IRenderer
+  /home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:80: error: cannot find symbol
+      RenderPipeline BEACON_BEAM_TRANSLUCENT = ((IRenderPipelines) new RenderPipelines()).baritone$registerPipeline(RenderPipeline.builder(BARITONE_BEACON_BEAM_SNIPPET)
+      ^
+    symbol:   class RenderPipeline
+    location: interface IRenderer
+  /home/user/Baritone/src/main/java/baritone/utils/pathing/Avoidance.java:26: error: cannot find symbol
+  import net.minecraft.world.entity.monster.Enderman;
+                                           ^
+    symbol:   class Enderman
+    location: package net.minecraft.world.entity.monster
+  /home/user/Baritone/src/main/java/baritone/utils/accessor/IRenderPipelines.java:26: error: cannot find symbol
+      RenderPipeline baritone$registerPipeline(RenderPipeline pipeline);
+                                               ^
+    symbol:   class RenderPipeline
+    location: interface IRenderPipelines
+  /home/user/Baritone/src/main/java/baritone/utils/accessor/IRenderPipelines.java:26: error: cannot find symbol
+      RenderPipeline baritone$registerPipeline(RenderPipeline pipeline);
+      ^
+    symbol:   class RenderPipeline
+    location: interface IRenderPipelines
+  /home/user/Baritone/src/main/java/baritone/behavior/LookBehavior.java:785: error: cannot find symbol
+                      ctx.player().connection.send(ServerboundPunchPacket.INSTANCE);
+                                                   ^
+    symbol:   variable ServerboundPunchPacket
+    location: class LookBehavior
+  /home/user/Baritone/src/main/java/baritone/process/FarmProcess.java:266: error: cannot find symbol
+                  if (ig.isValidBonemealTarget(ctx.world(), pos, state, BonemealSource.INTERACTION) && ig.isBonemealSuccess(ctx.world(), ctx.world().getRandom(), pos, state, BonemealSource.INTERACTION)) {
+                                                                        ^
+    symbol:   variable BonemealSource
+    location: class FarmProcess
+  /home/user/Baritone/src/main/java/baritone/process/FarmProcess.java:266: error: cannot find symbol
+                  if (ig.isValidBonemealTarget(ctx.world(), pos, state, BonemealSource.INTERACTION) && ig.isBonemealSuccess(ctx.world(), ctx.world().getRandom(), pos, state, BonemealSource.INTERACTION)) {
+                                                                                                                                                                              ^
+    symbol:   variable BonemealSource
+    location: class FarmProcess
+  /home/user/Baritone/src/main/java/baritone/utils/BlockBreakHelper.java:85: error: cannot find symbol
+          ctx.player().connection.send(ServerboundPunchPacket.INSTANCE);
+                                       ^
+    symbol:   variable ServerboundPunchPacket
+    location: class BlockBreakHelper
+  /home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:61: error: cannot find symbol
+          .withDepthStencilState(new DepthStencilState(CompareOp.LESS_THAN_OR_EQUAL, false))
+                                     ^
+    symbol:   class DepthStencilState
+    location: interface IRenderer
+  /home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:61: error: cannot find symbol
+          .withDepthStencilState(new DepthStencilState(CompareOp.LESS_THAN_OR_EQUAL, false))
+                                                       ^
+    symbol:   variable CompareOp
+    location: interface IRenderer
+  /home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:55: error: cannot find symbol
+          .withColorTargetState(new ColorTargetState(new BlendFunction(
+                                    ^
+    symbol:   class ColorTargetState
+    location: interface IRenderer
+  /home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:55: error: cannot find symbol
+          .withColorTargetState(new ColorTargetState(new BlendFunction(
+                                                         ^
+    symbol:   class BlendFunction
+    location: interface IRenderer
+  /home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:56: error: cannot find symbol
+              BlendFactor.SRC_ALPHA,
+              ^
+    symbol:   variable BlendFactor
+    location: interface IRenderer
+  /home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:57: error: cannot find symbol
+              BlendFactor.ONE_MINUS_SRC_ALPHA,
+              ^
+    symbol:   variable BlendFactor
+    location: interface IRenderer
+  /home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:58: error: cannot find symbol
+              BlendFactor.ONE,
+              ^
+    symbol:   variable BlendFactor
+    location: interface IRenderer
+  /home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:59: error: cannot find symbol
+              BlendFactor.ZERO
+              ^
+    symbol:   variable BlendFactor
+    location: interface IRenderer
+  /home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:54: error: cannot find symbol
+      RenderPipeline.Snippet BARITONE_LINES_SNIPPET = RenderPipeline.builder(((IRenderPipelines) new RenderPipelines()).getLinesSnippet())
+                                                      ^
+    symbol:   variable RenderPipeline
+    location: interface IRenderer
+  /home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:70: error: cannot find symbol
+              .withPrimitiveTopology(PrimitiveTopology.QUADS)
+                                     ^
+    symbol:   variable PrimitiveTopology
+    location: interface IRenderer
+  /home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:65: error: cannot find symbol
+      RenderPipeline.Snippet BARITONE_BEACON_BEAM_SNIPPET = RenderPipeline.builder(((IRenderPipelines) new RenderPipelines()).getMatricesFogSnippet())
+                                                            ^
+    symbol:   variable RenderPipeline
+    location: interface IRenderer
+  /home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:76: error: cannot find symbol
+              .withDepthStencilState(new DepthStencilState(CompareOp.ALWAYS_PASS, false))
+                                         ^
+    symbol:   class DepthStencilState
+    location: interface IRenderer
+  /home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:76: error: cannot find symbol
+              .withDepthStencilState(new DepthStencilState(CompareOp.ALWAYS_PASS, false))
+                                                           ^
+    symbol:   variable CompareOp
+    location: interface IRenderer
+  /home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:75: error: cannot find symbol
+              .withColorTargetState(new ColorTargetState(BlendFunction.TRANSLUCENT))
+                                        ^
+    symbol:   class ColorTargetState
+    location: interface IRenderer
+  /home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:75: error: cannot find symbol
+              .withColorTargetState(new ColorTargetState(BlendFunction.TRANSLUCENT))
+                                                         ^
+    symbol:   variable BlendFunction
+    location: interface IRenderer
+  /home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:73: error: cannot find symbol
+      RenderPipeline BEACON_BEAM_OPAQUE = ((IRenderPipelines) new RenderPipelines()).baritone$registerPipeline(RenderPipeline.builder(BARITONE_BEACON_BEAM_SNIPPET)
+                                                                                                               ^
+    symbol:   variable RenderPipeline
+    location: interface IRenderer
+  /home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:83: error: cannot find symbol
+              .withDepthStencilState(new DepthStencilState(CompareOp.ALWAYS_PASS, false))
+                                         ^
+    symbol:   class DepthStencilState
+    location: interface IRenderer
+  /home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:83: error: cannot find symbol
+              .withDepthStencilState(new DepthStencilState(CompareOp.ALWAYS_PASS, false))
+                                                           ^
+    symbol:   variable CompareOp
+    location: interface IRenderer
+  /home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:82: error: cannot find symbol
+              .withColorTargetState(new ColorTargetState(BlendFunction.TRANSLUCENT))
+                                        ^
+    symbol:   class ColorTargetState
+    location: interface IRenderer
+  /home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:82: error: cannot find symbol
+              .withColorTargetState(new ColorTargetState(BlendFunction.TRANSLUCENT))
+                                                         ^
+    symbol:   variable BlendFunction
+    location: interface IRenderer
+  /home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:80: error: cannot find symbol
+      RenderPipeline BEACON_BEAM_TRANSLUCENT = ((IRenderPipelines) new RenderPipelines()).baritone$registerPipeline(RenderPipeline.builder(BARITONE_BEACON_BEAM_SNIPPET)
+                                                                                                                    ^
+    symbol:   variable RenderPipeline
+    location: interface IRenderer
+  /home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:91: error: cannot find symbol
+              .withDepthStencilState(new DepthStencilState(CompareOp.LESS_THAN_OR_EQUAL, false))
+                                         ^
+    symbol:   class DepthStencilState
+    location: interface IRenderer
+  /home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:91: error: cannot find symbol
+              .withDepthStencilState(new DepthStencilState(CompareOp.LESS_THAN_OR_EQUAL, false))
+                                                           ^
+    symbol:   variable CompareOp
+    location: interface IRenderer
+  /home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:89: error: cannot find symbol
+          RenderSetup.builder(RenderPipeline.builder(BARITONE_LINES_SNIPPET)
+                              ^
+    symbol:   variable RenderPipeline
+    location: interface IRenderer
+  /home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:99: error: cannot find symbol
+                  .withDepthStencilState(new DepthStencilState(CompareOp.ALWAYS_PASS, false))
+                                             ^
+    symbol:   class DepthStencilState
+    location: interface IRenderer
+  /home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:99: error: cannot find symbol
+                  .withDepthStencilState(new DepthStencilState(CompareOp.ALWAYS_PASS, false))
+                                                               ^
+    symbol:   variable CompareOp
+    location: interface IRenderer
+  /home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:97: error: cannot find symbol
+          RenderSetup.builder(RenderPipeline.builder(BARITONE_LINES_SNIPPET)
+                              ^
+    symbol:   variable RenderPipeline
+    location: interface IRenderer
+  /home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:127: error: cannot find symbol
+          draw[0] = stagedVertexBuffer.appendDraw(DefaultVertexFormat.POSITION_COLOR_NORMAL_LINE_WIDTH, PrimitiveTopology.LINES);
+                                                                                                        ^
+    symbol:   variable PrimitiveTopology
+    location: interface IRenderer
+  /home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:140: error: cannot find symbol
+          draw[0] = stagedVertexBuffer.appendDraw(DefaultVertexFormat.BLOCK, PrimitiveTopology.QUADS);
+                                                                             ^
+    symbol:   variable PrimitiveTopology
+    location: interface IRenderer
+  /home/user/Baritone/src/main/java/baritone/utils/pathing/Avoidance.java:79: error: cannot find symbol
+                      .filter(entity -> !(entity instanceof Enderman) || ((Enderman) entity).isCreepy())
+                                                            ^
+    symbol:   class Enderman
+    location: class Avoidance
+  /home/user/Baritone/src/main/java/baritone/utils/pathing/Avoidance.java:79: error: cannot find symbol
+                      .filter(entity -> !(entity instanceof Enderman) || ((Enderman) entity).isCreepy())
+                                                                           ^
+    symbol:   class Enderman
+    location: class Avoidance
+  Note: Recompile with -Xlint:unchecked for details.
+  Note: Some input files use or override a deprecated API.
+  /home/user/Baritone/src/main/java/baritone/process/elytra/NetherPathfinderContext.java:326: warning: [removal] setMemory(long,long,byte) in Unsafe has been deprecated and marked for removal
+                      UNSAFE.setMemory(chunkPtr + (y0 * bytesInSection), bytesInSection, (byte) 0xFF);
+                            ^
+  Note: Some input files use unchecked or unsafe operations.
+  /home/user/Baritone/src/main/java/baritone/command/ExampleBaritoneControl.java:100: error: cannot find symbol
+                  Blaze3D.openUri(URI.create("https://www.dominos.com/en/pages/order/"));
+                         ^
+    symbol:   method openUri(URI)
+    location: class Blaze3D
+  /home/user/Baritone/src/main/java/baritone/utils/PathRenderer.java:367: error: cannot find symbol
+              stack.rotateDegrees(Axis.YP, time * 2.25F - 45.0F);
+                   ^
+    symbol:   method rotateDegrees(Axis,float)
+    location: variable stack of type PoseStack
+  /home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:54: error: package RenderPipeline does not exist
+      RenderPipeline.Snippet BARITONE_LINES_SNIPPET = RenderPipeline.builder(((IRenderPipelines) new RenderPipelines()).getLinesSnippet())
+                    ^
+  /home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:65: error: package RenderPipeline does not exist
+      RenderPipeline.Snippet BARITONE_BEACON_BEAM_SNIPPET = RenderPipeline.builder(((IRenderPipelines) new RenderPipelines()).getMatricesFogSnippet())
+                    ^
+  /home/user/Baritone/src/main/java/baritone/utils/IRenderer.java:29: error: package com.mojang.renderpearl.api.pipeline does not exist
+  import com.mojang.renderpearl.api.pipeline.*;
+                                   ^
+  /home/user/Baritone/src/main/java/baritone/utils/accessor/IRenderPipelines.java:20: error: package com.mojang.renderpearl.api.pipeline does not exist
+  import com.mojang.renderpearl.api.pipeline.RenderPipeline;
+                                            ^
+  /home/user/Baritone/src/main/java/baritone/utils/accessor/IRenderPipelines.java:23: error: package RenderPipeline does not exist
+      RenderPipeline.Snippet getLinesSnippet();
+                    ^
+  /home/user/Baritone/src/main/java/baritone/utils/accessor/IRenderPipelines.java:24: error: package RenderPipeline does not exist
+      RenderPipeline.Snippet getMatricesFogSnippet();
+                    ^
+  56 errors
+  5 warnings
+
+* Try:
+> Check your code and dependencies to fix the compilation error(s)
+> Run with --scan to get full insights.
+
+Deprecated Gradle features were used in this build, making it incompatible with Gradle 9.0.
+
+You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+
+For more on this, please refer to https://docs.gradle.org/8.14.4/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+
+BUILD FAILED in 3m 24s
+6 actionable tasks: 6 executed
+EXIT=1
