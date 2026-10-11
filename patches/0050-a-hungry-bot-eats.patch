@@ -1,0 +1,947 @@
+From 324034d917c964e034f8c321bb0e23d0b9a5aef8 Mon Sep 17 00:00:00 2001
+From: Turnstone <turnstone@agents.invalid>
+Date: Sun, 11 Oct 2026 16:58:20 +0000
+Subject: [PATCH] Turnstone: a hungry bot eats
+
+The operator asked for auto-eat by name on 2026-10-11, which is the explicit
+approval the gate requires; the roadmap's P1-04 had said automatic eating was
+not implied by its own approval, so the divergence is recorded in
+docs/planning/2026-10-11/implementation-turnstone-autoeat.md rather than left
+implicit. Nothing here renames anything: the rebrand half of the gate is
+untouched.
+
+New EatBehavior (a behaviour, not a process - eating wants the hand for a
+second and a half, not the path, the goal or the task, and every ownership
+handover is a way to lose a path, so this needs none of P0-03) and a
+Minecraft-free EatPolicy with its own unit tests.
+
+What it is allowed to do is narrowed rather than widened: ordinary food only
+(no golden apple, no chorus fruit, and nothing that applies an effect - which
+is what rotten flesh, spider eye, pufferfish and poisonous potato have in
+common), it never changes what is in the hand while a process is in control,
+it waits for the hand to actually arrive before pressing, it takes food from
+the main inventory only when the user has allowed Baritone to move items, and
+it gives up after three attempts per hunger episode instead of clicking at
+nothing. A meal that lands resets the budget, because a second helping for a
+bar that is still short is a new ask and not a retry.
+
+One press is not a bite. Vanilla calls releaseUsingItem while the real use key
+is up, so a lone processRightClick starts a mouthful the game drops on the next
+tick - an instrumented run shows phase=EATING with using=false. The click
+helpers are the wrong shape for a fix (re-clicking a mouthful starts it over),
+so the button is held through the input layer instead, as a one-tick lease:
+ask again to keep holding. It is asked for rather than switched because
+clearAllKeys() deliberately does not lift it - every movement calls that on
+every tick of a walk, and a meal eaten on the way somewhere must not come off
+the mouth twenty times a second.
+
+Both census tests caught this, as designed. ButtonWritesTest gains an entry
+(and the reason: a held item use cannot go through BlockPlaceHelper, whose
+condition is a block under the crosshair) plus shape pins for the wait;
+KeyWritesTest needed no new file, because the write went behind
+InputOverrideHandler, which is the remedy its own failure message names.
+
+391 tests, 0 failures (383 before). In game, read back from the game itself:
+bar 0 -> 5 -> 10 idle with bread 5 -> 4 -> 3; walking a goto of 130 blocks with
+bread 5 -> 0; and with the drain stopped, 0 -> 15 exactly at autoEatThreshold
+with bread 5 -> 2.
+---
+ .../implementation-turnstone-autoeat.md       |  98 ++++++
+ src/api/java/baritone/api/Settings.java       |  14 +
+ src/main/java/baritone/Baritone.java          |   3 +
+ .../java/baritone/behavior/EatBehavior.java   | 327 ++++++++++++++++++
+ src/main/java/baritone/utils/EatPolicy.java   | 145 ++++++++
+ .../baritone/utils/InputOverrideHandler.java  |  43 +++
+ .../java/baritone/utils/ButtonWritesTest.java |  13 +
+ .../java/baritone/utils/EatPolicyTest.java    | 111 ++++++
+ .../java/baritone/utils/KeyWritesTest.java    |   7 +
+ wiki/Settings.md                              |   2 +
+ 10 files changed, 763 insertions(+)
+ create mode 100644 docs/planning/2026-10-11/implementation-turnstone-autoeat.md
+ create mode 100644 src/main/java/baritone/behavior/EatBehavior.java
+ create mode 100644 src/main/java/baritone/utils/EatPolicy.java
+ create mode 100644 src/test/java/baritone/utils/EatPolicyTest.java
+
+diff --git a/docs/planning/2026-10-11/implementation-turnstone-autoeat.md b/docs/planning/2026-10-11/implementation-turnstone-autoeat.md
+new file mode 100644
+index 00000000..e767a196
+--- /dev/null
++++ b/docs/planning/2026-10-11/implementation-turnstone-autoeat.md
+@@ -0,0 +1,98 @@
++# Auto-eat: what landed, why it is shaped this way, and what it is worth
++
++**Author:** Turnstone. **Date:** 2026-10-11. **Branch:** `26.3`.
++**Authority:** the operator directed this work in conversation on 2026-10-11 — *"continue coding then. also add
++in to auto fight mobs, auto eat. interact with players by crouching, etc."* That is the explicit human
++approval the 2026-10-11 gate requires for feature implementation. The rebrand half of the gate is untouched:
++nothing here renames anything.
++
++**Divergence from the roadmap, recorded rather than hidden.** `roadmap.md` P1-04 says of its own approval
++"automatic eating/healing is not implied", because the planned tranche was preconditions and alerts. The
++operator has now asked for automatic eating by name, which is the higher authority. This document is the
++scope statement for that one capability. `P1-03` (DEFEND) and the crouch greeting are **not** in it — see
++"What this is not" below.
++
++## What it does
++
++When the bar drops below `autoEatThreshold` (default 15 of 20) the bot eats the most filling ordinary food it
++is carrying — from the hand if it is already there, otherwise from the hotbar — and keeps eating until the bar
++is back at the threshold. It then stops, and stays stopped until the bar drops again.
++
++It runs as a **behaviour**, not a process, and that is the central design decision. Eating wants the hand for a
++second and a half; it does not want the path, the goal or the task. A process would have to take control, stop
++the walk, and hand it back, and every one of those handovers is a way to lose a path — which is a large price
++for a sandwich. It also means this capability needs none of `P0-03`'s ownership work, which is why it could
++land ahead of the response cards.
++
++## The bounds, and the reason for each
++
++| Bound | Why |
++|---|---|
++| Never changes what is in the hand while a process is in control (`mostRecentInControl()`) | The hotbar belongs to the task. A snack is not worth the pickaxe's slot in the middle of a mine. Food **already in the hand** is the exception, and it costs the task nothing. |
++| Only ordinary food: feeds, non-zero stack, not `canAlwaysEat`, no consume effects | `alwaysEdible` is vanilla's own word for the specials — golden apple, enchanted golden apple, chorus fruit, honey bottle — and `Consumable#onConsumeEffects` is where the sting lives for the plain-looking ones: rotten flesh, spider eye, pufferfish, poisonous potato. A bot cannot *want* an effect, so it leaves all of them alone. |
++| Waits for the hand to arrive before pressing | A right click with the wrong item in hand is not a missed meal, it is a thrown pearl. The switch is asked for through `InventoryBehavior` and the bite waits for `switchingHands()` to clear. |
++| Three attempts per hunger episode, then quiet | A stall happens — hand busy, server refused, mouth interrupted — and a second attempt is the reasonable answer to it. Three is where that stops being an answer and starts being a bot clicking at nothing. A meal that lands resets the budget: a second helping for a bar that is still short is a new ask, not a retry. |
++| Bounded wait for the bite (`consumeTicks + 10`) | A bite that never lands must not become a button held forever. |
++| Hotbar first; the main inventory only under `allowInventory` | `allowInventory` is the user saying "do not move my items". Auto-eat does not override that. The move goes through `attemptToPutOnHotbar` and the food is picked up out of the hotbar a tick later. |
++| Not in creative or spectator, not while gliding, not with a menu open, not while the hands are busy | A bar that never moves, a hand on a rocket, and a menu that is the player's. |
++
++## The one thing that a press is not: a bite
++
++A single `processRightClick` starts a mouthful and **the game drops it on the next tick**. The reason is vanilla
++and it is in the client's own bytecode: `Minecraft` calls `MultiPlayerGameMode.releaseUsingItem` while the real
++`Options.keyUse` is up, and nothing in a headless client holds that key. An instrumented run shows exactly that:
++
++```
++eatprobe f=0 held=minecraft:bread x5 using=false busy=false ... phase=EATING spent=1
++```
++
++the bite was started and was not being chewed. The mod's click helpers are the wrong shape for the fix — they
++re-click on a cadence, and re-clicking a block is another block while re-clicking a mouthful is a mouthful
++started over. So the button is **held**, through the input layer, as a one-tick lease:
++
++* `InputOverrideHandler.holdTheUseButton()` asks for the game's use button for this tick. The ask is spent by the
++  tick that reads it, so the button can only stay down while somebody is asking every tick, and a holder that
++  stops asking — or stops ticking entirely — cannot leave it down.
++* It is asked for rather than switched because **`clearAllKeys()` does not lift it**, and that is deliberate:
++  every movement calls `clearAllKeys()` on every tick of a walk to rebuild the task's own keys. A meal eaten on
++  the way somewhere would come off the player's mouth twenty times a second otherwise.
++* It does not take a key that is already down, so a player eating at the same time keeps their own hold.
++
++Both census tests caught this work, which is what they are for, and both were amended the way the tests
++themselves prescribe: `ButtonWritesTest` with an entry explaining why a held item use cannot go through
++`BlockPlaceHelper` (whose whole condition is a block under the crosshair) and shape pins for the wait;
++`KeyWritesTest` needed no new file at all, because the key write went behind `InputOverrideHandler` — the
++remedy that test's own failure message names.
++
++## Evidence
++
++Unit: `EatPolicyTest`, 8 cases — the specials refused however filling, the most filling chosen, ties always
++resolving to the same slot, no candidate returning no choice, the budget bounding and resetting, the wait
++outlasting the bite. Suite: **391 tests, 0 failures** (383 before this work).
++
++In game, on this branch's jar, all via the game's own `/data get`:
++
++| Scenario | Result |
++|---|---|
++| Hungry with bread in hand (idle) | bar 0 → 5 → 10 with bread 5 → 4 → 3, `using=true` throughout |
++| Hungry, **walking** `#goto 0 -60 130` | moved z 0.5 → 130.4 while bread went **5 → 0** |
++| Drain stopped, bread given | bar 0 → **15** — exactly `autoEatThreshold` — with bread **5 → 2**, then it stopped |
++
++The third row is the whole behaviour in one line: three breads, no more and no fewer, and it stopped at the
++setting rather than at the stack.
++
++Settings in force for the runs: `autoEat=true`, `autoEatThreshold=15` (read back from the game), `allowInventory`
++untouched at its default `false`, difficulty normal (peaceful refills the bar by itself and would mask this).
++
++## What this is not
++
++* **Auto-fight mobs** (`P1-03`, DEFEND) is not here. It is an XL card, the operator has asked for it explicitly,
++  and the plan's own ordering puts `P0-03` — failure provenance and safe temporary ownership — in front of any
++  response that takes the path over. That is the next piece of work, and it is the one where the operator's ask
++  and the plan's bound rules have to be reconciled rather than one of them ignored.
++* **The crouch greeting** is not here. It is small, it touches the look/input surface, and it should follow the
++  per-tick input work above with its own bounds rather than being bolted on beside it.
++* **Main-inventory food when `allowInventory` is off**, **eating to heal** (a golden apple is exactly the case
++  the acceptance rule refuses), and **looting or crafting food** are all out of scope.
++* It is not a resource planner: nothing here looks for food, plants it, cooks it, or tells the task layer that
++  supplies are short. `P3-02` is where that lives.
+diff --git a/src/api/java/baritone/api/Settings.java b/src/api/java/baritone/api/Settings.java
+index 1e8e78ec..df583eb6 100644
+--- a/src/api/java/baritone/api/Settings.java
++++ b/src/api/java/baritone/api/Settings.java
+@@ -92,6 +92,20 @@ public final class Settings {
+      */
+     public final Setting<Boolean> allowInventory = new Setting<>(false);
+ 
++    /**
++     * Eat when hungry, the way you would: an ordinary food item out of the hand, or out of the
++     * hotbar if nothing is in a task's way. Never a golden apple, a chorus fruit or anything else
++     * that is worth saving, and never anything that applies an effect - see {@code EatPolicy}.
++     */
++    public final Setting<Boolean> autoEat = new Setting<>(true);
++
++    /**
++     * How empty the bar has to get before {@link #autoEat} does something about it, out of 20.
++     * Fifteen is three quarters gone: early enough that eating is a meal rather than an emergency,
++     * and late enough that a bot with a full bar does not spend the game chewing.
++     */
++    public final Setting<Integer> autoEatThreshold = new Setting<>(15);
++
+     /**
+      * Wait this many ticks between InventoryBehavior moving inventory items
+      */
+diff --git a/src/main/java/baritone/Baritone.java b/src/main/java/baritone/Baritone.java
+index 53f2bd3e..86c39105 100755
+--- a/src/main/java/baritone/Baritone.java
++++ b/src/main/java/baritone/Baritone.java
+@@ -108,6 +108,9 @@ public class Baritone implements IBaritone {
+             this.lookBehavior         = this.registerBehavior(LookBehavior::new);
+             this.pathingBehavior      = this.registerBehavior(PathingBehavior::new);
+             this.inventoryBehavior    = this.registerBehavior(InventoryBehavior::new);
++            // After the inventory behaviour, so a slot this one asks for is on its way the same
++            // tick, and before the input handler, so nothing is pressed while the hand is moving
++            this.registerBehavior(EatBehavior::new);
+             this.inputOverrideHandler = this.registerBehavior(InputOverrideHandler::new);
+             this.registerBehavior(WaypointBehavior::new);
+         }
+diff --git a/src/main/java/baritone/behavior/EatBehavior.java b/src/main/java/baritone/behavior/EatBehavior.java
+new file mode 100644
+index 00000000..67e84dd1
+--- /dev/null
++++ b/src/main/java/baritone/behavior/EatBehavior.java
+@@ -0,0 +1,327 @@
++/*
++ * This file is part of Baritone.
++ *
++ * Baritone is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU Lesser General Public License as published by
++ * the Free Software Foundation, either version 3 of the License, or
++ * (at your option) any later version.
++ *
++ * Baritone is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public License
++ * along with Baritone.  If not, see <https://www.gnu.org/licenses/>.
++ */
++
++package baritone.behavior;
++
++import baritone.Baritone;
++import baritone.api.event.events.TickEvent;
++import baritone.api.utils.Helper;
++import baritone.utils.EatPolicy;
++import net.minecraft.client.player.LocalPlayer;
++import net.minecraft.core.component.DataComponents;
++import net.minecraft.world.InteractionHand;
++import net.minecraft.world.InteractionResult;
++import net.minecraft.world.food.FoodProperties;
++import net.minecraft.world.item.ItemStack;
++import net.minecraft.world.item.component.Consumable;
++
++import java.util.ArrayList;
++import java.util.List;
++
++/**
++ * A hungry bot eats.
++ * <p>
++ * This is a behaviour and not a process on purpose. Eating does not want the path, the goal or the
++ * task: it wants the hand, for a second and a half, and it must be able to happen while the bot is
++ * walking somewhere, because that is when a person eats. A process would have to take control, stop
++ * the walk, and give it back, and every one of those handovers is a way to lose a path - which is a
++ * large price for a sandwich. So this sits beside the pathing behaviour and asks the same hand the
++ * other behaviours ask, one beat after the inventory behaviour has had its turn and before the input
++ * handler presses anything.
++ * <p>
++ * What it will not do, and these are the bounds rather than the policy:
++ * <ul>
++ *   <li><b>It never changes what is in the hand while a process is in control.</b> If the bot is
++ *   mining, building or crossing, the hotbar belongs to that task; a snack is not worth the
++ *   pickaxe's slot. The one exception is food already in the hand, which costs the task nothing.</li>
++ *   <li><b>It never eats a special food.</b> See {@link EatPolicy}: no golden apples, no chorus
++ *   fruit, nothing that applies an effect, nothing harmful.</li>
++ *   <li><b>It never takes the hand from the player.</b> It asks the same way the other behaviours
++ *   ask, and it waits for the hand to actually arrive before pressing - a right click with the
++ *   wrong item in hand is not a missed meal, it is a thrown pearl.</li>
++ *   <li><b>It gives up.</b> Three attempts per hunger episode and then quiet, so a bot whose food
++ *   is refused cannot spend the whole game clicking at a wall.</li>
++ * </ul>
++ */
++public final class EatBehavior extends Behavior implements Helper {
++
++    /**
++     * How long a hotbar switch is given to land before the attempt is written off. The switch itself
++     * is a beat; a second and a half is far past that and still short enough that the bot is not
++     * standing there with its hand halfway to a slot.
++     */
++    private static final int SWITCH_WINDOW = 30;
++
++    private enum Phase {
++        IDLE,
++        REACHING,
++        EATING
++    }
++
++    private final EatPolicy.Budget budget = new EatPolicy.Budget(EatPolicy.ATTEMPTS_PER_EPISODE);
++
++    private Phase phase = Phase.IDLE;
++    private int targetSlot = -1;
++    private int phaseTicks;
++    private int startFoodLevel;
++    private int startCount;
++    private int window;
++    private boolean notedEmpty;
++
++    public EatBehavior(Baritone baritone) {
++        super(baritone);
++    }
++
++    @Override
++    public void onTick(TickEvent event) {
++        if (event.getType() == TickEvent.Type.OUT) {
++            return;
++        }
++        if (!Baritone.settings().autoEat.value) {
++            abandon();
++            return;
++        }
++        LocalPlayer player = ctx.player();
++        if (player == null) {
++            abandon();
++            return;
++        }
++        if (ctx.world() == null || !ctx.playerController().getGameType().isSurvival()) {
++            // Creative and spectator have a full bar that never moves, and no world has no bar at all
++            abandon();
++            return;
++        }
++        if (phase == Phase.EATING) {
++            eating(player);
++            return;
++        }
++        // A hand on a rocket is not a hand for a sandwich, and the elytra's own owner is minding it
++        if (player.isFallFlying()) {
++            abandon();
++            return;
++        }
++        if (phase == Phase.IDLE) {
++            idle(player);
++            return;
++        }
++        reaching(player);
++    }
++
++    /**
++     * Decide whether to eat at all, and what.
++     */
++    private void idle(LocalPlayer player) {
++        if (player.getFoodData().getFoodLevel() >= Baritone.settings().autoEatThreshold.value) {
++            // Not hungry: the episode is over, and the next one starts with a fresh budget
++            budget.reset();
++            notedEmpty = false;
++            return;
++        }
++        if (!handsFree(player)) {
++            return;
++        }
++        if (!budget.mayTry()) {
++            return;
++        }
++        EatPolicy.Food chosen = choose(player);
++        if (chosen == null) {
++            if (!notedEmpty) {
++                notedEmpty = true;
++                logDebug("Hungry and nothing in the hand or the hotbar to eat; leaving it to you.");
++            }
++            return;
++        }
++        if (chosen.slot() == player.getInventory().getSelectedSlot()) {
++            // Already in the hand, which is the case that costs a task nothing
++            press(player);
++            return;
++        }
++        targetSlot = chosen.slot();
++        phase = Phase.REACHING;
++        phaseTicks = 0;
++        baritone.getInventoryBehavior().hold(targetSlot);
++    }
++
++    /**
++     * Wait for the hand to arrive in the slot that was asked for, then eat.
++     */
++    private void reaching(LocalPlayer player) {
++        if (player.containerMenu != player.inventoryMenu) {
++            // A menu opened over the top of this: whatever is in the hand is now the player's choice
++            abandon();
++            return;
++        }
++        if (player.getInventory().getSelectedSlot() == targetSlot
++                && !baritone.getInventoryBehavior().switchingHands()) {
++            press(player);
++            return;
++        }
++        if (phaseTicks == 0) {
++            baritone.getInventoryBehavior().hold(targetSlot);
++        }
++        if (phaseTicks++ > SWITCH_WINDOW) {
++            abandon();
++        }
++    }
++
++    /**
++     * Watch the mouth while the button is held. Vanilla finishes the bite by itself, so this is a wait
++     * as much as a hold; and the wait is bounded, because a bite that never lands must not become a
++     * button that is held forever.
++     */
++    private void eating(LocalPlayer player) {
++        holdUseButton(); // the bite lasts as long as we keep asking for the button
++        boolean swallowed = player.getFoodData().getFoodLevel() > startFoodLevel
++                || player.getItemInHand(InteractionHand.MAIN_HAND).getCount() < startCount;
++        if (swallowed) {
++            phase = Phase.IDLE;
++            window = 0;
++            // It worked. A second helping for a bar that is still short is a new ask, not a retry
++            budget.reset();
++            return;
++        }
++        if (!player.isUsingItem()) {
++            // The bite was dropped before it landed - interrupted, or never really started
++            abandon();
++            return;
++        }
++        if (phaseTicks++ > window) {
++            // Our own bite, so it is ours to take back; the budget has already paid for it
++            player.stopUsingItem();
++            abandon();
++        }
++    }
++
++    /**
++     * Drop whatever this behaviour was in the middle of. Not a failure and not a success: the next
++     * tick looks again from the start, carrying the budget the episode has already spent. Nothing
++     * here reaches for the hand - whatever a task was doing with it is still its own.
++     */
++    private void abandon() {
++        phase = Phase.IDLE;
++        targetSlot = -1;
++        phaseTicks = 0;
++        window = 0;
++    }
++
++    /**
++     * Press use on whatever is in the hand. Only ever called with an edible item in the main hand.
++     */
++    private void press(LocalPlayer player) {
++        ItemStack inHand = player.getItemInHand(InteractionHand.MAIN_HAND);
++        startFoodLevel = player.getFoodData().getFoodLevel();
++        startCount = inHand.getCount();
++        window = EatPolicy.completionWindow(consumeTicks(inHand));
++        budget.spend();
++        InteractionResult result = ctx.playerController().processRightClick(player, ctx.world(), InteractionHand.MAIN_HAND);
++        if (result != null && result.consumesAction()) {
++            holdUseButton();
++            phase = Phase.EATING;
++            phaseTicks = 0;
++        } else {
++            abandon();
++        }
++    }
++
++    /**
++     * One press is not a bite. Vanilla completes a consumable over its own ticking time and abandons it
++     * the moment the use button comes up - so a single call to start one is a mouthful the game releases
++     * again on the next tick, which is what a bot that "eats" and never chews looks like. The mod's click
++     * helpers re-click on a cadence, which suits a placement and not a mouthful, so what a sustained use
++     * needs is the button held down.
++     * <p>
++     * That belongs to the input layer, which owns the player's keys: this asks it, every tick of the bite,
++     * through {@code InputOverrideHandler.holdTheUseButton}, and stops asking when the bite is over. The
++     * ask is a lease of one tick, so the button cannot outlive the meal even if this behaviour stops
++     * ticking, and asking rather than switching is why a walk can still eat - see that method for the
++     * argument in full.
++     */
++    private void holdUseButton() {
++        baritone.getInputOverrideHandler().holdTheUseButton();
++    }
++
++    /**
++     * The item to eat, or {@code null} if there is nothing the bot is allowed to reach for.
++     */
++    private EatPolicy.Food choose(LocalPlayer player) {
++        int selected = player.getInventory().getSelectedSlot();
++        EatPolicy.Food held = describe(player.getItemInHand(InteractionHand.MAIN_HAND), selected);
++        if (EatPolicy.edible(held)) {
++            return held;
++        }
++        // Changing what is in the hand is a different proposition: the hand belongs to whichever
++        // process is in control, and nothing here is worth taking it from one.
++        if (!baritone.getPathingControlManager().mostRecentInControl().isEmpty()) {
++            return null;
++        }
++        List<EatPolicy.Food> hotbar = new ArrayList<>(9);
++        for (int slot = 0; slot < 9; slot++) {
++            hotbar.add(describe(player.getInventory().getItem(slot), slot));
++        }
++        EatPolicy.Food best = EatPolicy.chooseFood(hotbar);
++        if (best != null) {
++            return best;
++        }
++        // And the main inventory only if the user has told Baritone it may move items there. The
++        // move lands in a hotbar slot a beat later, so this tick asks for it and the next one finds
++        // the food where it was put.
++        if (!Baritone.settings().allowInventory.value) {
++            return null;
++        }
++        for (int slot = 9; slot < 36; slot++) {
++            if (EatPolicy.edible(describe(player.getInventory().getItem(slot), slot))) {
++                baritone.getInventoryBehavior().attemptToPutOnHotbar(slot, ignored -> false);
++                return null;
++            }
++        }
++        return null;
++    }
++
++    /**
++     * Is the hand free to be asked for? This is the idle-side test, so it includes a switch that is
++     * still on its way - a bot that pressed during one would be clicking with the previous item.
++     */
++    private boolean handsFree(LocalPlayer player) {
++        return !player.isUsingItem()
++                && !player.isHandsBusy()
++                && !baritone.getInventoryBehavior().switchingHands()
++                && player.containerMenu == player.inventoryMenu;
++    }
++
++    private static int consumeTicks(ItemStack stack) {
++        Consumable consumable = stack.get(DataComponents.CONSUMABLE);
++        // A food with no consumable component still takes vanilla's default eating time
++        return consumable == null ? 32 : consumable.consumeTicks();
++    }
++
++    /**
++     * Describe a stack the way {@link EatPolicy} wants to see it. An empty slot, or anything that is
++     * not food, comes back as something the policy will refuse rather than as a special case here.
++     */
++    private static EatPolicy.Food describe(ItemStack stack, int slot) {
++        if (stack == null || stack.isEmpty()) {
++            return new EatPolicy.Food(slot, 0, 0, false, false);
++        }
++        FoodProperties food = stack.get(DataComponents.FOOD);
++        if (food == null) {
++            return new EatPolicy.Food(slot, 0, stack.getCount(), false, false);
++        }
++        Consumable consumable = stack.get(DataComponents.CONSUMABLE);
++        boolean hasEffects = consumable != null && !consumable.onConsumeEffects().isEmpty();
++        return new EatPolicy.Food(slot, food.nutrition(), stack.getCount(), food.canAlwaysEat(), hasEffects);
++    }
++}
+diff --git a/src/main/java/baritone/utils/EatPolicy.java b/src/main/java/baritone/utils/EatPolicy.java
+new file mode 100644
+index 00000000..8c867095
+--- /dev/null
++++ b/src/main/java/baritone/utils/EatPolicy.java
+@@ -0,0 +1,145 @@
++/*
++ * This file is part of Baritone.
++ *
++ * Baritone is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU Lesser General Public License as published by
++ * the Free Software Foundation, either version 3 of the License, or
++ * (at your option) any later version.
++ *
++ * Baritone is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public License
++ * along with Baritone.  If not, see <https://www.gnu.org/licenses/>.
++ */
++
++package baritone.utils;
++
++import java.util.List;
++
++/**
++ * What a hungry bot is allowed to eat, which of the carried candidates it eats first, and how many
++ * times it may try before it stops asking.
++ * <p>
++ * The three answers are here, Minecraft-free, because they are the part of eating that can be wrong
++ * in a way a person would notice - a bot that bites a golden apple, or that chews through a stack of
++ * them one stall at a time, or that picks a different slot on every tick and so never settles on one.
++ * Everything that needs a world (the hand, the slot, the button) stays in {@code EatBehavior}; this
++ * is the judgement, and it is testable without a client.
++ * <p>
++ * The acceptance rule is deliberately narrow. An item is eaten only if it is ordinary carrying food:
++ * it feeds ({@code nutrition > 0}), there is some of it, and it is neither of the two things that
++ * make a food special. {@code alwaysEdible} is vanilla's own word for the foods a person can eat on a
++ * full stomach, and those are the ones that are worth something else - the golden apple and its
++ * enchanted sibling, the chorus fruit, the honey bottle. {@code hasEffects} covers the other half:
++ * the plain-looking foods that do something to you when they go down, which is the rotten flesh, the
++ * spider eye, the pufferfish, the poisonous potato. A bot has no way to want an effect, and a person
++ * who wanted one can eat it themselves, so the bot leaves all of them alone. What is left is the
++ * fixture: bread, cooked meat, carrots, and everything else whose whole job is the bar.
++ */
++public final class EatPolicy {
++
++    private EatPolicy() {}
++
++    /**
++     * One thing the bot is carrying and could eat, described without reference to a world.
++     *
++     * @param slot         the hotbar slot (0 to 8) or the inventory slot it would come from
++     * @param nutrition    {@code FoodProperties#nutrition()}, the half-bar hunger points it restores
++     * @param count        how many of them are in the stack
++     * @param alwaysEdible vanilla's {@code FoodProperties#canAlwaysEat()}: edible on a full stomach,
++     *                     which is what the special foods have in common
++     * @param hasEffects   whether consuming it applies anything beyond the food itself, including
++     *                     the harmful ones a plain nutrition figure does not reveal
++     */
++    public record Food(int slot, int nutrition, int count, boolean alwaysEdible, boolean hasEffects) {
++    }
++
++    /**
++     * Whether this is ordinary carrying food. See the class comment for why the specials are excluded.
++     */
++    public static boolean edible(Food food) {
++        return food != null
++                && food.nutrition() > 0
++                && food.count() > 0
++                && !food.alwaysEdible()
++                && !food.hasEffects();
++    }
++
++    /**
++     * The one to eat: of everything edible, the most filling, because a meal that does not fill the
++     * bar is a meal somebody has to repeat.
++     * <p>
++     * Ties go to the lowest slot, which is not a preference between two equal foods - it is what
++     * makes the answer the same on every tick. A choice that moved between equal candidates would
++     * have the hand switching back and forth and never arriving, which is the one way this code
++     * could spend a whole hunger bar's worth of ticks doing nothing.
++     *
++     * @return the chosen candidate, or {@code null} if nothing here is edible
++     */
++    public static Food chooseFood(List<Food> candidates) {
++        Food best = null;
++        for (Food candidate : candidates) {
++            if (!edible(candidate)) {
++                continue;
++            }
++            if (best == null
++                    || candidate.nutrition() > best.nutrition()
++                    || (candidate.nutrition() == best.nutrition() && candidate.slot() < best.slot())) {
++                best = candidate;
++            }
++        }
++        return best;
++    }
++
++    /**
++     * How many bites of one hunger episode may be attempted. A stall is a thing that happens - the
++     * hand was busy, the server refused, the mouth was interrupted - and a second attempt is the
++     * reasonable answer to it. Three is where that stops being an answer and starts being a bot
++     * clicking at nothing, so the budget runs out and the bot is quiet until it is fed by something
++     * else or gets hungry again later.
++     */
++    public static final int ATTEMPTS_PER_EPISODE = 3;
++
++    /**
++     * Attempts spent on the current hunger episode. Handed out, never taken back - except by
++     * {@link #reset()}, which is called when a meal actually lands or when the bot is no longer
++     * hungry, and those are the two events that mean the episode is over.
++     */
++    public static final class Budget {
++
++        private final int max;
++        private int spent;
++
++        public Budget(int max) {
++            this.max = max;
++        }
++
++        public boolean mayTry() {
++            return spent < max;
++        }
++
++        public void spend() {
++            spent++;
++        }
++
++        public void reset() {
++            spent = 0;
++        }
++
++        public int spent() {
++            return spent;
++        }
++    }
++
++    /**
++     * How long to keep watching a bite that has been started, in ticks, on top of what vanilla says
++     * the item takes. The extra is patience rather than tolerance: a server that is a little behind,
++     * or a tick where the client had not yet been told the mouth was full.
++     */
++    public static int completionWindow(int consumeTicks) {
++        return consumeTicks + 10;
++    }
++}
+diff --git a/src/main/java/baritone/utils/InputOverrideHandler.java b/src/main/java/baritone/utils/InputOverrideHandler.java
+index 1fcba8f2..ea11c527 100755
+--- a/src/main/java/baritone/utils/InputOverrideHandler.java
++++ b/src/main/java/baritone/utils/InputOverrideHandler.java
+@@ -56,6 +56,13 @@ public final class InputOverrideHandler extends Behavior implements IInputOverri
+      */
+     private final KeyBeat keyBeat = new KeyBeat();
+ 
++    /**
++     * Whether something is asking for the use button this tick, and whether the button is down because
++     * this file put it there. See {@link #holdTheUseButton()}.
++     */
++    private boolean useButtonAskedFor;
++    private boolean holdingTheUseButton;
++
+     /**
+      * The crouch a person keeps while their footing is not certain, held here for the same reason the key
+      * beat is held here: the crossing it covers outlives the movement that asked for it. A movement that
+@@ -101,12 +108,36 @@ public final class InputOverrideHandler extends Behavior implements IInputOverri
+ 
+     /**
+      * Clears the override state for all keys
++     * <p>
++     * Deliberately not the held use button: see {@link #holdTheUseButton()} for why it is a lease and
++     * why every movement rebuilding the task's own keys every tick must not lift somebody's bite.
+      */
+     @Override
+     public final void clearAllKeys() {
+         this.inputForceStateMap.clear();
+     }
+ 
++    /**
++     * Hold the game's use button down for this tick, the way a thumb does - ask again next tick to keep
++     * holding.
++     * <p>
++     * The click helpers in this tick are the wrong shape for a use that lasts rather than lands: they
++     * re-click on a cadence, and re-clicking a block is another block while re-clicking a mouthful is a
++     * mouthful started over and re-clicking a bow is an arrow that is never drawn. A sustained use wants
++     * the button down and held, because vanilla completes a consumable over its own ticking time and
++     * abandons it the instant that key comes up - a bite that is not held is not a bite at all.
++     * <p>
++     * It is a lease rather than a switch: the ask is spent by the tick that reads it, so the button can
++     * only stay down while somebody is asking for it every tick, and a holder that goes away - a
++     * behaviour that stops ticking, a world that closes - cannot leave it down by forgetting. It is also
++     * why {@link #clearAllKeys()} does not touch it: that is called by every movement, every tick of a
++     * walk, to rebuild the task's own keys, and a meal eaten while walking would come off the player's
++     * mouth twenty times a second if it were.
++     */
++    public void holdTheUseButton() {
++        this.useButtonAskedFor = true;
++    }
++
+     @Override
+     public final void onTick(TickEvent event) {
+         if (event.getType() == TickEvent.Type.OUT) {
+@@ -121,6 +152,18 @@ public final class InputOverrideHandler extends Behavior implements IInputOverri
+         final boolean handReady = !baritone.getInventoryBehavior().switchingHands();
+         blockBreakHelper.tick(isInputForcedDown(Input.CLICK_LEFT), handReady);
+         blockPlaceHelper.tick(isInputForcedDown(Input.CLICK_RIGHT), handReady);
++        // The use that lasts, as opposed to the two clicks above: the ask is spent by this tick, and the
++        // button follows it. Nothing here is a click - the click was made once, by whoever started the
++        // use - so this only keeps the game from taking the mouthful away while it is still being chewed
++        final boolean holdTheUse = this.useButtonAskedFor;
++        this.useButtonAskedFor = false;
++        if (holdTheUse && !ctx.minecraft().options.keyUse.isDown()) {
++            ctx.minecraft().options.keyUse.setDown(true);
++            this.holdingTheUseButton = true;
++        } else if (!holdTheUse && this.holdingTheUseButton) {
++            ctx.minecraft().options.keyUse.setDown(false);
++            this.holdingTheUseButton = false;
++        }
+ 
+         if (!baritone.getPathingBehavior().isPathing()) {
+             footing.reset(); // a crossing that ended while nobody was asking is not one being walked
+diff --git a/src/test/java/baritone/utils/ButtonWritesTest.java b/src/test/java/baritone/utils/ButtonWritesTest.java
+index 77faa49f..645ad6a3 100644
+--- a/src/test/java/baritone/utils/ButtonWritesTest.java
++++ b/src/test/java/baritone/utils/ButtonWritesTest.java
+@@ -70,6 +70,15 @@ public class ButtonWritesTest {
+             "src/main/java/baritone/utils/BlockBreakHelper.java",
+             // the right button: the beat, then the click, then the arm
+             "src/main/java/baritone/utils/BlockPlaceHelper.java",
++            // eating: the one held-item use in the fork that is not aimed at a block, so it cannot go
++            // through BlockPlaceHelper - that helper's whole condition is a block under the crosshair.
++            // It reaches for the mod's own controller, like everything above it, and it waits for the
++            // item in the hand the same way the helpers do: the slot is asked for through
++            // InventoryBehavior and the bite is not started until the switch has landed, and food that
++            // is already in the hand is the case that needs no switch at all. What it does not do is
++            // reach into the hand of a task that is using it, which is the reason it is a behaviour and
++            // not a process: a meal is never worth the slot a mine is in the middle of
++            "src/main/java/baritone/behavior/EatBehavior.java",
+             // the inventory swap: the beat behind InventorySwap, then the window click
+             "src/main/java/baritone/behavior/InventoryBehavior.java",
+             // the idle fidget and the arm that swings while the aim holds still: animation packets with no
+@@ -93,6 +102,10 @@ public class ButtonWritesTest {
+     private static final String[][] SHAPES = {
+             {"src/main/java/baritone/utils/BlockBreakHelper.java", "this.sightSettle.waiting("},
+             {"src/main/java/baritone/utils/BlockPlaceHelper.java", "this.sightSettle.waiting("},
++            // eating waits for the item that was asked for, and drops the attempt instead of pressing
++            // at a hand that never arrived (the window bounds the wait, the budget bounds the retries)
++            {"src/main/java/baritone/behavior/EatBehavior.java", "baritone.getInventoryBehavior().switchingHands()"},
++            {"src/main/java/baritone/behavior/EatBehavior.java", "player.getInventory().getSelectedSlot() == targetSlot"},
+             {"src/main/java/baritone/behavior/InventoryBehavior.java", "this.swap.tick()"},
+             // the arm that swings at nothing: the packet and the swing, and no click in the file at all
+             {"src/main/java/baritone/behavior/LookBehavior.java", "ServerboundPunchPacket.INSTANCE"},
+diff --git a/src/test/java/baritone/utils/EatPolicyTest.java b/src/test/java/baritone/utils/EatPolicyTest.java
+new file mode 100644
+index 00000000..4ca94c9c
+--- /dev/null
++++ b/src/test/java/baritone/utils/EatPolicyTest.java
+@@ -0,0 +1,111 @@
++/*
++ * This file is part of Baritone.
++ *
++ * Baritone is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU Lesser General Public License as published by
++ * the Free Software Foundation, either version 3 of the License, or
++ * (at your option) any later version.
++ *
++ * Baritone is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public License
++ * along with Baritone.  If not, see <https://www.gnu.org/licenses/>.
++ */
++
++package baritone.utils;
++
++import org.junit.Test;
++
++import java.util.ArrayList;
++import java.util.Arrays;
++import java.util.List;
++
++import static org.junit.Assert.assertEquals;
++import static org.junit.Assert.assertFalse;
++import static org.junit.Assert.assertNull;
++import static org.junit.Assert.assertTrue;
++
++/**
++ * The three ways eating can be wrong that a person would notice, and the rule that stops each of
++ * them: biting something that is not dinner, changing its mind about which slot on every tick, and
++ * clicking at a refused bite until the end of the game.
++ */
++public class EatPolicyTest {
++
++    // bread, cooked porkchop, a golden apple, rotten flesh, a stick (not food at all)
++    private static EatPolicy.Food plain(int slot, int nutrition) {
++        return new EatPolicy.Food(slot, nutrition, 1, false, false);
++    }
++
++    @Test
++    public void eatsTheOrdinaryFood() {
++        assertTrue(EatPolicy.edible(plain(0, 5)));
++        assertTrue(EatPolicy.edible(new EatPolicy.Food(3, 8, 64, false, false)));
++    }
++
++    @Test
++    public void refusesTheSpecialsHoweverFillingTheyAre() {
++        // A golden apple feeds and can be eaten on a full stomach. It is dinner for an emergency,
++        // and a bot has no way to know that an emergency is what it is in.
++        assertFalse(EatPolicy.edible(new EatPolicy.Food(0, 4, 1, true, false)));
++        // Rotten flesh, spider eyes, pufferfish: ordinary nutrition figures with a sting attached.
++        assertFalse(EatPolicy.edible(new EatPolicy.Food(0, 4, 1, false, true)));
++        // A stack of nothing, and a stick.
++        assertFalse(EatPolicy.edible(new EatPolicy.Food(0, 4, 0, false, false)));
++        assertFalse(EatPolicy.edible(new EatPolicy.Food(0, 0, 1, false, false)));
++        assertFalse(EatPolicy.edible(null));
++    }
++
++    @Test
++    public void eatsTheMostFillingOneAvailable() {
++        List<EatPolicy.Food> hotbar = Arrays.asList(plain(0, 2), plain(4, 8), plain(7, 5));
++        assertEquals(4, EatPolicy.chooseFood(hotbar).slot());
++    }
++
++    @Test
++    public void aSpecialIsNotChosenEvenWhenItIsTheMostFilling() {
++        List<EatPolicy.Food> hotbar = Arrays.asList(
++                plain(1, 5),
++                new EatPolicy.Food(2, 9, 3, true, false),
++                new EatPolicy.Food(3, 9, 3, false, true));
++        assertEquals(1, EatPolicy.chooseFood(hotbar).slot());
++    }
++
++    @Test
++    public void equalFoodsAlwaysComeBackToTheSameSlot() {
++        // Two loaves. Either is right; changing your mind about which one every tick is not, because
++        // the hand would be asked to move before it ever arrived.
++        List<EatPolicy.Food> hotbar = Arrays.asList(new EatPolicy.Food(6, 5, 1, false, false), new EatPolicy.Food(2, 5, 1, false, false));
++        assertEquals(2, EatPolicy.chooseFood(hotbar).slot());
++        assertEquals(2, EatPolicy.chooseFood(new ArrayList<>(hotbar)).slot());
++    }
++
++    @Test
++    public void nothingEdibleIsNoChoice() {
++        assertNull(EatPolicy.chooseFood(new ArrayList<>()));
++        assertNull(EatPolicy.chooseFood(Arrays.asList(plain(0, 0), new EatPolicy.Food(1, 6, 1, true, false))));
++    }
++
++    @Test
++    public void aRefusedBiteIsTriedAgainAndThenDropped() {
++        EatPolicy.Budget budget = new EatPolicy.Budget(EatPolicy.ATTEMPTS_PER_EPISODE);
++        for (int attempt = 0; attempt < EatPolicy.ATTEMPTS_PER_EPISODE; attempt++) {
++            assertTrue("attempt " + attempt + " should be allowed", budget.mayTry());
++            budget.spend();
++        }
++        assertFalse("the budget is spent, so the clicking stops", budget.mayTry());
++        // A meal landing, or the bot no longer being hungry, is what starts a new episode
++        budget.reset();
++        assertTrue(budget.mayTry());
++        assertEquals(0, budget.spent());
++    }
++
++    @Test
++    public void theWaitOutlastsTheBite() {
++        assertTrue(EatPolicy.completionWindow(32) > 32);
++        assertTrue(EatPolicy.completionWindow(0) > 0);
++    }
++}
+diff --git a/src/test/java/baritone/utils/KeyWritesTest.java b/src/test/java/baritone/utils/KeyWritesTest.java
+index ff6ba4fb..1f899944 100644
+--- a/src/test/java/baritone/utils/KeyWritesTest.java
++++ b/src/test/java/baritone/utils/KeyWritesTest.java
+@@ -105,6 +105,13 @@ public class KeyWritesTest {
+             // the write itself: one record, built from what was decided above it
+             {"src/main/java/baritone/utils/PlayerMovementInput.java", "this.keyPresses = new net.minecraft.world.entity.player.Input("},
+             // the flag write is the answer to the hangover-aware question, and the question is the hangover
++            // the held use button: a lease on the game's own use key, inside the file that owns the keys,
++            // asked for by the one sustained use in the fork (EatBehavior, eating) and spent by the tick
++            // that reads it, so a holder that stops asking cannot leave the button down. It is asked for
++            // rather than switched because clearAllKeys above does not lift it - that runs on every
++            // movement of a walk, and a meal eaten on the way somewhere must not come off the mouth
++            {"src/main/java/baritone/utils/InputOverrideHandler.java", "this.useButtonAskedFor = false;"},
++            {"src/main/java/baritone/utils/InputOverrideHandler.java", "ctx.minecraft().options.keyUse.setDown(true)"},
+             {"src/main/java/baritone/pathing/path/PathExecutor.java", "sprintNextTick = shouldSprintNextTick();"},
+             {"src/main/java/baritone/pathing/path/PathExecutor.java", "if (this.sprintHangover > 0 && canTrailOffSprint()) {"},
+     };
+diff --git a/wiki/Settings.md b/wiki/Settings.md
+index f296e2fc..53f274c9 100644
+--- a/wiki/Settings.md
++++ b/wiki/Settings.md
+@@ -35,6 +35,8 @@ Settings are saved to `minecraft/baritone/settings.txt`. Delete this file to res
+ | `allowWaterBucketFall` | true | Use water bucket for long falls |
+ | `allowVines` | false | Allow climbing and traversing vines |
+ | `allowDiagonalAscend` | false | Allow diagonal ascending movements |
++| `autoEat` | true | Eat when hungry: an ordinary food item from the hand or the hotbar, never a special one |
++| `autoEatThreshold` | 15 | How empty the bar gets, out of 20, before `autoEat` eats |
+ | `assumeSafeWalk` | false | Assume safe walk (no crouch on bridges) |
+ | `sprintInWater` | true | Sprint while in water |
+ 
+-- 
+2.47.3
+
