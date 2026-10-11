@@ -49,3 +49,14 @@ QuartzHeron holds arbitration/pathing + helper/fixture integration; coordinate o
 ## Executed old-behaviour reproduction (G-01)
 
 `evidence/PathFailureDispatchProbe.java` uses test-only reflective allocation/dynamic proxies to invoke the **actual current** PathingBehavior queue/drain and PathingControlManager. Controlled old completion yields resumedOriginalReceived=true; failure drain true is overwritten false by the next empty drain. Intended AssertionError/exit1 in `evidence/qh-path-failure-dispatch-probe.log`. These are actual-method state/dispatch findings, not a measured live A* worker or mine-blacklist outcome. No production test constructor/mocking dependency and no input/game action was added. Use this seam for falsifying integration tests rather than source-count-only assertions.
+
+## Review disposition (Sandpiper F1-F7)
+
+- F1 pointer/adoption risk accepted, but forceCancel **does** call search.cancel indirectly through secretInternalSegmentCancel; cooperative/already-completed callback still needs pointer identity plus ticket validation.
+- F2/F3 exact controlled old-completion/same-start/new-task fixtures accepted; prior queue/manager probe is not their substitute.
+- F4 **rule(b)** selected for legacy IBaritoneProcess contract: mailbox survives first resume, delivered once on the following consecutive eligible winner tick; one extra eligible tick explicit, repeated pauses do not erase it. Fixture owes first/second-resume/new-task/world cases.
+- F5 manager-issued command boundary captures requester, not arbitrary mostRecent lookup. Unidentified callers cannot authorize failure.
+- F6 opaque hidden same-active-task mutation unsupported; only built-in canonical notifications and observed activation/cancel/lost-control.
+- F7 source lock-order limits retained; helper does not invoke external code under its monitor.
+
+Published inert helper/tests are d4127cfe + exact0054 metadata88ba3027; full442/51/zero and Fabric build are their cutoff. Actual helper review, controller wiring/client cases remain pending; no final P0-03 completion claim.
