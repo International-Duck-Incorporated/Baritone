@@ -1,0 +1,10 @@
+Post-teleport samples only (first pre-teleport row removed); coordinate change is not walk speed.
+samples 338, ticks 730 to 1067
+moving for about 220 ticks (11.0 s); 60.0 blocks covered, 5.31 blocks/s on average
+cruise (median over the middle of the walk) 0.281 blocks/tick = 5.61 blocks/s; the fastest window 0.327 is inflated by bursts
+ticks from the first motion to 90% of cruise: 7 (6-tick windows: a resolution of 6)
+ticks from the last 90% of cruise to the stop: 7
+yaw   while moving: -106.1 to -58.1 (range 48.0), fastest turn 84.4 degrees in 6 ticks
+pitch while moving: -7.30 to 21.41 (range 28.71), fastest change 7.56 degrees in 6 ticks, 197 distinct values
+pitch while moving: median 1.6, mean 4.9; 24% of the samples more than 15 degrees down (positive is down)
+at rest before: yaw 0.0 pitch 0.0; at rest after: yaw -112.2 pitch 12.8

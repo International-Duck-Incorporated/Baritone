@@ -1,0 +1,93 @@
+{
+  "checked_at_utc": "2026-10-11T13:38:54.977029+00:00",
+  "pipeline_list_url": "https://gitlab.com/api/v4/projects/87267843/pipelines?ref=26.3&per_page=3",
+  "pipelines": [
+    {
+      "pipeline": {
+        "id": 2935844665,
+        "iid": 252,
+        "project_id": 87267843,
+        "sha": "b70b1064222a82fddc27563261481f3808424260",
+        "ref": "26.3",
+        "status": "failed",
+        "source": "push",
+        "created_at": "2026-10-11T13:38:07.150Z",
+        "updated_at": "2026-10-11T13:38:07.645Z",
+        "web_url": "https://gitlab.com/international-duck-incorporated/Baritone/-/pipelines/2935844665",
+        "name": null
+      },
+      "jobs_url": "https://gitlab.com/api/v4/projects/87267843/pipelines/2935844665/jobs",
+      "jobs": [
+        {
+          "id": 17093483103,
+          "status": "failed",
+          "name": "build",
+          "stage": "test",
+          "failure_reason": "ci_quota_exceeded",
+          "web_url": "https://gitlab.com/international-duck-incorporated/Baritone/-/jobs/17093483103",
+          "runner": null,
+          "started_at": null,
+          "finished_at": "2026-10-11T13:38:07.478Z"
+        }
+      ]
+    },
+    {
+      "pipeline": {
+        "id": 2935838004,
+        "iid": 251,
+        "project_id": 87267843,
+        "sha": "85eda9f8c4dd00f8e87a7fc6b2ba06f902bb51d8",
+        "ref": "26.3",
+        "status": "failed",
+        "source": "push",
+        "created_at": "2026-10-11T13:33:24.284Z",
+        "updated_at": "2026-10-11T13:33:24.730Z",
+        "web_url": "https://gitlab.com/international-duck-incorporated/Baritone/-/pipelines/2935838004",
+        "name": null
+      },
+      "jobs_url": "https://gitlab.com/api/v4/projects/87267843/pipelines/2935838004/jobs",
+      "jobs": [
+        {
+          "id": 17093448005,
+          "status": "failed",
+          "name": "build",
+          "stage": "test",
+          "failure_reason": "ci_quota_exceeded",
+          "web_url": "https://gitlab.com/international-duck-incorporated/Baritone/-/jobs/17093448005",
+          "runner": null,
+          "started_at": null,
+          "finished_at": "2026-10-11T13:33:24.554Z"
+        }
+      ]
+    },
+    {
+      "pipeline": {
+        "id": 2935796427,
+        "iid": 250,
+        "project_id": 87267843,
+        "sha": "b5642c630a2a835da51810505a8a1b34168f66f0",
+        "ref": "26.3",
+        "status": "failed",
+        "source": "push",
+        "created_at": "2026-10-11T13:08:26.463Z",
+        "updated_at": "2026-10-11T13:08:26.962Z",
+        "web_url": "https://gitlab.com/international-duck-incorporated/Baritone/-/pipelines/2935796427",
+        "name": null
+      },
+      "jobs_url": "https://gitlab.com/api/v4/projects/87267843/pipelines/2935796427/jobs",
+      "jobs": [
+        {
+          "id": 17093214657,
+          "status": "failed",
+          "name": "build",
+          "stage": "test",
+          "failure_reason": "ci_quota_exceeded",
+          "web_url": "https://gitlab.com/international-duck-incorporated/Baritone/-/jobs/17093214657",
+          "runner": null,
+          "started_at": null,
+          "finished_at": "2026-10-11T13:08:26.803Z"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,9 @@
+samples 340, ticks 241 to 580
+moving for about 222 ticks (11.1 s); 60.0 blocks covered, 5.27 blocks/s on average
+cruise (median over the middle of the walk) 0.281 blocks/tick = 5.61 blocks/s; the fastest window 0.701 is inflated by bursts
+ticks from the first motion to 90% of cruise: 7 (6-tick windows: a resolution of 6)
+ticks from the last 90% of cruise to the stop: 6
+yaw   while moving: -91.8 to 0.1 (range 91.8), fastest turn 90.6 degrees in 6 ticks
+pitch while moving: -1.84 to 17.09 (range 18.93), fastest change 14.22 degrees in 6 ticks, 205 distinct values
+pitch while moving: median 9.4, mean 7.9; 14% of the samples more than 15 degrees down (positive is down)
+at rest before: yaw 0.0 pitch 0.0; at rest after: yaw -0.3 pitch -0.2

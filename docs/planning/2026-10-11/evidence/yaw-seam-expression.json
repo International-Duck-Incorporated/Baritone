@@ -1,0 +1,12 @@
+{
+  "expression": "smoothYawBuffer.stream().mapToDouble(d -> d).average()",
+  "inputs": [
+    179.0,
+    -179.0
+  ],
+  "arithmetic_mean": 0.0,
+  "shortest_arc_distance_to_each_input": 179.0,
+  "expected_shortest_arc_mean": 180.0,
+  "validation": "expression-level numerical reproduction; optional smoothLook not exercised in game; inherited implementation",
+  "source": "src/main/java/baritone/behavior/LookBehavior.java:608"
+}
