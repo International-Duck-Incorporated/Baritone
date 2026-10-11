@@ -1,0 +1,30 @@
+# Turnstone - the six scenes on an independent box (tip 29d2c3fd, 2026-10-11 ~13:55-14:00 UTC)
+# command: scripts/headless/scenes.sh  (BARITONE_HEADLESS=/home/user/.cache/baritone-headless)
+# client: Zulu 25.0.4.1 + Xvfb + Mesa lavapipe, superflat world; scenes.sh exit code 0
+# result printed by scenes.sh:
+#   PASS  stairs   - up two, along, down two; tick exceptions 0
+#   PASS  bridge   - across a 4-wide trench; tick exceptions 0
+#   PASS  parkour  - across a 3-wide trench; tick exceptions 0
+#   PASS  mine     - 27 ore built, 21 left standing, baritone said 'Have 6 valid items': 1; tick exceptions 0
+#   PASS  farm     - ripe wheat left standing 0 (24 before), replanted 23; tick exceptions 0
+#   PASS  explore  - twenty-five seconds; tick exceptions 0
+#   scenes: 6 passed, 0 failed
+
+# the game-side assertions as they appear in the client log (trimmed):
+[System] [CHAT] Successfully filled 25 block(s)
+[System] [CHAT] Successfully filled 150 block(s)
+[System] [CHAT] Successfully filled 25 block(s)
+[System] [CHAT] [Headless] ARR1772023856
+[System] [CHAT] Successfully filled 588 block(s)
+[System] [CHAT] [Headless] ARR2049916600
+[System] [CHAT] Successfully filled 441 block(s)
+[System] [CHAT] [Headless] ARR30377763
+[System] [CHAT] Successfully filled 27 block(s)
+[CHAT] [Baritone] Have 6 valid items
+[System] [CHAT] Successfully filled 21 block(s)
+[System] [CHAT] Successfully filled 25 block(s)
+[System] [CHAT] Successfully filled 25 block(s)
+[CHAT] [Baritone] Farm failed
+[System] [CHAT] Successfully filled 23 block(s)
+[CHAT] [Baritone] Exploring from GoalXZ{x=33,z=300}
+[System] [CHAT] Successfully filled 273 block(s)
