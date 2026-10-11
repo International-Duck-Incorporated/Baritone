@@ -1,0 +1,18 @@
+/home/user/engineering-logs/PathFailureDispatchProbe.java:12: warning: Unsafe is internal proprietary API and may be removed in a future release
+import sun.misc.Unsafe;
+               ^
+/home/user/engineering-logs/PathFailureDispatchProbe.java:39: warning: Unsafe is internal proprietary API and may be removed in a future release
+        Field f = Unsafe.class.getDeclaredField("theUnsafe");
+                  ^
+/home/user/engineering-logs/PathFailureDispatchProbe.java:41: warning: Unsafe is internal proprietary API and may be removed in a future release
+        Unsafe u = (Unsafe) f.get(null);
+        ^
+/home/user/engineering-logs/PathFailureDispatchProbe.java:41: warning: Unsafe is internal proprietary API and may be removed in a future release
+        Unsafe u = (Unsafe) f.get(null);
+                    ^
+4 warnings
+actual queue/manager, late untagged transient failure: resumedOriginalReceived=true
+actual dispatcher failure flag: failureDrain=true nextEmptyDrain=false
+Scope: real methods + controlled completion; not a live A* callback, mine blacklist or client physics scenario.
+Exception in thread "main" java.lang.AssertionError: old behavior reproduces cross-requester delivery and empty-drain loss
+	at PathFailureDispatchProbe.main(PathFailureDispatchProbe.java:78)

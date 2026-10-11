@@ -1,0 +1,17 @@
+/home/user/engineering-logs/UseButtonOutProbe.java:5: warning: Unsafe is internal proprietary API and may be removed in a future release
+import sun.misc.Unsafe;
+               ^
+/home/user/engineering-logs/UseButtonOutProbe.java:10: warning: Unsafe is internal proprietary API and may be removed in a future release
+        Field access = Unsafe.class.getDeclaredField("theUnsafe");
+                       ^
+/home/user/engineering-logs/UseButtonOutProbe.java:12: warning: Unsafe is internal proprietary API and may be removed in a future release
+        Unsafe unsafe = (Unsafe) access.get(null);
+        ^
+/home/user/engineering-logs/UseButtonOutProbe.java:12: warning: Unsafe is internal proprietary API and may be removed in a future release
+        Unsafe unsafe = (Unsafe) access.get(null);
+                         ^
+4 warnings
+actual InputOverrideHandler.onTick(OUT): asked=true holding=true
+Scope: actual method/lease state only; no GLFW key or live item-use outcome measured.
+Exception in thread "main" java.lang.AssertionError: OUT leaves the automation lease state alive
+	at UseButtonOutProbe.main(UseButtonOutProbe.java:25)
