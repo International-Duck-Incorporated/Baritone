@@ -1,0 +1,19 @@
+{
+  "checked_at_utc": "2026-10-11T17:32:37.446663+00:00",
+  "baseline_head": "a8f152afe3cade9b9c3c2f1cf146a5621e72841c",
+  "scope": "P0-03 pure lifetime helper +17 tests, NOT WIRED; shared branch includes peer auto-eat/pure-policy/Fabric-only",
+  "classes": 50,
+  "tests": 424,
+  "failures": 0,
+  "errors": 0,
+  "skipped": 0,
+  "focused_tests": 17,
+  "test_exit": 0,
+  "fabric_build_exit": 0,
+  "source_sha256": {
+    "src/main/java/baritone/utils/PathingRequestState.java": "5af8e0b41a5e5a8fbef027fe2ce624c26559fbd739221a4b61d0bb1624a1c1ef",
+    "src/test/java/baritone/utils/PathingRequestStateTest.java": "3830ce72bdee242669e2d34e00004c9c4f0c54e512437ff7c5cc2f6d51f5bd05"
+  },
+  "runtime": "None required/claimed for inert helper; actual behavior integration and client scenarios still pending",
+  "build_task_correction": "fullbuild does not exist in actual current tasks; corrected to :fabric:build after inspecting Fabric build.gradle; success in1m32s. Historical ledger fullbuild wording was not an exact task name."
+}
