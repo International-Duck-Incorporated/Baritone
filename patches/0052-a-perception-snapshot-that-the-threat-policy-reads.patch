@@ -1,0 +1,710 @@
+From bb898e66cc2c682acdabe16e1f0ce00b3584756f Mon Sep 17 00:00:00 2001
+From: Sandpiper <sandpiper@agents.invalid>
+Date: Sun, 11 Oct 2026 17:36:14 +0000
+Subject: [PATCH] threat: pure perception snapshot and scan budget (P1-01 first
+ slice, OFF, unwired)
+
+---
+ .../baritone/utils/threat/Observation.java    |  67 +++++
+ .../baritone/utils/threat/ScanSchedule.java   |  84 ++++++
+ .../baritone/utils/threat/ThreatKind.java     |  84 ++++++
+ .../baritone/utils/threat/ThreatSnapshot.java | 177 +++++++++++++
+ .../utils/threat/ThreatSnapshotTest.java      | 246 ++++++++++++++++++
+ 5 files changed, 658 insertions(+)
+ create mode 100644 src/main/java/baritone/utils/threat/Observation.java
+ create mode 100644 src/main/java/baritone/utils/threat/ScanSchedule.java
+ create mode 100644 src/main/java/baritone/utils/threat/ThreatKind.java
+ create mode 100644 src/main/java/baritone/utils/threat/ThreatSnapshot.java
+ create mode 100644 src/test/java/baritone/utils/threat/ThreatSnapshotTest.java
+
+diff --git a/src/main/java/baritone/utils/threat/Observation.java b/src/main/java/baritone/utils/threat/Observation.java
+new file mode 100644
+index 00000000..f0d16b97
+--- /dev/null
++++ b/src/main/java/baritone/utils/threat/Observation.java
+@@ -0,0 +1,67 @@
++/*
++ * This file is part of Baritone.
++ *
++ * Baritone is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU Lesser General Public License as published by
++ * the Free Software Foundation, either version 3 of the License, or
++ * (at your option) any later version.
++ *
++ * Baritone is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public License
++ * along with Baritone.  If not, see <https://www.gnu.org/licenses/>.
++ */
++
++package baritone.utils.threat;
++
++import java.util.UUID;
++
++/**
++ * One entity as it was seen on one client tick, with everything the client could actually establish
++ * about it - and no more.
++ * <p>
++ * The sampler that builds these is the only place that touches the game. Nothing here is a claim the
++ * client cannot back: the three answers that could be guessed are kept explicit rather than flattened.
++ * <ul>
++ *   <li>{@link #targetingUs} is {@link Knowledge#UNKNOWN} when the client has no replicated answer.
++ *   A client's view of a mob's target can be missing, and "missing" is not "not coming for us".</li>
++ *   <li>{@code hurtTime} and "a player stood nearby" are deliberately not fields at all. They are
++ *   timing, not attribution, and they once named the wrong attacker.</li>
++ *   <li>{@link #armed} is the caller's answer to "is the hand worth hitting something with", because
++ *   only the caller knows what the task is holding.</li>
++ * </ul>
++ *
++ * @param world        the dimension or world key the sample was taken in; a sample from another
++ *                     world is never the same entity
++ * @param entityId     the entity's network id, reused by the game after a despawn
++ * @param uuid         the entity's own id, which is not reused: id plus uuid is the entity's identity
++ * @param typeId       the registry id, e.g. {@code minecraft:zombie}, or {@code null} if unreadable
++ * @param distance     blocks from the player at the sample
++ * @param visible      whether the sampler found a line of sight
++ * @param targetingUs  whether the entity is targeting this player, as far as the client knows
++ * @param alive        the entity was alive at the sample
++ * @param loaded       the entity was in a loaded chunk at the sample
++ * @param sampledTick  the client tick the sample was taken on
++ */
++public record Observation(
++        String world,
++        int entityId,
++        UUID uuid,
++        String typeId,
++        double distance,
++        boolean visible,
++        Knowledge targetingUs,
++        boolean alive,
++        boolean loaded,
++        int sampledTick) {
++
++    /** A three-valued answer the client may not be able to give. */
++    public enum Knowledge {
++        YES,
++        NO,
++        UNKNOWN
++    }
++}
+diff --git a/src/main/java/baritone/utils/threat/ScanSchedule.java b/src/main/java/baritone/utils/threat/ScanSchedule.java
+new file mode 100644
+index 00000000..b19c2bd4
+--- /dev/null
++++ b/src/main/java/baritone/utils/threat/ScanSchedule.java
+@@ -0,0 +1,84 @@
++/*
++ * This file is part of Baritone.
++ *
++ * Baritone is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU Lesser General Public License as published by
++ * the Free Software Foundation, either version 3 of the License, or
++ * (at your option) any later version.
++ *
++ * Baritone is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public License
++ * along with Baritone.  If not, see <https://www.gnu.org/licenses/>.
++ */
++
++package baritone.utils.threat;
++
++import java.util.ArrayList;
++import java.util.List;
++
++/**
++ * How often the perception layer may look, and how many expensive line-of-sight checks one tick may spend.
++ * <p>
++ * The budget is for the bot's owned tasks only. With no task in control there is no scan at all: an
++ * idle bot does not start watching the world on its own, because nothing has asked it to.
++ * <p>
++ * Rotation for line of sight: the candidates are checked in a window that moves by {@link #LOS_PER_TICK}
++ * every tick and wraps. Every candidate is looked at within {@code ceil(n / LOS_PER_TICK)} ticks, and the
++ * window for a given tick depends only on the tick and the count, so the same inputs always check the
++ * same things.
++ */
++public final class ScanSchedule {
++
++    /** At 20 client ticks per second, a rescan every four ticks is 5 Hz. */
++    public static final int RESCAN_INTERVAL_TICKS = 4;
++
++    /** Expensive line-of-sight checks allowed on one tick. */
++    public static final int LOS_PER_TICK = 4;
++
++    private boolean scannedBefore;
++    private int lastScanTick;
++
++    /**
++     * Whether a scan is due this tick.
++     *
++     * @param nowTick   the current client tick
++     * @param ownedTask whether a process holds control of the body
++     * @return true at most once per {@link #RESCAN_INTERVAL_TICKS}, and only while a task owns the body
++     */
++    public boolean shouldScan(int nowTick, boolean ownedTask) {
++        if (!ownedTask) {
++            return false;
++        }
++        if (scannedBefore && nowTick - lastScanTick < RESCAN_INTERVAL_TICKS) {
++            return false;
++        }
++        scannedBefore = true;
++        lastScanTick = nowTick;
++        return true;
++    }
++
++    /**
++     * The candidate indices to run line of sight on this tick.
++     *
++     * @param candidateCount how many candidates there are
++     * @param nowTick        the current client tick
++     * @return at most {@link #LOS_PER_TICK} distinct indices in {@code [0, candidateCount)}, in window order
++     */
++    public static List<Integer> losWindow(int candidateCount, int nowTick) {
++        if (candidateCount <= 0) {
++            return List.of();
++        }
++        int size = Math.min(LOS_PER_TICK, candidateCount);
++        // Windows of LOS_PER_TICK, each starting where the last one ended, so they tile the list.
++        int start = Math.floorMod(nowTick * LOS_PER_TICK, candidateCount);
++        List<Integer> out = new ArrayList<>(size);
++        for (int i = 0; i < size; i++) {
++            out.add((start + i) % candidateCount);
++        }
++        return out;
++    }
++}
+diff --git a/src/main/java/baritone/utils/threat/ThreatKind.java b/src/main/java/baritone/utils/threat/ThreatKind.java
+new file mode 100644
+index 00000000..5e86c7b7
+--- /dev/null
++++ b/src/main/java/baritone/utils/threat/ThreatKind.java
+@@ -0,0 +1,84 @@
++/*
++ * This file is part of Baritone.
++ *
++ * Baritone is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU Lesser General Public License as published by
++ * the Free Software Foundation, either version 3 of the License, or
++ * (at your option) any later version.
++ *
++ * Baritone is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public License
++ * along with Baritone.  If not, see <https://www.gnu.org/licenses/>.
++ */
++
++package baritone.utils.threat;
++
++import java.util.Set;
++
++/**
++ * What kind of thing an entity is, decided from its registry id and nothing else.
++ * <p>
++ * This is an explicit whitelist on purpose. Vanilla's own category ("monster", "creature") is not a
++ * reliable answer to "is this hostile by nature": a neutral mob can sit in the monster category, and a
++ * mod can add anything under any category. So a type is only ever {@link #HOSTILE_BY_NATURE} or
++ * {@link #DETONATING} if it is named here, in the {@code minecraft} namespace, and everything else is
++ * {@link #UNKNOWN}. An unknown is a reason to decline, never a reason to attack.
++ * <p>
++ * The tables are conservative rather than complete. A mob added to the game later reads as
++ * {@link #UNKNOWN} until someone reviews it and names it here - that is the intended failure mode.
++ */
++public enum ThreatKind {
++    /** Monsters that are hostile in every state: the only class {@code DefensePolicy} may engage. */
++    HOSTILE_BY_NATURE,
++    /** Hostile, but whose death or approach is itself the attack. Never engaged. */
++    DETONATING,
++    /** Angerable neutrals. Their anger may be at a person beside the bot, so they are never engaged. */
++    NEUTRAL,
++    /** Mobs that do not attack. */
++    PASSIVE,
++    /** Anything not named above, including every non-vanilla entity. */
++    UNKNOWN;
++
++    private static final String VANILLA = "minecraft:";
++
++    private static final Set<String> HOSTILE = Set.of(
++            "zombie", "husk", "drowned", "skeleton", "stray", "spider", "cave_spider", "witch", "phantom");
++
++    private static final Set<String> DETONATE = Set.of("creeper");
++
++    private static final Set<String> ANGERABLE = Set.of(
++            "enderman", "zombified_piglin", "wolf", "bee", "iron_golem", "polar_bear", "llama", "goat");
++
++    private static final Set<String> PASSIVE_TYPES = Set.of(
++            "cow", "pig", "sheep", "chicken", "rabbit", "horse", "donkey", "mooshroom", "villager", "cat");
++
++    /**
++     * The kind of a registry id such as {@code minecraft:zombie}.
++     *
++     * @param typeId the entity type's registry id, or {@code null} if it could not be read
++     * @return the kind, never {@code null}; anything not recognised is {@link #UNKNOWN}
++     */
++    public static ThreatKind of(String typeId) {
++        if (typeId == null || !typeId.startsWith(VANILLA)) {
++            return UNKNOWN;
++        }
++        String name = typeId.substring(VANILLA.length());
++        if (HOSTILE.contains(name)) {
++            return HOSTILE_BY_NATURE;
++        }
++        if (DETONATE.contains(name)) {
++            return DETONATING;
++        }
++        if (ANGERABLE.contains(name)) {
++            return NEUTRAL;
++        }
++        if (PASSIVE_TYPES.contains(name)) {
++            return PASSIVE;
++        }
++        return UNKNOWN;
++    }
++}
+diff --git a/src/main/java/baritone/utils/threat/ThreatSnapshot.java b/src/main/java/baritone/utils/threat/ThreatSnapshot.java
+new file mode 100644
+index 00000000..3c0e612e
+--- /dev/null
++++ b/src/main/java/baritone/utils/threat/ThreatSnapshot.java
+@@ -0,0 +1,177 @@
++/*
++ * This file is part of Baritone.
++ *
++ * Baritone is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU Lesser General Public License as published by
++ * the Free Software Foundation, either version 3 of the License, or
++ * (at your option) any later version.
++ *
++ * Baritone is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public License
++ * along with Baritone.  If not, see <https://www.gnu.org/licenses/>.
++ */
++
++package baritone.utils.threat;
++
++import baritone.utils.DefensePolicy;
++import baritone.utils.threat.Observation.Knowledge;
++
++import java.util.ArrayList;
++import java.util.Comparator;
++import java.util.HashMap;
++import java.util.List;
++import java.util.Map;
++import java.util.UUID;
++
++/**
++ * An immutable, deterministic picture of what the bot can see right now, built from raw observations.
++ * <p>
++ * This replaces the separate entity scans the look, avoidance and follow code each make. It does not
++ * decide anything. It keeps the classification, the confidence, the provenance and the age of every
++ * entity, and {@link #asSightings(int)} hands the decision layer only what {@link DefensePolicy} needs.
++ * <p>
++ * What it removes, with the numbers: {@code utils/pathing/Avoidance#create} walks the whole
++ * {@code entitiesStream()} on every path calculation, keeps every mob that survives three filters, and
++ * has no rate limit and no ownership check. A snapshot is built at most every {@link ScanSchedule}
++ * interval while a task owns the body, and every consumer reads the same one.
++ * <p>
++ * Determinism: the same observations, in any order, give the same snapshot, with entries sorted by
++ * distance then id then uuid. Nothing here reads a clock, a random source or the game.
++ */
++public final class ThreatSnapshot {
++
++    /**
++     * One entity in the snapshot: its observation, what its type is, and the tick it was sampled on.
++     *
++     * @param observation the sample, unchanged
++     * @param kind        the classification from its type id
++     */
++    public record Entry(Observation observation, ThreatKind kind) {
++        public int entityId() {
++            return observation.entityId();
++        }
++
++        public UUID uuid() {
++            return observation.uuid();
++        }
++
++        public int ageTicks(int nowTick) {
++            return nowTick - observation.sampledTick();
++        }
++    }
++
++    private final int tick;
++    private final String world;
++    private final double health;
++    private final boolean armed;
++    private final List<Entry> entries;
++
++    private ThreatSnapshot(int tick, String world, double health, boolean armed, List<Entry> entries) {
++        this.tick = tick;
++        this.world = world;
++        this.health = health;
++        this.armed = armed;
++        this.entries = List.copyOf(entries);
++    }
++
++    /**
++     * Builds the snapshot for {@code nowTick}, keeping only what is still true about the world now.
++     * <p>
++     * Dropped, and why: a sample from another world (a different entity, whatever its id); a sample
++     * that says the entity was dead or unloaded; a sample older than {@code maxAgeTicks}, or from the
++     * future (a clock that went backwards is not evidence). Of several samples of the same entity, the
++     * newest is kept. The same id with a different uuid is a different entity, and both are kept.
++     *
++     * @param nowTick     the current client tick
++     * @param world       the world the player is in now
++     * @param health      the player's health, as the caller reads it
++     * @param armed       whether the hand holds something worth hitting with
++     * @param maxAgeTicks the oldest sample that may still be used
++     * @param observations raw samples in any order
++     * @return the snapshot, never {@code null}
++     */
++    public static ThreatSnapshot of(int nowTick, String world, double health, boolean armed,
++                                    int maxAgeTicks, List<Observation> observations) {
++        Map<String, Observation> newest = new HashMap<>();
++        for (Observation o : observations) {
++            if (o == null || !world.equals(o.world()) || !o.alive() || !o.loaded()) {
++                continue;
++            }
++            int age = nowTick - o.sampledTick();
++            if (age < 0 || age > maxAgeTicks) {
++                continue;
++            }
++            String key = o.entityId() + "/" + o.uuid();
++            Observation kept = newest.get(key);
++            if (kept == null || o.sampledTick() > kept.sampledTick()) {
++                newest.put(key, o);
++            }
++        }
++        List<Entry> entries = new ArrayList<>(newest.size());
++        for (Observation o : newest.values()) {
++            entries.add(new Entry(o, ThreatKind.of(o.typeId())));
++        }
++        entries.sort(Comparator.comparingDouble((Entry e) -> e.observation().distance())
++                .thenComparingInt(Entry::entityId)
++                .thenComparing(e -> e.uuid().toString()));
++        return new ThreatSnapshot(nowTick, world, health, armed, entries);
++    }
++
++    public int tick() {
++        return tick;
++    }
++
++    public String world() {
++        return world;
++    }
++
++    public double health() {
++        return health;
++    }
++
++    public boolean armed() {
++        return armed;
++    }
++
++    /** Every surviving entity, nearest first. Unmodifiable. */
++    public List<Entry> entries() {
++        return entries;
++    }
++
++    /**
++     * The decision layer's view of this snapshot: one {@link DefensePolicy.Sighting} per entry.
++     * <p>
++     * The mapping is the conservative one, and the field that could be flattened too early is handled
++     * explicitly:
++     * <ul>
++     *   <li>{@code HOSTILE_BY_NATURE} is hostile; {@code DETONATING} is hostile and detonates.</li>
++     *   <li>{@code NEUTRAL} and {@code PASSIVE} are neutral-or-passive, so the policy declines them
++     *   with {@code NOT_HOSTILE}.</li>
++     *   <li>{@code UNKNOWN} is neither, so the policy declines it with {@code UNKNOWN_MOB}, which is the
++     *   gap worth closing rather than a silent pass.</li>
++     *   <li>{@code comingForUs} is true only when the client <em>knows</em> the entity is targeting this
++     *   player. {@link Knowledge#UNKNOWN} maps to false, which the policy reads as a reason not to fight.
++     *   The unknown itself stays in the {@link Entry}, so a future consumer can see it.</li>
++     * </ul>
++     *
++     * @param nowTick the tick the caller is deciding on; entries are measured against it
++     * @return the sightings in the snapshot's order
++     */
++    public List<DefensePolicy.Sighting> asSightings(int nowTick) {
++        List<DefensePolicy.Sighting> out = new ArrayList<>(entries.size());
++        for (Entry e : entries) {
++            Observation o = e.observation();
++            boolean hostile = e.kind() == ThreatKind.HOSTILE_BY_NATURE || e.kind() == ThreatKind.DETONATING;
++            boolean neutralOrPassive = e.kind() == ThreatKind.NEUTRAL || e.kind() == ThreatKind.PASSIVE;
++            boolean detonates = e.kind() == ThreatKind.DETONATING;
++            boolean comingForUs = o.targetingUs() == Knowledge.YES;
++            out.add(new DefensePolicy.Sighting(
++                    o.entityId(), o.distance(), hostile, neutralOrPassive, detonates, o.visible(), comingForUs));
++        }
++        return out;
++    }
++}
+diff --git a/src/test/java/baritone/utils/threat/ThreatSnapshotTest.java b/src/test/java/baritone/utils/threat/ThreatSnapshotTest.java
+new file mode 100644
+index 00000000..03af55ff
+--- /dev/null
++++ b/src/test/java/baritone/utils/threat/ThreatSnapshotTest.java
+@@ -0,0 +1,246 @@
++/*
++ * This file is part of Baritone.
++ *
++ * Baritone is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU Lesser General Public License as published by
++ * the Free Software Foundation, either version 3 of the License, or
++ * (at your option) any later version.
++ *
++ * Baritone is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public License
++ * along with Baritone.  If not, see <https://www.gnu.org/licenses/>.
++ */
++
++package baritone.utils.threat;
++
++import baritone.utils.DefensePolicy;
++import baritone.utils.threat.Observation.Knowledge;
++import org.junit.Test;
++
++import java.util.ArrayList;
++import java.util.Collections;
++import java.util.HashSet;
++import java.util.List;
++import java.util.Set;
++import java.util.UUID;
++
++import static org.junit.Assert.assertEquals;
++import static org.junit.Assert.assertFalse;
++import static org.junit.Assert.assertTrue;
++
++public class ThreatSnapshotTest {
++
++    private static final String OVERWORLD = "minecraft:overworld";
++    private static final UUID A = new UUID(1, 1);
++    private static final UUID B = new UUID(2, 2);
++
++    private static Observation obs(int id, UUID uuid, String type, double distance, boolean visible,
++                                   Knowledge targeting, int sampledTick) {
++        return new Observation(OVERWORLD, id, uuid, type, distance, visible, targeting, true, true, sampledTick);
++    }
++
++    private static Observation zombie(int id, double distance, Knowledge targeting) {
++        return obs(id, A, "minecraft:zombie", distance, true, targeting, 100);
++    }
++
++    private static ThreatSnapshot snap(List<Observation> observations) {
++        return ThreatSnapshot.of(100, OVERWORLD, 20, true, 4, observations);
++    }
++
++    // ---- classification: explicit table, unknowns decline ----
++
++    @Test
++    public void hostileNamedTypesAreHostileByNature() {
++        assertEquals(ThreatKind.HOSTILE_BY_NATURE, ThreatKind.of("minecraft:zombie"));
++        assertEquals(ThreatKind.HOSTILE_BY_NATURE, ThreatKind.of("minecraft:skeleton"));
++        assertEquals(ThreatKind.HOSTILE_BY_NATURE, ThreatKind.of("minecraft:spider"));
++    }
++
++    @Test
++    public void creeperDetonates() {
++        assertEquals(ThreatKind.DETONATING, ThreatKind.of("minecraft:creeper"));
++    }
++
++    @Test
++    public void angerableNeutralsAreNeutralEvenWhenAngry() {
++        // A zombified piglin or an enderman can be angry and still never be a thing to swing at.
++        assertEquals(ThreatKind.NEUTRAL, ThreatKind.of("minecraft:zombified_piglin"));
++        assertEquals(ThreatKind.NEUTRAL, ThreatKind.of("minecraft:enderman"));
++        assertEquals(ThreatKind.NEUTRAL, ThreatKind.of("minecraft:wolf"));
++    }
++
++    @Test
++    public void passiveMobsArePassive() {
++        assertEquals(ThreatKind.PASSIVE, ThreatKind.of("minecraft:cow"));
++        assertEquals(ThreatKind.PASSIVE, ThreatKind.of("minecraft:sheep"));
++    }
++
++    @Test
++    public void unknownModdedOrUnreadableTypesAreUnknownEvenIfTheNameLooksHostile() {
++        // A mod's "zombie" is not the vanilla zombie: the namespace is part of the identity.
++        assertEquals(ThreatKind.UNKNOWN, ThreatKind.of("somemod:zombie"));
++        assertEquals(ThreatKind.UNKNOWN, ThreatKind.of("minecraft:some_future_mob"));
++        assertEquals(ThreatKind.UNKNOWN, ThreatKind.of(null));
++        assertEquals(ThreatKind.UNKNOWN, ThreatKind.of(""));
++    }
++
++    // ---- lifetime and identity: what is still true now ----
++
++    @Test
++    public void deadUnloadedOtherWorldAndStaleSamplesAreDropped() {
++        List<Observation> raw = new ArrayList<>();
++        raw.add(new Observation(OVERWORLD, 1, A, "minecraft:zombie", 3, true, Knowledge.NO, false, true, 100));
++        raw.add(new Observation(OVERWORLD, 2, B, "minecraft:zombie", 3, true, Knowledge.NO, true, false, 100));
++        raw.add(new Observation("minecraft:the_nether", 3, new UUID(3, 3), "minecraft:zombie", 3, true, Knowledge.NO, true, true, 100));
++        raw.add(obs(4, new UUID(4, 4), "minecraft:zombie", 3, true, Knowledge.NO, 90)); // age 10 > 4
++        raw.add(obs(5, new UUID(5, 5), "minecraft:zombie", 3, true, Knowledge.NO, 101)); // from the future
++        raw.add(obs(6, new UUID(6, 6), "minecraft:zombie", 3, true, Knowledge.NO, 99)); // age 1, kept
++        ThreatSnapshot s = snap(raw);
++        assertEquals(1, s.entries().size());
++        assertEquals(6, s.entries().get(0).entityId());
++    }
++
++    @Test
++    public void newestSampleOfTheSameEntityIsKept() {
++        ThreatSnapshot s = snap(List.of(
++                obs(7, A, "minecraft:zombie", 6.0, true, Knowledge.NO, 97),
++                obs(7, A, "minecraft:zombie", 2.5, true, Knowledge.NO, 99)));
++        assertEquals(1, s.entries().size());
++        assertEquals(2.5, s.entries().get(0).observation().distance(), 0.0);
++    }
++
++    @Test
++    public void sameIdWithAnotherUuidIsAnotherEntity() {
++        // The game reuses network ids after a despawn: id alone is not identity.
++        ThreatSnapshot s = snap(List.of(
++                obs(7, A, "minecraft:zombie", 2.0, true, Knowledge.NO, 100),
++                obs(7, B, "minecraft:skeleton", 4.0, true, Knowledge.NO, 100)));
++        assertEquals(2, s.entries().size());
++    }
++
++    // ---- determinism ----
++
++    @Test
++    public void sameObservationsInAnyOrderGiveTheSameSnapshot() {
++        List<Observation> raw = new ArrayList<>();
++        for (int i = 0; i < 12; i++) {
++            raw.add(obs(i, new UUID(0, i), i % 2 == 0 ? "minecraft:zombie" : "minecraft:cow",
++                    1 + (i % 4), true, Knowledge.UNKNOWN, 100));
++        }
++        List<Observation> shuffled = new ArrayList<>(raw);
++        Collections.reverse(shuffled);
++        assertEquals(snap(raw).entries(), snap(shuffled).entries());
++    }
++
++    @Test
++    public void entriesAreNearestFirstWithTiesBrokenByIdThenUuid() {
++        ThreatSnapshot s = snap(List.of(
++                obs(9, A, "minecraft:zombie", 3, true, Knowledge.NO, 100),
++                obs(2, B, "minecraft:zombie", 3, true, Knowledge.NO, 100),
++                obs(5, A, "minecraft:zombie", 1, true, Knowledge.NO, 100)));
++        List<Integer> ids = new ArrayList<>();
++        s.entries().forEach(e -> ids.add(e.entityId()));
++        assertEquals(List.of(5, 2, 9), ids);
++    }
++
++    // ---- the decision layer's view: conservative, and the unknown is not flattened in the snapshot ----
++
++    @Test
++    public void unknownTargetingIsKeptInTheSnapshotButDeclinedByThePolicyView() {
++        ThreatSnapshot s = snap(List.of(zombie(1, 2, Knowledge.UNKNOWN)));
++        assertEquals(Knowledge.UNKNOWN, s.entries().get(0).observation().targetingUs());
++        DefensePolicy.Sighting sighting = s.asSightings(100).get(0);
++        assertFalse(sighting.comingForUs());
++    }
++
++    @Test
++    public void onlyAKnownTargetOfUsIsComingForUs() {
++        assertTrue(snap(List.of(zombie(1, 2, Knowledge.YES))).asSightings(100).get(0).comingForUs());
++        assertFalse(snap(List.of(zombie(1, 2, Knowledge.NO))).asSightings(100).get(0).comingForUs());
++    }
++
++    @Test
++    public void sightingMappingFollowsTheKindTable() {
++        ThreatSnapshot s = snap(List.of(
++                obs(1, A, "minecraft:zombie", 2, true, Knowledge.YES, 100),
++                obs(2, B, "minecraft:creeper", 2, true, Knowledge.YES, 100),
++                obs(3, new UUID(3, 3), "minecraft:enderman", 2, true, Knowledge.YES, 100),
++                obs(4, new UUID(4, 4), "minecraft:cow", 2, true, Knowledge.NO, 100),
++                obs(5, new UUID(5, 5), "somemod:thing", 2, true, Knowledge.NO, 100)));
++        List<DefensePolicy.Sighting> out = s.asSightings(100);
++        // sorted by id here because distances tie
++        assertSighting(out.get(0), true, false, false);   // zombie
++        assertSighting(out.get(1), true, false, true);    // creeper
++        assertSighting(out.get(2), false, true, false);   // enderman
++        assertSighting(out.get(3), false, true, false);   // cow
++        assertSighting(out.get(4), false, false, false);  // unknown
++    }
++
++    private static void assertSighting(DefensePolicy.Sighting s, boolean hostile, boolean neutralOrPassive,
++                                       boolean detonates) {
++        assertEquals(hostile, s.hostileByNature());
++        assertEquals(neutralOrPassive, s.neutralOrPassive());
++        assertEquals(detonates, s.detonatesOnContact());
++    }
++
++    @Test
++    public void thePolicyEngagesAHostileThatIsComingForUsAndNothingElse() {
++        DefensePolicy.Self self = new DefensePolicy.Self(20, true);
++        // a zombie coming for us: the one case the policy may engage
++        ThreatSnapshot zombieComing = snap(List.of(zombie(1, 2, Knowledge.YES)));
++        assertTrue(DefensePolicy.decide(zombieComing.asSightings(100), self, 3.0).engage());
++        // an angry enderman, a creeper and an unknown mob all decline
++        ThreatSnapshot others = snap(List.of(
++                obs(2, A, "minecraft:enderman", 2, true, Knowledge.YES, 100),
++                obs(3, B, "minecraft:creeper", 2, true, Knowledge.YES, 100),
++                obs(4, new UUID(4, 4), "somemod:thing", 2, true, Knowledge.YES, 100)));
++        assertFalse(DefensePolicy.decide(others.asSightings(100), self, 3.0).engage());
++    }
++
++    // ---- scan budget ----
++
++    @Test
++    public void nothingIsScannedWithoutAnOwnedTask() {
++        ScanSchedule schedule = new ScanSchedule();
++        for (int tick = 0; tick < 50; tick++) {
++            assertFalse(schedule.shouldScan(tick, false));
++        }
++    }
++
++    @Test
++    public void ownedTaskScansAtMostEveryFourTicks() {
++        ScanSchedule schedule = new ScanSchedule();
++        int scans = 0;
++        for (int tick = 0; tick < 40; tick++) {
++            if (schedule.shouldScan(tick, true)) {
++                scans++;
++            }
++        }
++        assertEquals(10, scans); // ticks 0, 4, 8, ... 36
++    }
++
++    @Test
++    public void losWindowCoversEveryCandidateWithinCeilingOfNOverFourTicks() {
++        for (int n = 1; n <= 40; n++) {
++            Set<Integer> seen = new HashSet<>();
++            int ticks = (n + ScanSchedule.LOS_PER_TICK - 1) / ScanSchedule.LOS_PER_TICK;
++            for (int tick = 0; tick < ticks; tick++) {
++                List<Integer> window = ScanSchedule.losWindow(n, tick);
++                assertEquals(Math.min(ScanSchedule.LOS_PER_TICK, n), window.size());
++                assertEquals(window.size(), new HashSet<>(window).size()); // no duplicates in one tick
++                seen.addAll(window);
++            }
++            assertEquals("n=" + n, n, seen.size());
++        }
++    }
++
++    @Test
++    public void losWindowIsDeterministicAndEmptyForNoCandidates() {
++        assertEquals(ScanSchedule.losWindow(9, 7), ScanSchedule.losWindow(9, 7));
++        assertTrue(ScanSchedule.losWindow(0, 3).isEmpty());
++    }
++}
+-- 
+2.47.3
+
