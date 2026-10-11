@@ -1,0 +1,93 @@
+> Task :buildSrc:compileJava
+> Task :buildSrc:compileGroovy NO-SOURCE
+> Task :buildSrc:processResources NO-SOURCE
+> Task :buildSrc:classes
+> Task :buildSrc:jar UP-TO-DATE
+> Task :compileApiJava UP-TO-DATE
+> Task :processApiResources NO-SOURCE
+> Task :apiClasses UP-TO-DATE
+> Task :compileSchematica_apiJava UP-TO-DATE
+> Task :processSchematica_apiResources NO-SOURCE
+> Task :schematica_apiClasses UP-TO-DATE
+> Task :compileJava
+/home/user/Baritone/src/main/java/baritone/process/elytra/NetherPathfinderContext.java:38: warning: Unsafe is internal proprietary API and may be removed in a future release
+/home/user/Baritone/src/main/java/baritone/process/elytra/NetherPathfinderContext.java:55: warning: Unsafe is internal proprietary API and may be removed in a future release
+/home/user/Baritone/src/main/java/baritone/process/elytra/NetherPathfinderContext.java:58: warning: Unsafe is internal proprietary API and may be removed in a future release
+/home/user/Baritone/src/main/java/baritone/process/elytra/NetherPathfinderContext.java:60: warning: Unsafe is internal proprietary API and may be removed in a future release
+/home/user/Baritone/src/main/java/baritone/process/elytra/NetherPathfinderContext.java:326: warning: [removal] setMemory(long,long,byte) in Unsafe has been deprecated and marked for removal
+> Task :processResources NO-SOURCE
+> Task :classes
+> Task :compileLaunchJava UP-TO-DATE
+> Task :processLaunchResources UP-TO-DATE
+> Task :launchClasses UP-TO-DATE
+> Task :jar
+> Task :assemble
+> Task :compileTestJava UP-TO-DATE
+> Task :processTestResources NO-SOURCE
+> Task :testClasses UP-TO-DATE
+> Task :test UP-TO-DATE
+> Task :check UP-TO-DATE
+> Task :build
+> Task :fabric:compileJava NO-SOURCE
+> Task :fabric:processResources UP-TO-DATE
+> Task :fabric:classes UP-TO-DATE
+> Task :fabric:jar
+> Task :fabric:shadowJar
+> Task :fabric:remapJar
+> Task :fabric:assemble
+> Task :fabric:compileTestJava NO-SOURCE
+> Task :fabric:processTestResources NO-SOURCE
+> Task :fabric:testClasses UP-TO-DATE
+> Task :fabric:test NO-SOURCE
+> Task :fabric:check UP-TO-DATE
+> Task :fabric:build
+> Task :fabric:proguard
+> Task :fabric:createDist
+> Task :forge:compileJava UP-TO-DATE
+> Task :forge:processResources UP-TO-DATE
+> Task :forge:classes UP-TO-DATE
+> Task :forge:jar
+> Task :forge:shadowJar
+> Task :forge:remapJar
+> Task :forge:assemble
+> Task :forge:compileTestJava NO-SOURCE
+> Task :forge:processTestResources NO-SOURCE
+> Task :forge:testClasses UP-TO-DATE
+> Task :forge:test NO-SOURCE
+> Task :forge:check UP-TO-DATE
+> Task :forge:build
+> Task :forge:proguard
+> Task :forge:createDist
+> Task :neoforge:compileJava UP-TO-DATE
+> Task :neoforge:processResources UP-TO-DATE
+> Task :neoforge:classes UP-TO-DATE
+> Task :neoforge:jar
+> Task :neoforge:shadowJar
+> Task :neoforge:remapJar
+> Task :neoforge:assemble
+> Task :neoforge:compileTestJava NO-SOURCE
+> Task :neoforge:processTestResources NO-SOURCE
+> Task :neoforge:testClasses UP-TO-DATE
+> Task :neoforge:test NO-SOURCE
+> Task :neoforge:check UP-TO-DATE
+> Task :neoforge:build
+> Task :neoforge:proguard
+> Task :neoforge:createDist
+> Task :tweaker:compileJava UP-TO-DATE
+> Task :tweaker:processResources NO-SOURCE
+> Task :tweaker:classes UP-TO-DATE
+> Task :tweaker:jar
+> Task :tweaker:shadowJar
+> Task :tweaker:remapJar
+> Task :tweaker:assemble
+> Task :tweaker:compileTestJava NO-SOURCE
+> Task :tweaker:processTestResources NO-SOURCE
+> Task :tweaker:testClasses UP-TO-DATE
+> Task :tweaker:test NO-SOURCE
+> Task :tweaker:check UP-TO-DATE
+> Task :tweaker:build
+> Task :tweaker:proguard
+> Task :tweaker:createDist
+Deprecated Gradle features were used in this build, making it incompatible with Gradle 9.0.
+BUILD SUCCESSFUL in 5m 10s
+36 actionable tasks: 23 executed, 13 up-to-date

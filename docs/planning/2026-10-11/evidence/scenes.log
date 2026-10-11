@@ -1,0 +1,7 @@
+PASS  stairs - up two, along, down two; tick exceptions 0
+PASS  bridge - across a 4-wide trench; tick exceptions 0
+PASS  parkour - across a 3-wide trench; tick exceptions 0
+PASS  mine - 27 ore built, 21 left standing, baritone said 'Have 6 valid items': 1; tick exceptions 0
+PASS  farm - ripe wheat left standing 0 (24 before), replanted 23; tick exceptions 0
+PASS  explore - twenty-five seconds; tick exceptions 0
+scenes: 6 passed, 0 failed

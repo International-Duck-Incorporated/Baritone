@@ -1,0 +1,445 @@
+[
+  {
+    "patch": "patches/0001-add-inventory-swap-windup.patch",
+    "commit": "3fc86ae1ae2a1e7de84b69d55ed5fb52d34e63eb",
+    "remote_ancestor": true,
+    "baseline": "a73a3a1ca148a2d67158bafa9f47aabc9cfacef6",
+    "apply_check_exit": 0,
+    "tree_differences": [],
+    "status": "exact tree match"
+  },
+  {
+    "patch": "patches/0002-honor-hotbar-windup-before-elytra-firework-use.patch",
+    "commit": "5e905d8e288fc3f7eba005a4a4b6532edb77200d",
+    "remote_ancestor": true,
+    "baseline": "66ffe864c705896fa58f8adfe00434cb6307728b",
+    "apply_check_exit": 0,
+    "tree_differences": [],
+    "status": "exact tree match"
+  },
+  {
+    "patch": "patches/0003-cancel-stale-inventory-swap-windups.patch",
+    "commit": "0c503c749383939fb1d81b58751c8201c1a2ae42",
+    "remote_ancestor": true,
+    "baseline": "9855c4a1b12602e905cc866423c93c569bb49e3c",
+    "apply_check_exit": 0,
+    "tree_differences": [],
+    "status": "exact tree match"
+  },
+  {
+    "patch": "patches/0004-keep-a-stable-follow-target.patch",
+    "commit": "d3ee6fc35273a00f445ec7f9981a4bf53fb850a9",
+    "remote_ancestor": true,
+    "baseline": "efde6b88410541a63bf4ddc1b4d082381063ec10",
+    "apply_check_exit": 0,
+    "tree_differences": [],
+    "status": "exact tree match"
+  },
+  {
+    "patch": "patches/0005-document-stable-follow-target-behavior.patch",
+    "commit": "2498814c957d31b0de14b1ce7ac5aa0d3ae46717",
+    "remote_ancestor": true,
+    "baseline": "0e8dea12e6f550ddaffd9cd301b5524d37f47353",
+    "apply_check_exit": 0,
+    "tree_differences": [],
+    "status": "exact tree match"
+  },
+  {
+    "patch": "patches/0006-jitter-elytra-inventory-transaction-gaps.patch",
+    "commit": "3d6f974de9a51a26727403395d76de62d63f1df4",
+    "remote_ancestor": true,
+    "baseline": "c0358e57e3513376b00276b6bfaa9d4961fb9e58",
+    "apply_check_exit": 0,
+    "tree_differences": [],
+    "status": "exact tree match"
+  },
+  {
+    "patch": "patches/0007-document-elytra-transaction-cadence.patch",
+    "commit": "c69a88ae3459a43fc8e48909d26a318bd52e802c",
+    "remote_ancestor": true,
+    "baseline": "ceb020fde90dda06c9c485c67dba942db42946c7",
+    "apply_check_exit": 0,
+    "tree_differences": [],
+    "status": "exact tree match"
+  },
+  {
+    "patch": "patches/0008-draw-a-tempo-for-every-turn.patch",
+    "commit": "b059dd00092e9b3d6891f2482cc08dfd3841ce1f",
+    "remote_ancestor": true,
+    "baseline": "0155876f7c46517eaa98be2dc2292823d61fa3ea",
+    "apply_check_exit": 0,
+    "tree_differences": [],
+    "status": "exact tree match"
+  },
+  {
+    "patch": "patches/0009-take-the-water-bucket-out-on-the-way-down.patch",
+    "commit": "1a6f26062b218ce135b4bae600acd5998c92e050",
+    "remote_ancestor": true,
+    "baseline": "b6577cb9a4d351f45ad2c8851ca3191f689e3eab",
+    "apply_check_exit": 0,
+    "tree_differences": [],
+    "status": "exact tree match"
+  },
+  {
+    "patch": "patches/0010-document-the-bucket-beat.patch",
+    "commit": "ca71860e67ae155ad9eff59119c335d8357f21d1",
+    "remote_ancestor": true,
+    "baseline": "1a6f26062b218ce135b4bae600acd5998c92e050",
+    "apply_check_exit": 0,
+    "tree_differences": [],
+    "status": "exact tree match"
+  },
+  {
+    "patch": "patches/0011-keep-the-stride-sway-running-in-the-air.patch",
+    "commit": "ffe96b46670a300c0376ee516ded7f166ba4f224",
+    "remote_ancestor": true,
+    "baseline": "f26945d7a2db665e197fd73dbe3b01eac90c3d13",
+    "apply_check_exit": 0,
+    "tree_differences": [],
+    "status": "exact tree match"
+  },
+  {
+    "patch": "patches/0012-document-the-sway-in-the-air.patch",
+    "commit": "a3d85ad3db1b9582e7e11673b0d19279a1798078",
+    "remote_ancestor": true,
+    "baseline": "ffe96b46670a300c0376ee516ded7f166ba4f224",
+    "apply_check_exit": 0,
+    "tree_differences": [],
+    "status": "exact tree match"
+  },
+  {
+    "patch": "patches/0013-open-doors-and-gates-with-the-rest-of-the-hand.patch",
+    "commit": "1f13eb4578b6f1217677ba844cba906a65c9f808",
+    "remote_ancestor": true,
+    "baseline": "5775c9d47133368f3928eaa69de1b3316d4d8621",
+    "apply_check_exit": 0,
+    "tree_differences": [],
+    "status": "exact tree match"
+  },
+  {
+    "patch": "patches/0014-count-the-buttons.patch",
+    "commit": "5998da6d533a00472be8affc5bfd4e17c5b235e5",
+    "remote_ancestor": true,
+    "baseline": "1f13eb4578b6f1217677ba844cba906a65c9f808",
+    "apply_check_exit": 0,
+    "tree_differences": [],
+    "status": "exact tree match"
+  },
+  {
+    "patch": "patches/0015-document-the-door-hand-and-the-button-count.patch",
+    "commit": "5844472e6d07069f55201fc6f2c9b00d2886352c",
+    "remote_ancestor": true,
+    "baseline": "5998da6d533a00472be8affc5bfd4e17c5b235e5",
+    "apply_check_exit": 0,
+    "tree_differences": [],
+    "status": "exact tree match"
+  },
+  {
+    "patch": "patches/0016-turn-to-whoever-hit-us.patch",
+    "commit": "9491e663c415177ecc4a02bebae5871f64e65319",
+    "remote_ancestor": true,
+    "baseline": "04fce2640de136b6d27a1573fc9521a6662be29c",
+    "apply_check_exit": 0,
+    "tree_differences": [],
+    "status": "exact tree match"
+  },
+  {
+    "patch": "patches/0017-document-the-flinch.patch",
+    "commit": "408044fa2ce3b902a9be7b4528a60227788e3709",
+    "remote_ancestor": true,
+    "baseline": "9491e663c415177ecc4a02bebae5871f64e65319",
+    "apply_check_exit": 0,
+    "tree_differences": [],
+    "status": "exact tree match"
+  },
+  {
+    "patch": "patches/0018-ask-every-click-which-block-it-is-for.patch",
+    "commit": "cd5633b209bde2dcf0d02e6ca302a5b8b0034c78",
+    "remote_ancestor": true,
+    "baseline": "e9f5abee18e1e94d3157b7039c16f6bbdc59fa05",
+    "apply_check_exit": 0,
+    "tree_differences": [],
+    "status": "exact tree match"
+  },
+  {
+    "patch": "patches/0019-document-the-click-gates.patch",
+    "commit": "bbe16c74d3d0afc28f4302801bc235702ddc1c7f",
+    "remote_ancestor": true,
+    "baseline": "cd5633b209bde2dcf0d02e6ca302a5b8b0034c78",
+    "apply_check_exit": 0,
+    "tree_differences": [],
+    "status": "exact tree match"
+  },
+  {
+    "patch": "patches/0020-pin-the-hand-ready-wait.patch",
+    "commit": "6fc1be6cee0abe207d1d36aa950b0732f7efebd2",
+    "remote_ancestor": true,
+    "baseline": "48a6a7b57845a0ed713b54396eb102ada0c7da12",
+    "apply_check_exit": 0,
+    "tree_differences": [],
+    "status": "exact tree match"
+  },
+  {
+    "patch": "patches/0021-carry-the-blow-in-the-hostile-run.patch",
+    "commit": "707c63b982512c7af3bec8fe1cd27424905ab48c",
+    "remote_ancestor": true,
+    "baseline": "8ff46f5fbe6911be0effd831f84b954e77d46689",
+    "apply_check_exit": 0,
+    "tree_differences": [],
+    "status": "exact tree match"
+  },
+  {
+    "patch": "patches/0022-let-the-builder-break-outwards.patch",
+    "commit": "9ca8323ca04557eb3b8180304478b468f0482e17",
+    "remote_ancestor": true,
+    "baseline": "49bec4a629be36b7fd0e6072ee149c8c800bed06",
+    "apply_check_exit": 0,
+    "tree_differences": [
+      "patches/0022-let-the-builder-break-outwards.patch"
+    ],
+    "status": "only patch-file differences"
+  },
+  {
+    "patch": "patches/0023-ask-the-trace-for-the-face.patch",
+    "commit": "27adae538ab45b15523c809fcccba548c02fbc94",
+    "remote_ancestor": true,
+    "baseline": "34559749dbf6f59a40a404c09207f999969e1d43",
+    "apply_check_exit": 0,
+    "tree_differences": [],
+    "status": "exact tree match"
+  },
+  {
+    "patch": "patches/0024-point-the-stare-at-whoever-hit-us.patch",
+    "commit": "44fd9380c710feb9b4a55da63eb8571e1fc5c5a4",
+    "remote_ancestor": true,
+    "baseline": "fb2f1fe1afe746a6ebff8cdbf91d0c29f4c5e366",
+    "apply_check_exit": 0,
+    "tree_differences": [],
+    "status": "exact tree match"
+  },
+  {
+    "patch": "patches/0025-document-the-stares-base.patch",
+    "commit": "4b7457af26f921e988e1d37a6d35a2fdbc56a0eb",
+    "remote_ancestor": true,
+    "baseline": "44fd9380c710feb9b4a55da63eb8571e1fc5c5a4",
+    "apply_check_exit": 0,
+    "tree_differences": [],
+    "status": "exact tree match"
+  },
+  {
+    "patch": "patches/0026-look-at-the-block-the-walk-is-for.patch",
+    "commit": "a7209a2e7e6e36412a011b2e45eb138930ad8fa9",
+    "remote_ancestor": true,
+    "baseline": "24939c6f48c8299d41c6bb7aba0808b8245203b2",
+    "apply_check_exit": 0,
+    "tree_differences": [],
+    "status": "exact tree match"
+  },
+  {
+    "patch": "patches/0027-hold-the-crouch-across-a-crossing.patch",
+    "commit": "37407222ba0c3155d8f68c854814514348cab112",
+    "remote_ancestor": true,
+    "baseline": "ff3769b6cb20e8e27110de83cf9ff372c7f3db0f",
+    "apply_check_exit": 0,
+    "tree_differences": [],
+    "status": "exact tree match"
+  },
+  {
+    "patch": "patches/0028-let-the-auto-swaps-clicks-wait-for-their-window.patch",
+    "commit": "31a1864c56ebd86c3df85619e489445abfdeedd0",
+    "remote_ancestor": true,
+    "baseline": "4141ccc9764e9d09317b95e779d1b2f15458c930",
+    "apply_check_exit": 0,
+    "tree_differences": [],
+    "status": "exact tree match"
+  },
+  {
+    "patch": "patches/0029-document-the-auto-swaps-window.patch",
+    "commit": "281d87dbabae72d0f1a431489d35876102926a31",
+    "remote_ancestor": true,
+    "baseline": "31a1864c56ebd86c3df85619e489445abfdeedd0",
+    "apply_check_exit": 0,
+    "tree_differences": [],
+    "status": "exact tree match"
+  },
+  {
+    "patch": "patches/0030-document-the-falls-straight-down-aim.patch",
+    "commit": "48600048ef8a0a9b9fabfbb6cdbeede17048ab34",
+    "remote_ancestor": true,
+    "baseline": "ff22b1b666cfb5567b7eaba271ae561fd38ffa46",
+    "apply_check_exit": 0,
+    "tree_differences": [],
+    "status": "exact tree match"
+  },
+  {
+    "patch": "patches/0031-count-the-keys-write-surface.patch",
+    "commit": "77f772a1cf18f77d527a8163ba32c862a4a04eb8",
+    "remote_ancestor": true,
+    "baseline": "130dd015ebce1c30ee8f8d6fa21c3044fefb9118",
+    "apply_check_exit": 0,
+    "tree_differences": [],
+    "status": "exact tree match"
+  },
+  {
+    "patch": "patches/0032-carry-the-look-through-the-hostile-run.patch",
+    "commit": "72ccf4771caf22ddc0a3752d80a899f012559feb",
+    "remote_ancestor": true,
+    "baseline": "fbacf48ed91d28501aef263d1bd7045751ce4295",
+    "apply_check_exit": 0,
+    "tree_differences": [],
+    "status": "exact tree match"
+  },
+  {
+    "patch": "patches/0033-pin-the-movement-asked-sneak-in-the-keys-count.patch",
+    "commit": "f38e60eac218ad224831deee64fd038dfc831ba7",
+    "remote_ancestor": true,
+    "baseline": "9e6d979739cc3634c8461ab64e21fda08003735e",
+    "apply_check_exit": 0,
+    "tree_differences": [],
+    "status": "exact tree match"
+  },
+  {
+    "patch": "patches/0034-harden-the-four-counted-edges-wider-spellings-no-prose.patch",
+    "commit": "95e135792db5aa1f37d51b61eb1c42949330c4fc",
+    "remote_ancestor": true,
+    "baseline": "ff1601db01b2ec20e29214291eeabc4ec66d0a73",
+    "apply_check_exit": 0,
+    "tree_differences": [],
+    "status": "exact tree match"
+  },
+  {
+    "patch": "patches/0035-bound-the-wind-up-waits-and-pin-the-three-unpinned-rules.patch",
+    "commit": "650ad843998f52818d81175e1af4655fe46c2102",
+    "remote_ancestor": true,
+    "baseline": "95e135792db5aa1f37d51b61eb1c42949330c4fc",
+    "apply_check_exit": 0,
+    "tree_differences": [],
+    "status": "exact tree match"
+  },
+  {
+    "patch": "patches/0036-census-the-key-readers-not-just-the-lines-already-known.patch",
+    "commit": "fdbd6a3501bf2d8dca77cdf88a0e6186a4a36b50",
+    "remote_ancestor": true,
+    "baseline": "96b623ca35371c1aa9c83a124a7c8f8555ac9e40",
+    "apply_check_exit": 0,
+    "tree_differences": [],
+    "status": "exact tree match"
+  },
+  {
+    "patch": "patches/0037-watch-the-key-mapping-classs-entry-points-in-the-keys-count.patch",
+    "commit": "b5532cdc1ae24217f425e0b8dfaa5dea78582450",
+    "remote_ancestor": true,
+    "baseline": "fdbd6a3501bf2d8dca77cdf88a0e6186a4a36b50",
+    "apply_check_exit": 0,
+    "tree_differences": [],
+    "status": "exact tree match"
+  },
+  {
+    "patch": "patches/0038-let-the-farm-work-outwards-from-where-it-stands.patch",
+    "commit": "0307a7cd012ad730bbdc8a179429c0750f6fff37",
+    "remote_ancestor": true,
+    "baseline": "b35eeda4148e1683aca6cd43802c9d2d5d300665",
+    "apply_check_exit": 0,
+    "tree_differences": [],
+    "status": "exact tree match"
+  },
+  {
+    "patch": "patches/0039-close-the-unspelled-writes-in-the-counted-edges-and-pin-the-comment-stripper.patch",
+    "commit": "b47aed44033490ee0fbddfd8ce62f2d9ed4aea67",
+    "remote_ancestor": true,
+    "baseline": "0307a7cd012ad730bbdc8a179429c0750f6fff37",
+    "apply_check_exit": 0,
+    "tree_differences": [],
+    "status": "exact tree match"
+  },
+  {
+    "patch": "patches/0040-finish-an-elytra-swap-that-has-begun-before-the-behaviour-goes.patch",
+    "commit": "7e1e6d3a9922581c17e35e0cce05d10670e933fe",
+    "remote_ancestor": true,
+    "baseline": "e291ccaaace722bb026ae10e3502b10b6ae7a966",
+    "apply_check_exit": 0,
+    "tree_differences": [],
+    "status": "exact tree match"
+  },
+  {
+    "patch": "patches/0041-count-where-the-randomness-comes-from.patch",
+    "commit": "f037435a65433673e1b2aece41b8bd8a6ddef958",
+    "remote_ancestor": true,
+    "baseline": "0e4e8681fd26226a328d3c0aaf60578ed7286f1d",
+    "apply_check_exit": 0,
+    "tree_differences": [],
+    "status": "exact tree match"
+  },
+  {
+    "patch": "patches/0042-stop-the-look-aheads-reading-one-movement-past-the-end-of-a-path.patch",
+    "commit": "901a999b32c3102afe683888d0c058677a5bceea",
+    "remote_ancestor": true,
+    "baseline": "4063a2a21a20bcafa862fee6240260c2f94b234b",
+    "apply_check_exit": 0,
+    "tree_differences": [],
+    "status": "exact tree match"
+  },
+  {
+    "patch": "patches/0043-add-a-headless-client-harness-around-the-fabric-dev-jar.patch",
+    "commit": "a145acc581e3666730c22234fd00a71de3ea9d9e",
+    "remote_ancestor": true,
+    "baseline": "901a999b32c3102afe683888d0c058677a5bceea",
+    "apply_check_exit": 0,
+    "tree_differences": [],
+    "status": "exact tree match"
+  },
+  {
+    "patch": "patches/0044-check-the-wikis-setting-defaults-against-the-source.patch",
+    "commit": "8d64700ec7852363ceee2c313712cd8e2190e908",
+    "remote_ancestor": true,
+    "baseline": "39d2cba67cca088aedcdeae0bbf1c3e7f8800404",
+    "apply_check_exit": 0,
+    "tree_differences": [],
+    "status": "exact tree match"
+  },
+  {
+    "patch": "patches/0045-correct-the-wikis-api-build-and-getting-started-pages.patch",
+    "commit": "78553ed5c56098249e5eeca6099f70af2acf3b07",
+    "remote_ancestor": true,
+    "baseline": "3964b9e541c17769125c29b82d8faad72c9de7f2",
+    "apply_check_exit": 0,
+    "tree_differences": [],
+    "status": "exact tree match"
+  },
+  {
+    "patch": "patches/0046-do-not-ask-a-player-who-is-not-there-on-the-way-out-of-a-world.patch",
+    "commit": "29b70536ccd25cb27b984b8cf11ae622648b4ff2",
+    "remote_ancestor": true,
+    "baseline": "b558707ada968af5a5d699b52fac8f320a4409f0",
+    "apply_check_exit": 0,
+    "tree_differences": [],
+    "status": "exact tree match"
+  },
+  {
+    "patch": "patches/0047-add-smoke-sh-a-walk-to-its-end-and-a-way-out-with-the-elytra-process-alive.patch",
+    "commit": "14f0995df16606d5b16b31e3758d67b648a3151d",
+    "remote_ancestor": true,
+    "baseline": "29b70536ccd25cb27b984b8cf11ae622648b4ff2",
+    "apply_check_exit": 0,
+    "tree_differences": [],
+    "status": "exact tree match"
+  },
+  {
+    "patch": "patches/0048-lean-the-gazes-yaw-onto-the-corner-and-not-its-pitch-onto-the-floor.patch",
+    "commit": "87581e58755f8787d721c3be24503cc8f0bb1bc1",
+    "remote_ancestor": true,
+    "baseline": "602709c5214f97052c9c58bded13297b7476b0c1",
+    "apply_check_exit": 0,
+    "tree_differences": [],
+    "status": "exact tree match"
+  },
+  {
+    "patch": "patches/0049-add-scenes-sh-six-real-game-scenes-and-a-per-tick-trace-from-a-datapack.patch",
+    "commit": "6549a8c0186f12b08258b99b26e852edbd38af11",
+    "remote_ancestor": true,
+    "baseline": "87581e58755f8787d721c3be24503cc8f0bb1bc1",
+    "apply_check_exit": 0,
+    "tree_differences": [],
+    "status": "exact tree match"
+  }
+]

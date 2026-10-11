@@ -1,0 +1,212 @@
+[
+  {
+    "candidate": "Wayquill",
+    "checked_at_utc": "2026-10-11T13:22:50Z",
+    "checks": [
+      {
+        "service": "GitHub repositories",
+        "query_url": "https://api.github.com/search/repositories?q=Wayquill+in%3Aname&per_page=5",
+        "count": 0,
+        "results": []
+      },
+      {
+        "service": "Modrinth",
+        "query_url": "https://api.modrinth.com/v2/search?query=Wayquill&limit=5",
+        "count": 0,
+        "results": []
+      }
+    ]
+  },
+  {
+    "candidate": "VoxelHelm",
+    "checked_at_utc": "2026-10-11T13:22:50Z",
+    "checks": [
+      {
+        "service": "GitHub repositories",
+        "query_url": "https://api.github.com/search/repositories?q=VoxelHelm+in%3Aname&per_page=5",
+        "count": 0,
+        "results": []
+      },
+      {
+        "service": "Modrinth",
+        "query_url": "https://api.modrinth.com/v2/search?query=VoxelHelm&limit=5",
+        "count": 0,
+        "results": []
+      }
+    ]
+  },
+  {
+    "candidate": "Trailwarden",
+    "checked_at_utc": "2026-10-11T13:22:51Z",
+    "checks": [
+      {
+        "service": "GitHub repositories",
+        "query_url": "https://api.github.com/search/repositories?q=Trailwarden+in%3Aname&per_page=5",
+        "count": 3,
+        "results": [
+          {
+            "name": "brunoribeiro2k/trailwarden",
+            "url": "https://github.com/brunoribeiro2k/trailwarden"
+          },
+          {
+            "name": "AnandSundar/TrailWarden",
+            "url": "https://github.com/AnandSundar/TrailWarden"
+          },
+          {
+            "name": "randerson-trailwarden/trailwarden",
+            "url": "https://github.com/randerson-trailwarden/trailwarden"
+          }
+        ]
+      },
+      {
+        "service": "Modrinth",
+        "query_url": "https://api.modrinth.com/v2/search?query=Trailwarden&limit=5",
+        "count": 0,
+        "results": []
+      }
+    ]
+  },
+  {
+    "candidate": "Pathloom",
+    "checked_at_utc": "2026-10-11T13:22:51Z",
+    "checks": [
+      {
+        "service": "GitHub repositories",
+        "query_url": "https://api.github.com/search/repositories?q=Pathloom+in%3Aname&per_page=5",
+        "count": 19,
+        "results": [
+          {
+            "name": "PathloomGH/pathloom",
+            "url": "https://github.com/PathloomGH/pathloom"
+          },
+          {
+            "name": "Shub-eteral/pathloom",
+            "url": "https://github.com/Shub-eteral/pathloom"
+          },
+          {
+            "name": "pizzacatz/pathloom",
+            "url": "https://github.com/pizzacatz/pathloom"
+          },
+          {
+            "name": "AnjaniBeesu/Pathloom",
+            "url": "https://github.com/AnjaniBeesu/Pathloom"
+          },
+          {
+            "name": "soshiCS/pathloom",
+            "url": "https://github.com/soshiCS/pathloom"
+          }
+        ]
+      },
+      {
+        "service": "Modrinth",
+        "query_url": "https://api.modrinth.com/v2/search?query=Pathloom&limit=5",
+        "count": 0,
+        "results": []
+      }
+    ]
+  },
+  {
+    "candidate": "Cairn",
+    "checked_at_utc": "2026-10-11T13:22:52Z",
+    "checks": [
+      {
+        "service": "GitHub repositories",
+        "query_url": "https://api.github.com/search/repositories?q=Cairn+in%3Aname&per_page=5",
+        "count": 2038,
+        "results": [
+          {
+            "name": "oritera/Cairn",
+            "url": "https://github.com/oritera/Cairn"
+          },
+          {
+            "name": "yochaigal/cairn",
+            "url": "https://github.com/yochaigal/cairn"
+          },
+          {
+            "name": "cairn-dev/cairn",
+            "url": "https://github.com/cairn-dev/cairn"
+          },
+          {
+            "name": "jfrost4/Cairn",
+            "url": "https://github.com/jfrost4/Cairn"
+          },
+          {
+            "name": "Stack-Cairn/LiveAgent",
+            "url": "https://github.com/Stack-Cairn/LiveAgent"
+          }
+        ]
+      },
+      {
+        "service": "Modrinth",
+        "query_url": "https://api.modrinth.com/v2/search?query=Cairn&limit=5",
+        "count": 1,
+        "results": [
+          {
+            "name": "Vannila+ Essentials",
+            "url": "https://modrinth.com/mod/vannila-essentials"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "candidate": "Strider",
+    "checked_at_utc": "2026-10-11T13:22:52Z",
+    "checks": [
+      {
+        "service": "GitHub repositories",
+        "query_url": "https://api.github.com/search/repositories?q=Strider+in%3Aname&per_page=5",
+        "count": 1361,
+        "results": [
+          {
+            "name": "Strider-CD/strider",
+            "url": "https://github.com/Strider-CD/strider"
+          },
+          {
+            "name": "benjeems/packetStrider",
+            "url": "https://github.com/benjeems/packetStrider"
+          },
+          {
+            "name": "kenamick/strider",
+            "url": "https://github.com/kenamick/strider"
+          },
+          {
+            "name": "gcristofol/strider",
+            "url": "https://github.com/gcristofol/strider"
+          },
+          {
+            "name": "Strider-CD/docker-strider",
+            "url": "https://github.com/Strider-CD/docker-strider"
+          }
+        ]
+      },
+      {
+        "service": "Modrinth",
+        "query_url": "https://api.modrinth.com/v2/search?query=Strider&limit=5",
+        "count": 32,
+        "results": [
+          {
+            "name": "Riptide Depth Strider Fix",
+            "url": "https://modrinth.com/mod/riptide-depth-strider-fix"
+          },
+          {
+            "name": "Dune Striders",
+            "url": "https://modrinth.com/mod/dune-striders"
+          },
+          {
+            "name": "Strider's Grace",
+            "url": "https://modrinth.com/mod/striders-grace"
+          },
+          {
+            "name": "Standable Striders",
+            "url": "https://modrinth.com/mod/standable-striders"
+          },
+          {
+            "name": "Depth Striders",
+            "url": "https://modrinth.com/mod/depth-striders"
+          }
+        ]
+      }
+    ]
+  }
+]
