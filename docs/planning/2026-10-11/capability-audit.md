@@ -1,0 +1,166 @@
+# Repository capability, rotation, lifecycle and combat audit
+
+Author: **QuartzHeron**. Product tree: `f1058fa8345ff26a1c7e95cb1fd9f522bcc661d2`, branch `26.3`; later planning commits change no implementation. **Proposal/investigation, not implementation approval.** Source paths/line anchors refer to this tree and may move in future commits.
+
+## Evidence vocabulary
+
+- **S — source-confirmed:** implementation and relevant callers read; this does not establish runtime quality.
+- **T — executed:** a specifically described unit/build/game experiment passed or reproduced a result.
+- **U — present, runtime-unvalidated:** wiring exists but the relevant scenario has not been exercised here.
+- **H — hypothesis:** plausible source-supported explanation; not a confirmed historical defect.
+- **M — missing in inspected scope:** no implementation in the audited product/API/launch/loader call paths. Not a claim about Minecraft itself, a downstream plugin, or an uninspected branch.
+- **P — proposed:** new work requiring approval. **X — speculative/deferred:** not part of the initial MVP.
+
+Evidence ledger: [validation](validation.md). Proposed work: [roadmap](roadmap.md). Existing source tests passed 383/383; that is not proof that absent features already work.
+
+## 1. Architecture and actual fork capabilities
+
+```text
+Minecraft/mixins -> GameEventHandler ordered client-thread events
+  -> PathingBehavior / PathingControlManager -> chosen IBaritoneProcess
+      -> goals -> existing A* and cached-world calculation -> PathExecutor
+          -> Movement + MovementHelper + sprint/approach/head-first policies
+  -> LookBehavior -> AimProcessor / AimDynamics -> PRE packet-facing / POST camera handback
+  -> InventoryBehavior -> staged hand / guarded inventory swaps
+  -> InputOverrideHandler -> PlayerMovementInput + block break/place helpers -> vanilla controller
+```
+
+`Baritone.java` registers the behaviours and processes. `utils/PathingControlManager.java` arbitrates process priority; `api/process/IBaritoneProcess.java` and `PathingCommandType.java` define activation, temporary ownership, cancellation and pause contracts. Mining, farming, building, exploring, getting blocks/items, following and Elytra are real processes, not proposed stubs. `command/defaults/DefaultCommands.java:32-75` registers their user commands; it registers **no combat/hunt/defend process or command**.
+
+The matching upstream version is fully ancestored (0 upstream-only / 281 fork-only commits at the inspected product baseline). Inherited A* and world-cache logic should stay. The source-inspected fork additions include stepped/eased aim, bounded walking gaze/pitch variation, stride and idle head motion, block retarget/sight-settle/dig rhythm, staged hotbar/inventory moves, head-first and approach/landing movement, sprint transitions, held crossing crouch, sticky follow goals/progress, player-relative block work ordering, write-count/fuzz/mutation guardrails and a real-client harness. Read `HUMANLIKE.md` as the existing behavioural contract, not as a survival/combat specification. These are substantial adaptations, but not a new general-purpose task planner or implemented autonomous fighter.
+
+Runtime coverage is deliberately narrow: flat peaceful scenes and teardown passed. Flight completion, hostiles, modded entity semantics and server anti-cheat compatibility are **U**, not globally validated.
+
+## 2. Rotation and forward-orientation root-cause audit
+
+### 2.1 Ownership and tick handoffs
+
+| Stage | Exact components | Actual responsibility / evidence |
+|---|---|---|
+| Ordered tick entry | `src/launch/java/baritone/launch/mixins/MixinMinecraft.java`; `event/GameEventHandler.java`; registration in `Baritone.java` | Ticks dispatch ordered listeners on the client thread. Source ordering matters: path/process requests precede inventory execution and input clicks. **S** |
+| Movement intent | `pathing/path/PathExecutor.java`; `pathing/movement/Movement.java` | Movement chooses target rotations and keys; path executor handles progress, pauses, goal completion, cancellation/replan and sprint suitability. **S** |
+| Heading/key pairing | `MovementHelper.java:704-731`; `MovementOption.java:134-135` | Eight-way yaw/key options are selected from `headRotation`; settled-forward option faces ideal movement heading. `remainWithExistingLookDirection` can intentionally permit strafe/backward movement. Normal navigation sets `blockInteract=false`. **S** |
+| Aim request | `behavior/LookBehavior.java`, `updateTarget` and `AimProcessor` | Single existing aim owner; block targets retain interaction precision. `GazeAhead` leans yaw only; pitch is handled separately. **S/T** helper tests |
+| Motion direction | `LookBehavior.java:1319-1324`; `MixinEntity.java` | Uses requested target and processor rotation for motion events, not an unrelated decorative camera gaze. Mixin borrows/restores event yaw. **S** |
+| Packet-facing | `LookBehavior.java:581-582`; `MixinClientPlayerEntity.java` | PRE temporarily writes stepped `aimRotation` before vanilla movement packet output. **S**, server trace **T** |
+| Local camera | `LookBehavior.java:604-618` | POST restores previous local rotation for SERVER mode, optionally smooths CLIENT mode, then clears this tick's target. Persistent ownership by an indefinitely stale target is not established. **S/T** A/B |
+| Effective interaction ray | `utils/player/BaritonePlayerContext.java:79-85`; `api/utils/RayTraceUtils.java:37-65` | Effective rotation drives block raytrace. Existing utility explicitly ignores entity intersections: it is not an entity-hit combat ray. **S** |
+| Inputs and clicks | `utils/InputOverrideHandler.java`, `PlayerMovementInput.java`, `BlockBreakHelper.java`, `BlockPlaceHelper.java`, `utils/player/BaritonePlayerController.java` | Movement keys and guarded block/item/window interactions; controller interface has no entity-attack operation. **S** |
+| Special borrowed rotation | `process/BuilderProcess.java`; `MixinLivingEntity.java` | Builder borrows placement yaw and restores it; Elytra has a dedicated flight rotation event/control loop. `CameraWritesTest` guards the existing allowed write sites. **S/T**, flight quality **U** |
+| World/ownership reset | `LookBehavior.java:639-663`, idle/wander unwind and handoff methods; process `onLostControl` | Clears/reset transient state on world changes. The caller order and asynchronous work still need scenario tests; no blanket claim that every handoff is safe. **S/U** |
+
+No product code writes a separate custom `yBodyRot`/head-yaw controller in the inspected census (`ThisWayCommand` reads `getYHeadRot`; the camera-write test searches writes). Vanilla body/head rendering and interpolation must be observed separately; packet yaw does not by itself measure third-person neck animation.
+
+### 2.2 The reproduced walking/mining discrepancy
+
+`Settings.java:760,765,799` defaults `freeLook=true`, `blockFreeLook=false`, `antiCheatCompatibility=true`. `LookBehavior.Target.Mode.resolve:1555-1574` therefore makes ordinary walking **SERVER**, while block interaction is **CLIENT**. SERVER mode sends the requested facing but restores the person's local view. CLIENT mode leaves the camera following the bot's aim.
+
+**T:** controlled A/B with the same eastward 60-block route pattern, initial south-facing yaw 0 and `remainWithExistingLookDirection=false` in both runs shows local yaw 0 under free look, versus local yaw −89.7 with free look disabled. Server traces face along the route in both runs. See the committed [screenshots/CSV](validation.md#controlled-camera-experiment).
+
+**Conclusion:** the main observed local walking-versus-mining distinction is an existing mode contract, not evidence that navigation has no look target. The smallest initial action is to explain/test the existing `freeLook=false` visible-bot profile while preserving default/manual free-look compatibility. Changing the default or taking away user mouse control requires a separate operator decision. Do not create another camera controller or force every action to stare straight ahead.
+
+Turnstone independently confirmed PRE/POST and the defaults (`b70b1064`). Their important refinement is accepted: the smooth-look average is a CLIENT-camera branch, whereas server-facing movement is the stepped `aimRotation`. The A/B validates the instrument distinction; a remote observer's rendered interpolation remains **U**.
+
+### 2.3 Other orientation findings are separate
+
+- **S/T inherited expression defect:** optional `smoothLook` uses an arithmetic yaw average (`LookBehavior.java:608`; same upstream implementation). Samples 179/−179 average to 0, the wrong side of the compass. Existing default is off; expression reproduction is not a live smoothing test. Proposed wrap-safe average and seam regressions: **P2-02**.
+- **Peer-T retention, cause still H:** Turnstone's six controlled runs (`888e8145`, `evidence/turnstone-trace-extracts.md`) show steep pitch after a fall persisting at the goal; their table reports persistence through a subsequent 30-block flat walk, with a level-forced control staying −4.1..+1.0. Forced idle pitch 40 remains near 40 over the recorded approximately 50 seconds. Accept the measured retention, not “forever” or a unique writer. The committed excerpts do not include the full run-3/run-4 rows or a complete setting/owner ledger; run 5 is already stationary by tick 4875, so it is weak evidence for a long *moving* continuation after forcing 40. Their bucket-only theory was partly falsified by a no-bucket fall; keep that correction visible. **Source sharpening:** the existing `PitchWander#step` already approaches a near-level preference by 1°/tick. `settledGaze:1274` instead compares the *post-processed* `to` pitch against raw `ctx.playerRotations` after `peekRotation:1403-1423` adds tremor/mouse quantisation. A small processed difference can bypass settling even for a raw pitch-echo walking target. This is a falsifiable **H** about the gate, not a confirmed live root cause; the executed existing-helper probe (`evidence/qh-pitch-helper-probe.log`) disproves “the helper has no near-level preference.” Capture raw target, processed target, guard result, ownership and free-look setting before the smallest fix. Preserve manual camera intent; forced user pitch held while idle is not automatically a bug. **P2-01**, promoted ahead of further cosmetic movement work.
+- **H, not a proven historic cause:** `noticeBlows:419-456` notices increased `hurtTime`, then guesses a visible nearby player/`Enemy` within 10 blocks. Players outrank the closest mob. `behavior/look/Flinch.java:178-215` neck-clamps yaw during movement but not pitch, and can keep following a living presumed culprit after LOS changes. This can produce a pitched visual response; it does not prove Nightjar's recorded one-tick snap or authenticate a damage source. Capture damage/culprit/owner/rotation layers together before fixing **P2-03**.
+- **S risk/H runtime outcome:** `somethingNearby:932-950` may look at any nearby visible living entity's eyes, including an unangered Enderman. Enderman gaze can be provocative; the actual scene has not been reproduced here. A safety classification shared with optional interest, not an invented combat target, should forbid provocative gaze where reliable. **P1-01/P2-03**.
+- **S:** post-job idle regards an open screen/user movement as human takeover (`LookBehavior.java:1117-1126`). `command/ExampleBaritoneControl.java:52-130` parses settings/chat commands; it is not another rotation controller. A normal chat screen does not establish a conversation-facing task or speaker-selection policy.
+- **S:** navigation may legitimately strafe/back up while maintaining look direction, turn before walking, lean into a corner, anticipate a slope, aim precisely at a block or follow a flight heading. Desired consistency is context-appropriate ownership, not uniform yaw/pitch for all of these.
+
+### 2.4 Humanisation and sprint wind-up already present
+
+`Cadence.java` centralises bounded existing timings: retarget 1–3 ticks, sight settle 1–2, sprint wind-up 2–4, sprint hangover 1–3, key beat 1–2, inventory-swap wind-up 1–2 and hotbar switch 2–5. Pure helpers accept seeded `Random` for repeatable tests; runtime generators are not a guarantee of an entire recorded-run seed. Do not add more arbitrary delays/random mistakes on top.
+
+`PathExecutor.java:597-639` already excludes Parkour/Ascend/Descend/Fall/Pillar/vertical cases from waiting on sprint spin-up; `SprintWindup`'s `mayWait=false` immediately permits sprint and the existing test includes parkour-not-waiting. `:650-654` has hangover handling. **S/T** helper logic; edge/flight safety **U**. Nightjar announced remaining parkour work; do not duplicate that work or claim the existing exclusions are missing. Reserve a targeted edge/hangover/client trial under **P0-04** before adding another timing rule.
+
+Interaction precision wins over head decoration. Emergency survival, once approved, must be able to bypass optional presentation wind-ups at safe handoff boundaries, without bypassing server reach, cooldown, collision or item-ownership checks.
+
+## 3. Mandatory entity/combat audit — 30 explicit answers
+
+**Inspected scope:** all `src/main`, `src/api`, `src/launch` and loader Java trees; process/command registration; entity scans; forced click paths; player-controller methods; relevant settings, tests and inherited history. Searches alone were not treated as proof: `Avoidance`, `LookBehavior`, `FollowProcess`, arbitration, input/block helpers and controller implementations were read. Minecraft has a vanilla attack API; this fork does not currently invoke it as an autonomous entity combat policy.
+
+| # | Question | Explicit current answer and evidence | Classification / consequence |
+|---:|---|---|---|
+| 1 | Are nearby animals and monsters detected at all? | **Yes, in particular subsystems.** `LookBehavior#somethingNearby` scans living entities; `noticeBlows` scans visible players/`Enemy`; `Avoidance#create` scans `Mob`; `FollowProcess` caches entities matching a caller predicate. | **S**; detection is not a unified world/threat model. |
+| 2 | Is detection continuous, universal and at one radius? | **No.** Interest scan is 12 blocks, damage gaze 10, default avoidance sphere 8 (spawners 16); avoidance is built for path calculation, follow uses its own settings/filter. These are different cadences and consumers. | **S/M** universal threat feed; do not invent a single current sensor radius. |
+| 3 | Is entity identity/type available? | **Yes** through actual Minecraft entity objects and runtime types in those scans. No persistent combat target record or generation-safe target identity store was found. | **S/M**; new records must scope UUID/entity ID to world/connection. |
+| 4 | Is there an explicit passive/hostile/neutral classifier? | **Not a general one.** `Enemy`, `Mob`, `Player` type checks and a few special avoidance filters exist; there is no exhaustive three-way threat-policy classifier. | **S/M**; animals included in `Mob` must not become targets. |
+| 5 | Which nearby mobs currently affect path choice? | With `avoidance=true`, `Avoidance#create:63-82` builds cost spheres for broad `Mob` objects with Spider/ZombifiedPiglin/Enderman exceptions. Default avoidance is **false**; `Favoring:31-35` applies sampled spheres before calculation. | **S/U** optional cost bias, not real-time guaranteed escape. |
+| 6 | Are neutral mobs state-aware? | **Partially** in existing avoidance: spider brightness, zombified-piglin last-hurt-by-mob and Enderman creepy state. This is not reliable universal aggression attribution and not an attack authorization. | **S/M** general neutral policy; client-state uncertainty must be explicit. |
+| 7 | Does it deliberately attack passive animals? | **No autonomous animal-attack implementation found.** FarmProcess works crops; following a cow is not hunting it. | **M**; keep prohibition absent explicit future objective/policy. |
+| 8 | Does it deliberately attack hostile monsters? | **No autonomous monster-attack implementation found.** No combat process/command, attack target acquisition, weapon/cooldown loop or entity-attack controller call is wired. | **M**; Minecraft manual/downstream attacks are outside this statement. |
+| 9 | Does it know which entity damaged the player? | **Not authoritatively.** `noticeBlows` notices `hurtTime` then guesses a nearby visible player/Enemy, ranking a player first. Projectile/environmental damage and multiple bystanders can make that guess wrong. | **S** visual guess; never feed directly into attacks. |
+| 10 | What happens when attacked while mining? | No combat interrupt is dispatched. Existing mine/path logic proceeds, fails/replans or completes by its normal rules; damage gaze may react only when existing look gates allow it, and block precision is protected. | **S/M**, hostile mining runtime **U**. |
+| 11 | What about attacks while building, farming, exploring or following? | Same absence of a survival/combat interrupt: those processes retain their own normal tick/control contracts. A head reflex is not task suspension or self-defence. | **S/M**, hostile task transitions **U**. |
+| 12 | Is following an entity the same as pursuing it to fight? | **No.** `FollowProcess` produces near/offset goals, filters dead/self/world-distant entities, and retains useful progress; it has no attack action. | **S**; reuse goal-following ideas without calling it combat. |
+| 13 | How are combat targets selected/prioritised? | **They are not.** Only visual-interest/damage candidates and caller-defined follow targets are selected. Visual player-first ranking is unsuitable as a combat priority. | **M** combat selector. |
+| 14 | Does it reason about multiple threats? | No multi-threat fight/retreat model. Overlapping optional avoidance spheres can increase path cost; the flinch picks one presumed culprit. Neither evaluates crowd combat risk. | **S/M**; proposed multi-threat escalation defaults to avoidance. |
+| 15 | Can it choose fight, flee or ignore? | No such general policy. Optional path cost bias and task cancellation are not an implemented fight/flee/ignore decision. | **M**; proposed deterministic policy, not LLM requirement. |
+| 16 | Does player health drive task interruption or combat? | No health-aware ground-task/defence policy found in inspected paths. Damage animation drives gaze, not a low-health threshold or healing task. | **M** ground survival; Elytra/resource guards are separate. |
+| 17 | Does armor/protection influence threat response? | No armor-aware threat/risk or attack policy found. Movement calculation reads equipment for effects such as Frost Walker; that is not combat assessment. | **S/M**; do not claim equipment is never read. |
+| 18 | Does it choose and preserve a weapon? | No entity-combat weapon selector. `ToolSet` chooses block tools and honors item-saver durability; `InventoryBehavior` stages item selection. | **S/M**; useful abstractions, not existing fighter. |
+| 19 | Does hunger affect anything, and does it auto-eat? | **Yes**: sprint eligibility requires food >6 (`CalculationContext:105`). No autonomous ground-food/eating task was found. | **S/M**; hunger guard already exists, resource autonomy does not. |
+| 20 | Is there an emergency retreat/heal/critical-health mode? | No general ground critical-health response. Elytra separately has low-durability/rocket-related landing guards (`ElytraProcess:188,281,487`). | **S/M**; preserve those implemented guards. |
+| 21 | Are entity reach/LOS/hitbox checks implemented for attacking? | No attack pipeline. Current `RayTraceUtils#rayTraceTowards` explicitly traces **blocks only** and ignores entity collisions. Existing block LOS/reach checks cannot be relabelled entity-hit checks. | **S/M**; a proposed adapter must use this version's vanilla entity/reach APIs. |
+| 22 | Does it respect attack cooldown and confirm hits? | No autonomous attack/cooldown/hit-confirmation loop exists. Swinging at a block, `hurtTime` and mouse-button wind-ups do not implement this. | **M**; bounded attempts and observed outcomes required. |
+| 23 | Are friendly players/pets protected by a combat policy? | No attack system exists, so no autonomous player/pet aggression is wired. Damage gaze can look at a friendly player; it is not a verified aggressor. | **M** policy; proposed player attacks off, pets/friendlies deny-listed. |
+| 24 | Can an explicit animal-hunting objective override the safe default? | Not currently: no hunt/kill objective found. Existing `follow` predicates can select animals, but cannot authorize damaging them. | **M/P**; any future hunt objective needs separate explicit approval. |
+| 25 | What if a mob physically blocks the planned route? | Normal movement collision/progress/timeout/replanning applies; optional avoidance can bias a newly calculated route. There is no deliberate “kill the blocking entity” fallback. | **S/M**; a blocked-route kill fallback would be unsafe and is rejected. |
+| 26 | Is threat awareness integrated with resource/farm tasks? | Crop farming, dropped-item pickup and resource guards exist, but no entity-threat budget/survival coordinator is connected to those tasks. | **S/M**; distinguish crop farming from livestock tasks. |
+| 27 | Can a task be paused, interrupted and automatically resumed after combat? | User pause/resume and temporary-process arbitration exist. No combat interruption is wired, nor a universal checkpoint/resume protocol after a replacing evasion goal. | **S/M**; temporary REQUEST_PAUSE is simpler than goal replacement. |
+| 28 | Are endless combat retries, stale targets and task-failure loops prevented? | Combat loops do not exist. Movement timeouts/cancellation, mine target blacklist/rescan and follow progress retention are real, but no shared retry budget, target-expiry or global task circuit breaker was found. | **S/M**; avoid claiming existing retries are unbounded runtime failures without a reproduction. |
+| 29 | Are current threat decisions configurable, deterministic and tested? | Optional avoidance settings exist; many humanisation helpers have seeded tests. No dedicated threat-decision settings, pure threat-policy tests or hostile scenario validation were found. | **S/M**; new policy default OFF, deterministic and scenario-tested. |
+| 30 | Where should awareness/response live and how should it integrate? | **Proposed:** client-thread bounded perception + pure policy, an existing-style optional temporary process for safe ground response, the existing goal/path/look/input/inventory owners, and a narrowly gated vanilla attack adapter for a separately approved defence MVP. | **P**, detailed below; not new competing controllers, rewritten A*, or an LLM in the tick loop. |
+
+### Version-specific combat/perception constraints
+
+Read this branch's built 26.3 Minecraft classes using `javap`, not an older wiki/API name. `MultiPlayerGameMode.attack(Player, Entity)` exists; `Player` exposes `getAttackStrengthScale(float)`, `getCurrentItemAttackStrengthDelay()` and item-aware `isWithinAttackRange(ItemStack, AABB, double)`. These are **availability checks**, not implemented fork calls or a validated combat design.
+
+`NeutralMob.isAngryAt` requires a **ServerLevel** in this version, while this client has a `ClientLevel`; persistent anger uses end times/entity references rather than blindly copied older UUID/timer code. `Mob.getTarget`/last-attacker data may not be replicated as an authoritative server attribution. Never cast the client world to ServerLevel, assume null means harmless, or copy a server-side AI implementation into the client. Unknown aggression leads to cautious avoidance/notification, never permission to attack.
+
+## 4. Proposed survival/threat integration contract (not implemented)
+
+1. **Perception:** immutable world/connection-scoped snapshots from the client thread. Stable entity identity, category, alive/visible/range/LOS, observable aggression indicators and their confidence/provenance. Separate *unknown* from passive/neutral. Reuse/replace duplicate interest/avoidance sampling carefully; no background Minecraft-object reads.
+2. **Policy:** proposed single `threatResponse` enum OFF / AVOID / DEFEND, initially **OFF** to preserve compatibility. Ordinary task ownership is required; no new idle takeover, manual PvP or passive-animal killing. DEFEND allows only an approved restricted ground-melee case; uncertain neutrals/players, crowds, creepers, low health/equipment and hazardous footing prefer escape/alert. An explicit hunt objective is **not** included.
+3. **State machine:** OBSERVE → ASSESS → REQUEST_SAFE_SUSPEND → AVOID or narrowly DEFEND → REVALIDATE → RESUME / bounded FAIL. Damage/threat escalation is immediate for policy, while safe physical handoff respects parkour/fall/flight. Do not stop midair or borrow an unrelated flight controller.
+4. **Task suspension:** use `IBaritoneProcess#isTemporary` and REQUEST_PAUSE when retaining a path. For evasion, record original process/goal/context generation; distinguish response-path failure from original-task failure. On exit, ask the original process for a fresh goal, revalidate task prerequisites and path reachability, discard stale escaped geometry; never blindly restore an old PathExecutor or deliver evasion `calcFailed` to mine blacklisting.
+5. **Inputs/aim:** existing LookBehavior remains the only aim owner. Precise entity action suppresses decorative gaze just as precise block action does. One narrowly reviewed vanilla entity-hit adapter; no fake block hit, unbounded attack key or second aim/input controller. Item-aware reach/LOS/cooldown, explicit safe target, stable identity and cancellation checked on every attempt.
+6. **Resources:** preserve food sprint, item-saver and Elytra landing guards. Start with resource-aware pause/alert and explicit requirements, then separately approved ground eating/weapon selection if needed. Do not promise automatic crafting/eating/full survival from present inventory code.
+7. **Bounds:** hysteresis/cooldown per encounter, no auto-attacking an unknown neutral, cap failed attacks/evasion attempts and retained snapshot age, stop/alert on repeated no progress. One escalation to safer avoidance rather than fight/resume oscillation. World/logout/death/user cancel invalidates all response tokens and pending hits.
+8. **Budget proposal:** coarse bounded nearby scan at up to 5 Hz during an owned task; cheap damage/current-target safety checks every tick; at most four expensive candidate LOS tests per tick, rotating rather than permanently ignoring farther hazards. Proposed p95 added client-tick cost <1 ms on a declared reference machine with 100 nearby living entities; measured profiling may require adjusting this budget, not hiding stalls. No network/LLM dependency.
+
+### Proposed initial safety bounds (reviewable defaults, not measured balance)
+
+These make acceptance tests concrete without adding a page of user settings. The single proposed response enum remains OFF by default; constants/policy version are deterministic and can be revised with recorded scenario evidence before wiring.
+
+| Concern | Initial proposed bound / rule | Test consequence |
+|---|---|---|
+| Critical health | ≤30% of max health selects safe avoidance/alert, never DEFEND | Boundary at 6/20 health; low-health crowd fixture cannot select attack |
+| DEFEND eligibility | Separately approved whitelist starts with one ordinary vanilla Zombie, suitable sword/tool durability, food >6, health ≥70% of max, armor value ≥8, safe ground, observable threatening approach, no allies/pets/unknown neutral/multiple threats | A type match alone is not attack permission; all deny conditions tested; modded/ambiguous cases AVOID/alert |
+| Evasion retry | At most 3 failed replan attempts per encounter and 10 s no-progress window, then explicit intervention-needed state | Failure cannot be silently retried forever or resume the original job into the same danger |
+| Defence retry | At most 5 unsuccessful gated attack attempts or 5 s without observed encounter progress; absolute encounter limit 15 s, then AVOID/alert | No continuous attack key/spam/unbounded pursuit; probable hit observation is not falsely labelled authoritative damage attribution |
+| Clear-to-resume | No current danger for 20 ticks, no new damage for 40 ticks, valid original task/world generation and fresh safe path | LOS loss for one tick cannot oscillate fight/resume; cancel/world change invalidates resume |
+| Observation expiry | Discard dead/unloaded/changed-world identity immediately; never attack on a snapshot older than 4 ticks | Live identity/reach/LOS/cooldown/policy rechecked immediately before an attack |
+
+Thresholds are deliberately conservative starting proposals for Minecraft 26.3, not a guarantee of survival or a universal modded-server damage model. Ground-only DEFEND/encounter budgets must be challenged by the independent safety review; the foundation can ship AVOID without ever implementing/enabling DEFEND. If no safe escape/cleanup action exists, terminate automatic attempts with a clear alert rather than claim successful survival.
+
+## 5. Full task lifecycle and reliability assessment
+
+| Boundary / concern | Present implementation | Verified limit / proposed work |
+|---|---|---|
+| Start/priority | Registered `IBaritoneProcess`, priorities and temporary contract; new non-temporary winner calls lost-control on lower owners (`PathingControlManager:181-214`). | **S**; do not replace with a second task scheduler just to add one interrupt. |
+| Pause | `ExecutionControlCommands` pauses/resumes; `PathingBehavior:119-198` clears keys/stops breaking when safe, preserves current goal/path. | **S**; a replacing temporary goal is not equivalent to this pause. |
+| Path completion/failure | Path executor timeout (`:305-309`); pathing discards invalid next paths, continues applicable next paths, finishes at goal or recalculates. | **S/T** scene completion; universal recovery success not established. |
+| Mining progress | `MineProcess:80-150` checks inventory quantity, handles path failure with closest-target blacklist or cancellation, rescans asynchronously, can request safe shaft pause. | **S/T** small mine scene; stale async result/task-generation races require deliberate tests. |
+| Follow progress | Stable standing target and `FollowProgress`; alive/self/range/world filtering. `calcFailed` parameter is not used as a shared retry budget. | **S**; unreachable-follow endurance/no-progress scenario **U**, not a demonstrated infinite loop. |
+| Inventory ownership | `InventoryBehavior:103-159` cancels stale pending one-click swaps on missing request/settings/menu boundary; staged hand waits block clicks. InventoryPauser is a temporary safe stationary gate (priority 5.1). | **S/T** existing tests; do not re-add the fixed stale-swap issue. |
+| Elytra transaction teardown | `ElytraProcess#onLostControl` calls `ElytraBehavior#finishTheSwapBeforeGoing` before dropping behaviour; `InventoryTransaction#finishNow` drains a begun queue only while its inventory-window guard allows it. | **S/T** ordinary smoke; **S risk/U scenario**: a begun queue under a non-player menu can remain undrained as its owner is released. Needs minimal targeted reproduction, not a claimed observed duplicate/lost item. |
+| Flight cancel/world change | Asynchronous teardown and world destruction exist; corrected null-context teardown `29b70536` is in current branch. | **T** smoke passes; actual landing/launch/late async cancellation **U**. |
+| Resource/terrain safety | Sprint food >6, tool durability item-saver, water bucket/nether constraint, max-fall limits, lava avoidance, Elytra rocket/durability landing safeguards. | **S**; these must be preserved. No general health-aware ground resource planner is wired. |
+| Death/world replacement | Mixins/events clear world-facing transient state and waypoint/death handling exists. | **S**; no universal auto-respawn/recovery-of-all-jobs capability found. Never auto-resume into a different world. |
+| Diagnostics | Logger routing, path/proc commands, trace datapack, write-count/fuzz tests and scene/smoke scripts. | **S/T**; missing correlated owner/rotation/health/retry/termination events make anomaly attribution difficult. Proposed bounded opt-in trace, not persistent chat spam. |
+
+The desired next architecture is **incremental contracts around the current owners**: owner generation/failure provenance and verified temporary handoff, bounded retry/progress policy where evidence needs it, surviving inventory cleanup ownership, and optional awareness/response. Durable resumption across a new client/world and long-horizon automatic food/crafting/hunting are larger **P3/X** scope; they are not prerequisites for the restricted ground threat MVP.

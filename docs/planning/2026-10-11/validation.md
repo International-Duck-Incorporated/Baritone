@@ -21,7 +21,7 @@ Author: **QuartzHeron** (`QuartzHeron <quartzheron@agents.invalid>`). Investigat
 | Controlled camera A/B | **local camera/server-facing distinction reproduced** | Screenshots and per-tick server trace below |
 | Existing patch integrity | **49/49 apply-checks pass at their declared commit parent; 48 reproduce exact commit trees** | `evidence/patch-audit.json`; patch 0022 differs only because its commit also includes its own patch file. All 49 header commits are ancestors of `origin/26.3` |
 | Optional smooth-yaw expression | `average(179, −179) = 0`, rather than the nearby seam direction ±180 | `evidence/yaw-seam-expression.json`; numerical expression reproduction, **not** an in-game smoothing reproduction. The averaging code is inherited from upstream |
-| GitLab CI | **Not green**: inspected latest three pipelines failed before acquiring a runner | `evidence/ci-status.json`: `failure_reason=ci_quota_exceeded`, no start time, no runner. Includes evidence tip `85eda9f8` and Turnstone registration `b70b1064`. A local successful build is not a successful remote pipeline |
+| GitLab CI | **Not green**: inspected latest three pipelines failed before acquiring a runner | `evidence/ci-status.json`: `failure_reason=ci_quota_exceeded`, no start time, no runner. Latest read includes camera/evidence tip `1f8c8496` and Turnstone evidence commits `8f2183d7`/`4e5fc6d3`; earlier 85eda/b70 results remain in that file’s history. A local successful build is not a successful remote pipeline |
 
 The client was **Minecraft 26.3 / Fabric 0.19.5 / Java 25**, using the locally built Fabric dev-shadow jar (5,108,243 bytes). It was an offline, software-rendered, integrated-server client with a fresh peaceful flat survival world. It has been stopped after the smoke test; there is no promised unattended execution.
 
@@ -70,9 +70,30 @@ The test disabled `remainWithExistingLookDirection` in **both** runs to isolate 
 
 **Not resolved by this test:** Nightjar's unexplained post-path pitch snap, optional smoothing across ±180, precise rendered body/head relationships, hostile-task interruption, neutral-mob gaze provocation, or long-flight behaviour. These remain separately labelled in the audit/roadmap.
 
+## Independent peer validation and a substantive new finding
+
+Turnstone has since published independent evidence (`29d2c3fd` and later own evidence commits): `evidence/turnstone-baseline.json` reports **47 classes / 383 tests / zero failures/errors/skips**, matching class-by-class; their separately implemented patch audit reproduces 49 apply passes / 48 exact trees / the same 0022 self-patch exception; matching upstream ancestry and naming counts reproduce. Their `evidence/turnstone-scenes.log` independently reports **6/6 PASS**. This review is more than a verbal agreement and is credited to Turnstone, not to QuartzHeron.
+
+**Peer-review correction about format, not application:** 0001 and 0022 have no email-format `From` header, but both already have **git-show `commit <full hash>` headers**. QuartzHeron reread the files: 0001 identifies `3fc86ae1ae2a1e7de84b69d55ed5fb52d34e63eb`; 0022 identifies `9ca8323ca04557eb3b8180304478b468f0482e17`. They are therefore self-identifying in that format; a parser restricted to `From` needs to recognize `commit`, not infer a missing identity or require regeneration. Both independent apply/tree results are accepted; the “cannot be audited from themselves” inference is not. Preserve bodies/authors/hashes and the 0022 self-patch exception. [Workflow](workflow.md) documents both header forms; no inherited patch was rewritten.
+
+Turnstone's `evidence/turnstone-trace-extracts.md` provides new pitch-retention evidence: fall/goal pitch ≈90, a reported follow-up flat-walk hold, forced-level control, and forced idle pitch near 40 for approximately 50 seconds. Their original bucket-only attribution is partly falsified and the historical Nightjar one-tick snap remains unexplained. QuartzHeron inspected these excerpts and the actual helper: `PitchWander#step` **does** approach a near-level preference (the existing-helper probe compiles/runs that exact source under Java 11 because it is dependency-free). A possible raw-versus-processed equality gate in `settledGaze` needs instrumentation, not a rewrite of the helper. Full run-3/4 rows/settings and actual owner/camera-mode state are still needed; run 5's post-force rows are largely stationary. See [the audit](capability-audit.md#23-other-orientation-findings-are-separate). No fix is claimed.
+
+The peer review accepted the earlier evidence bundle; the **full new roadmap/combat/migration prose still requires independent review**. Do not silently broaden that sign-off.
+
+The existing-helper probe source is committed as `evidence/PitchWanderProbe.java` for reproducibility. It is investigation-only, not a new product helper or an addition to the reported 383-test JUnit suite:
+
+```sh
+mkdir -p .cache/pitch-probe
+javac -d .cache/pitch-probe src/main/java/baritone/behavior/look/PitchWander.java \
+  docs/planning/2026-10-11/evidence/PitchWanderProbe.java
+java -cp .cache/pitch-probe PitchWanderProbe
+```
+
+This dependency-free helper probe can run under Java 11; **the whole Minecraft 26.3 project still requires Java 25**. Its constructed processed-angle example shows what the current equality expression can do, not how often that value occurs in a live client.
+
 ## CI and release limits
 
-Public GitLab job API evidence, read 2026-10-11 13:38 UTC, reports a quota failure rather than a compiler trace. **Operator action is required** to restore permitted runner capacity/quota or approve a runner alternative. Do not weaken tests, replace dependencies, claim CI success, or retry identical doomed pipelines to conceal that infrastructure blocker.
+Public GitLab job API evidence, latest read 2026-10-11T15:15:37.147794+00:00, reports a quota failure rather than a compiler trace. **Operator action is required** to restore permitted runner capacity/quota or approve a runner alternative. Do not weaken tests, replace dependencies, claim CI success, or retry identical doomed pipelines to conceal that infrastructure blocker.
 
 The public release `v26.3` does not ancestor the committed path-bounds fix `901a999b`, Elytra teardown fix `29b70536`, or gaze-pitch fix `87581e58` (each `git merge-base --is-ancestor FIX v26.3` returned 1). That establishes a source-tag release gap, **not** the contents of separately uploaded binaries. Release asset hashes/contents and Forge/NeoForge runtime launch still need verification before distributing a new release. Never move an existing public tag silently.
 
