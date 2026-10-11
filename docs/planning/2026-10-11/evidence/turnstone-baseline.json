@@ -1,0 +1,207 @@
+{
+  "reviewed_by": "Turnstone",
+  "checked_at_utc": "2026-10-11T13:52:00Z",
+  "commit": "b70b1064222a82fddc27563261481f3808424260",
+  "jdk": "Zulu 25.0.4.1+1-LTS (jmods present)",
+  "gradle": "8.14.4",
+  "command": "./gradlew test --no-daemon -Dorg.gradle.jvmargs=-Xmx1000m -Dorg.gradle.workers.max=1",
+  "exit": 0,
+  "test_classes": 47,
+  "counts": {
+    "tests": 383,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "classes": [
+    {
+      "class": "baritone.api.utils.AimScatterTest",
+      "tests": 8
+    },
+    {
+      "class": "baritone.api.utils.RotationTest",
+      "tests": 3
+    },
+    {
+      "class": "baritone.behavior.look.AimDynamicsTest",
+      "tests": 30
+    },
+    {
+      "class": "baritone.behavior.look.ApproachLookTest",
+      "tests": 13
+    },
+    {
+      "class": "baritone.behavior.look.CameraWritesTest",
+      "tests": 2
+    },
+    {
+      "class": "baritone.behavior.look.FlinchTest",
+      "tests": 10
+    },
+    {
+      "class": "baritone.behavior.look.GazeAheadTest",
+      "tests": 11
+    },
+    {
+      "class": "baritone.behavior.look.HeadWanderTest",
+      "tests": 10
+    },
+    {
+      "class": "baritone.behavior.look.HumanlikeLookFuzzTest",
+      "tests": 10
+    },
+    {
+      "class": "baritone.behavior.look.IdleFidgetTest",
+      "tests": 5
+    },
+    {
+      "class": "baritone.behavior.look.IdleGlanceTest",
+      "tests": 17
+    },
+    {
+      "class": "baritone.behavior.look.NewcomerTest",
+      "tests": 7
+    },
+    {
+      "class": "baritone.behavior.look.PitchWanderTest",
+      "tests": 11
+    },
+    {
+      "class": "baritone.behavior.look.ReactionDelayTest",
+      "tests": 10
+    },
+    {
+      "class": "baritone.behavior.look.TurnPaceTest",
+      "tests": 5
+    },
+    {
+      "class": "baritone.behavior.look.UnattendedTest",
+      "tests": 6
+    },
+    {
+      "class": "baritone.behavior.look.WalkGlanceTest",
+      "tests": 17
+    },
+    {
+      "class": "baritone.cache.CachedRegionTest",
+      "tests": 1
+    },
+    {
+      "class": "baritone.pathing.calc.openset.OpenSetsTest",
+      "tests": 31
+    },
+    {
+      "class": "baritone.pathing.goals.GoalGetToBlockTest",
+      "tests": 1
+    },
+    {
+      "class": "baritone.pathing.movement.ActionCostsTest",
+      "tests": 1
+    },
+    {
+      "class": "baritone.pathing.movement.BridgeCrossingTest",
+      "tests": 3
+    },
+    {
+      "class": "baritone.pathing.movement.CarefulFootingTest",
+      "tests": 8
+    },
+    {
+      "class": "baritone.pathing.movement.ClickGatesTest",
+      "tests": 4
+    },
+    {
+      "class": "baritone.pathing.movement.HeadFirstTest",
+      "tests": 9
+    },
+    {
+      "class": "baritone.pathing.movement.KeyBeatTest",
+      "tests": 16
+    },
+    {
+      "class": "baritone.pathing.movement.MovementOptionTest",
+      "tests": 11
+    },
+    {
+      "class": "baritone.pathing.movement.SprintWindupTest",
+      "tests": 4
+    },
+    {
+      "class": "baritone.pathing.movement.StraightRunTest",
+      "tests": 7
+    },
+    {
+      "class": "baritone.pathing.movement.StripCommentsTest",
+      "tests": 9
+    },
+    {
+      "class": "baritone.pathing.path.PathExecutorBoundsTest",
+      "tests": 5
+    },
+    {
+      "class": "baritone.process.FarmReachTest",
+      "tests": 8
+    },
+    {
+      "class": "baritone.process.FollowProgressTest",
+      "tests": 6
+    },
+    {
+      "class": "baritone.process.PlaceSearchTest",
+      "tests": 6
+    },
+    {
+      "class": "baritone.process.elytra.ElytraHitboxTest",
+      "tests": 5
+    },
+    {
+      "class": "baritone.utils.ButtonWritesTest",
+      "tests": 4
+    },
+    {
+      "class": "baritone.utils.CadenceTest",
+      "tests": 25
+    },
+    {
+      "class": "baritone.utils.HandWritesTest",
+      "tests": 2
+    },
+    {
+      "class": "baritone.utils.HotbarSwitchTest",
+      "tests": 7
+    },
+    {
+      "class": "baritone.utils.InventorySwapTest",
+      "tests": 6
+    },
+    {
+      "class": "baritone.utils.InventoryTransactionTest",
+      "tests": 14
+    },
+    {
+      "class": "baritone.utils.KeyWritesTest",
+      "tests": 4
+    },
+    {
+      "class": "baritone.utils.RandomSourceTest",
+      "tests": 3
+    },
+    {
+      "class": "baritone.utils.SettingsWikiTest",
+      "tests": 3
+    },
+    {
+      "class": "baritone.utils.ToolSetTest",
+      "tests": 3
+    },
+    {
+      "class": "baritone.utils.pathing.BetterBlockPosTest",
+      "tests": 1
+    },
+    {
+      "class": "baritone.utils.pathing.PathingBlockTypeTest",
+      "tests": 1
+    }
+  ],
+  "comparison_with_quartzheron_baseline": "identical class set and per-class test counts; no differences"
+}

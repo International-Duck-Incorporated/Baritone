@@ -1,0 +1,214 @@
+Downloading https://services.gradle.org/distributions/gradle-8.14.4-bin.zip
+.............10%.............20%.............30%.............40%.............50%.............60%.............70%.............80%.............90%..............100%
+
+Welcome to Gradle 8.14.4!
+
+Here are the highlights of this release:
+ - Java 24 support
+ - GraalVM Native Image toolchain selection
+ - Enhancements to test reporting
+ - Build Authoring improvements
+
+For more details see https://docs.gradle.org/8.14.4/release-notes.html
+
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.14.4/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+> Task :buildSrc:compileJava
+Note: Some input files use or override a deprecated API.
+Note: Recompile with -Xlint:deprecation for details.
+
+> Task :buildSrc:compileGroovy NO-SOURCE
+> Task :buildSrc:processResources NO-SOURCE
+> Task :buildSrc:classes
+> Task :buildSrc:jar
+
+> Configure project :
+[Unimined] Plugin Version: 1.4.2-dabcdf3-SNAPSHOT
+
+[Unimined] You have less than 2GB of memory allocated to gradle.
+[Unimined] This may cause issues with remapping and other tasks.
+[Unimined] Please allocate more memory to gradle by adding: 
+[Unimined]   org.gradle.jvmargs=-Xmx2G
+[Unimined] to your gradle.properties file.
+
+using version number: 1.20.0
+[Unimined] Plugin Version: 1.4.2-dabcdf3-SNAPSHOT
+
+[Unimined] You have less than 2GB of memory allocated to gradle.
+[Unimined] This may cause issues with remapping and other tasks.
+[Unimined] Please allocate more memory to gradle by adding: 
+[Unimined]   org.gradle.jvmargs=-Xmx2G
+[Unimined] to your gradle.properties file.
+
+using version number: 1.20.0
+[Unimined] Plugin Version: 1.4.2-dabcdf3-SNAPSHOT
+
+[Unimined] You have less than 2GB of memory allocated to gradle.
+[Unimined] This may cause issues with remapping and other tasks.
+[Unimined] Please allocate more memory to gradle by adding: 
+[Unimined]   org.gradle.jvmargs=-Xmx2G
+[Unimined] to your gradle.properties file.
+
+using version number: 1.20.0
+[Unimined] Plugin Version: 1.4.2-dabcdf3-SNAPSHOT
+
+[Unimined] You have less than 2GB of memory allocated to gradle.
+[Unimined] This may cause issues with remapping and other tasks.
+[Unimined] Please allocate more memory to gradle by adding: 
+[Unimined]   org.gradle.jvmargs=-Xmx2G
+[Unimined] to your gradle.properties file.
+
+using version number: 1.20.0
+[Unimined] Plugin Version: 1.4.2-dabcdf3-SNAPSHOT
+
+[Unimined] You have less than 2GB of memory allocated to gradle.
+[Unimined] This may cause issues with remapping and other tasks.
+[Unimined] Please allocate more memory to gradle by adding: 
+[Unimined]   org.gradle.jvmargs=-Xmx2G
+[Unimined] to your gradle.properties file.
+
+using version number: 1.20.0
+[Unimined/Minecraft ::main] Applying minecraft config for source set 'main'
+[Unimined/MinecraftDownloader] retrieving version metadata
+[Unimined/Minecraft ::main] Applying NoTransformMinecraftTransformer
+[Unimined/Minecraft ::main] Applying run configs
+
+> Configure project :fabric
+[Unimined/Minecraft :fabric:main] Applying minecraft config for source set 'main'
+[Unimined/MinecraftDownloader] retrieving version metadata
+[Unimined/Minecraft :fabric:main] Applying OfficialFabricMinecraftTransformer
+[Unimined/Minecraft :fabric:main] Applying run configs
+
+> Configure project :forge
+[Unimined/MinecraftDownloader] retrieving version metadata
+[Unimined/Minecraft :forge:main] Applying minecraft config for source set 'main'
+[Unimined/ForgeTransformer] Selected FG3
+[Unimined/Forge] Using FG3 transformer
+[Unimined/Minecraft :forge:main] Applying FG3MinecraftTransformer
+[Unimined/Minecraft :forge:main] Applying run configs
+Merging client and server jars...
+[Unimined/Forge] transforming minecraft jar for FG3
+[Unimined/ForgeTransformer] Applying ATs [META-INF/accesstransformer.cfg]
+
+> Configure project :neoforge
+[Unimined/MinecraftDownloader] retrieving version metadata
+[Unimined/Minecraft :neoforge:main] Applying minecraft config for source set 'main'
+[Unimined/Forge] Using FG3 transformer
+[Unimined/Minecraft :neoforge:main] Applying NeoForgedTransformer
+[Unimined/Minecraft :neoforge:main] Applying run configs
+Merging client and server jars...
+[Unimined/Forge] transforming minecraft jar for FG3
+[Unimined/ForgeTransformer] Applying ATs [META-INF/accesstransformer.cfg]
+
+> Configure project :tweaker
+[Unimined/Minecraft :tweaker:main] Applying minecraft config for source set 'main'
+[Unimined/MinecraftDownloader] retrieving version metadata
+[Unimined/Minecraft :tweaker:main] Applying NoTransformMinecraftTransformer
+[Unimined/Minecraft :tweaker:main] Applying run configs
+
+> Task :compileApiJava
+/home/user/Baritone/src/api/java/baritone/api/utils/BlockOptionalMeta.java:59: warning: Unsafe is internal proprietary API and may be removed in a future release
+import sun.misc.Unsafe;
+               ^
+/home/user/Baritone/src/api/java/baritone/api/utils/BlockOptionalMeta.java:260: warning: Unsafe is internal proprietary API and may be removed in a future release
+        private static Unsafe unsafe = getUnsafe();
+                       ^
+/home/user/Baritone/src/api/java/baritone/api/utils/BlockOptionalMeta.java:294: warning: Unsafe is internal proprietary API and may be removed in a future release
+        public static Unsafe getUnsafe() {
+                      ^
+/home/user/Baritone/src/api/java/baritone/api/utils/BlockOptionalMeta.java:296: warning: Unsafe is internal proprietary API and may be removed in a future release
+                Field theUnsafe = Unsafe.class.getDeclaredField("theUnsafe");
+                                  ^
+/home/user/Baritone/src/api/java/baritone/api/utils/BlockOptionalMeta.java:298: warning: Unsafe is internal proprietary API and may be removed in a future release
+                return (Unsafe) theUnsafe.get(null);
+                        ^
+Note: /home/user/Baritone/src/api/java/baritone/api/BaritoneAPI.java uses or overrides a deprecated API.
+Note: Recompile with -Xlint:deprecation for details.
+Note: Some input files use unchecked or unsafe operations.
+Note: Recompile with -Xlint:unchecked for details.
+5 warnings
+
+> Task :processApiResources NO-SOURCE
+> Task :apiClasses
+> Task :compileSchematica_apiJava
+> Task :processSchematica_apiResources NO-SOURCE
+> Task :schematica_apiClasses
+
+> Task :compileJava
+/home/user/Baritone/src/main/java/baritone/process/elytra/NetherPathfinderContext.java:38: warning: Unsafe is internal proprietary API and may be removed in a future release
+import sun.misc.Unsafe;
+               ^
+/home/user/Baritone/src/main/java/baritone/process/elytra/NetherPathfinderContext.java:55: warning: Unsafe is internal proprietary API and may be removed in a future release
+    private static final Unsafe UNSAFE;
+                         ^
+/home/user/Baritone/src/main/java/baritone/process/elytra/NetherPathfinderContext.java:58: warning: Unsafe is internal proprietary API and may be removed in a future release
+            Field f = Unsafe.class.getDeclaredField("theUnsafe");
+                      ^
+/home/user/Baritone/src/main/java/baritone/process/elytra/NetherPathfinderContext.java:60: warning: Unsafe is internal proprietary API and may be removed in a future release
+            UNSAFE = (Unsafe) f.get(null);
+                      ^
+/home/user/Baritone/src/main/java/baritone/process/elytra/NetherPathfinderContext.java:326: warning: [removal] setMemory(long,long,byte) in Unsafe has been deprecated and marked for removal
+                    UNSAFE.setMemory(chunkPtr + (y0 * bytesInSection), bytesInSection, (byte) 0xFF);
+                          ^
+Note: Some input files use or override a deprecated API.
+Note: Recompile with -Xlint:deprecation for details.
+Note: Some input files use unchecked or unsafe operations.
+Note: Recompile with -Xlint:unchecked for details.
+5 warnings
+
+> Task :processResources NO-SOURCE
+> Task :classes
+> Task :compileTestJava
+> Task :processTestResources NO-SOURCE
+> Task :testClasses
+> Task :test
+
+> Task :compileLaunchJava
+Note: /home/user/Baritone/src/launch/java/baritone/launch/mixins/MixinPalettedContainer.java uses unchecked or unsafe operations.
+Note: Recompile with -Xlint:unchecked for details.
+
+> Task :processLaunchResources
+> Task :launchClasses
+> Task :fabric:compileJava NO-SOURCE
+> Task :fabric:processResources
+> Task :fabric:classes
+> Task :fabric:compileTestJava NO-SOURCE
+> Task :fabric:processTestResources NO-SOURCE
+> Task :fabric:testClasses UP-TO-DATE
+> Task :fabric:test NO-SOURCE
+> Task :forge:compileJava
+> Task :forge:processResources
+> Task :forge:classes
+> Task :forge:compileTestJava NO-SOURCE
+> Task :forge:processTestResources NO-SOURCE
+> Task :forge:testClasses UP-TO-DATE
+> Task :forge:test NO-SOURCE
+> Task :neoforge:compileJava
+> Task :neoforge:processResources
+> Task :neoforge:classes
+> Task :neoforge:compileTestJava NO-SOURCE
+> Task :neoforge:processTestResources NO-SOURCE
+> Task :neoforge:testClasses UP-TO-DATE
+> Task :neoforge:test NO-SOURCE
+
+> Task :tweaker:compileJava
+Note: /home/user/Baritone/tweaker/src/main/java/baritone/launch/tweaker/BaritoneTweaker.java uses unchecked or unsafe operations.
+Note: Recompile with -Xlint:unchecked for details.
+
+> Task :tweaker:processResources NO-SOURCE
+> Task :tweaker:classes
+> Task :tweaker:compileTestJava NO-SOURCE
+> Task :tweaker:processTestResources NO-SOURCE
+> Task :tweaker:testClasses UP-TO-DATE
+> Task :tweaker:test NO-SOURCE
+
+[Incubating] Problems report is available at: file:///home/user/Baritone/build/reports/problems/problems-report.html
+
+Deprecated Gradle features were used in this build, making it incompatible with Gradle 9.0.
+
+You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+
+For more on this, please refer to https://docs.gradle.org/8.14.4/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+
+BUILD SUCCESSFUL in 5m 27s
+15 actionable tasks: 15 executed

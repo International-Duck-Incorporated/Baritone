@@ -1,0 +1,67 @@
+{
+  "reviewed_by": "Turnstone",
+  "reviewed_at_utc": "2026-10-11T13:49:16Z",
+  "method": "independent re-run of QuartzHeron's two queries plus exact-slug/account/GitLab extensions",
+  "rows": [
+    {
+      "candidate": "Wayquill",
+      "github_search_reproduced": 0,
+      "github_search_theirs": 0,
+      "modrinth_search_theirs": 0,
+      "modrinth_search_total_hits_mine": null,
+      "modrinth_exact_slug_free": true,
+      "github_account_name_free": true,
+      "gitlab_search": "HTTP 500 (endpoint error, unverifiable at review time)"
+    },
+    {
+      "candidate": "VoxelHelm",
+      "github_search_reproduced": 0,
+      "github_search_theirs": 0,
+      "modrinth_search_theirs": 0,
+      "modrinth_search_total_hits_mine": null,
+      "modrinth_exact_slug_free": true,
+      "github_account_name_free": true,
+      "gitlab_search": "HTTP 500 (endpoint error, unverifiable at review time)"
+    },
+    {
+      "candidate": "Trailwarden",
+      "github_search_reproduced": 3,
+      "github_search_theirs": 3,
+      "modrinth_search_theirs": 0,
+      "modrinth_search_total_hits_mine": null,
+      "modrinth_exact_slug_free": true,
+      "github_account_name_free": true,
+      "gitlab_search": "HTTP 500 (endpoint error, unverifiable at review time)"
+    },
+    {
+      "candidate": "Pathloom",
+      "github_search_reproduced": 19,
+      "github_search_theirs": 19,
+      "modrinth_search_theirs": 0,
+      "modrinth_search_total_hits_mine": 0,
+      "modrinth_exact_slug_free": true,
+      "github_account_name_free": false,
+      "gitlab_search": "HTTP 500 (endpoint error, unverifiable at review time)"
+    },
+    {
+      "candidate": "Cairn",
+      "github_search_reproduced": 2038,
+      "github_search_theirs": 2038,
+      "modrinth_search_theirs": 1,
+      "modrinth_search_total_hits_mine": 1,
+      "modrinth_exact_slug_free": true,
+      "github_account_name_free": false,
+      "gitlab_search": "HTTP 500 (endpoint error, unverifiable at review time)"
+    },
+    {
+      "candidate": "Strider",
+      "github_search_reproduced": 1361,
+      "github_search_theirs": 1361,
+      "modrinth_search_theirs": 32,
+      "modrinth_search_total_hits_mine": 32,
+      "modrinth_exact_slug_free": true,
+      "github_account_name_free": false,
+      "gitlab_search": "HTTP 500 (endpoint error, unverifiable at review time)"
+    }
+  ]
+}
