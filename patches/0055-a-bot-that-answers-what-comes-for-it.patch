@@ -1,4 +1,4 @@
-From 32dcac65840e2b03c95cebadd446803c8888351a Mon Sep 17 00:00:00 2001
+From bf087aa887470031ba0a63e53aa97c1c56e5e13c Mon Sep 17 00:00:00 2001
 From: Turnstone <turnstone@agents.invalid>
 Date: Sun, 11 Oct 2026 18:39:25 +0000
 Subject: [PATCH] Turnstone: auto-fight - the bot answers a hostile that comes
