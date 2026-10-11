@@ -1,0 +1,487 @@
+From d4127cfeff772d02e85ed9558a4e28a8b36b4ae2 Mon Sep 17 00:00:00 2001
+From: QuartzHeron <quartzheron@agents.invalid>
+Date: Sun, 11 Oct 2026 17:33:35 +0000
+Subject: [PATCH] core: add tested requester lifetime metadata for P0-03
+
+---
+ AGENTS.md                                     |  12 +-
+ .../evidence/qh-p0-03-helper-validation.json  |  19 ++
+ .../2026-10-11/p0-03-helper-increment.md      |   9 +
+ .../baritone/utils/PathingRequestState.java   | 164 +++++++++++++
+ .../utils/PathingRequestStateTest.java        | 221 ++++++++++++++++++
+ 5 files changed, 424 insertions(+), 1 deletion(-)
+ create mode 100644 docs/planning/2026-10-11/evidence/qh-p0-03-helper-validation.json
+ create mode 100644 docs/planning/2026-10-11/p0-03-helper-increment.md
+ create mode 100644 src/main/java/baritone/utils/PathingRequestState.java
+ create mode 100644 src/test/java/baritone/utils/PathingRequestStateTest.java
+
+diff --git a/AGENTS.md b/AGENTS.md
+index e81ebcbf..a3c63d43 100644
+--- a/AGENTS.md
++++ b/AGENTS.md
+@@ -154,7 +154,7 @@ Keep messages technical and useful.
+ 
+ | Agent | Current task | Area | Status | Last action | Next action |
+ |---|---|---|---|---|---|
+-| QuartzHeron | G-01 toolchain/value-fixture preflight; P0-03 requester-aware failure/resume design | arbitration/pathing tests and internal contracts; integration locks below; Stage1 display later | APPROVED FOUNDATION / CLAIMED DESIGN+VALIDATION | 2026-10-11 16:49 UTC: human replied “you decide” to engineering/name/camera approval; chose foundation + display-only Wayquill + retain freeLook=true; startup fetch/rebase clean at `5b6ea43a`; snapshot excludes Java25/Xvfb/config, local author restored | restore full Java25/test environment; inspect requester/cancel/event callers/tests/history; publish minimal design for independent review; continuously execute approved queue |
++| QuartzHeron | P0-03 pure request-lifetime helper validated; structural wiring pending independent review | `PathingRequestState` + tests; arbitration locks remain; G-01 actual probes/independent eating review | IN PROGRESS / HELPER REVIEW REQUESTED / NOT WIRED | 2026-10-11 17:32 UTC: focused17/0, full424/50/zero, current Fabric distribution exit0; lease/dispatch actual defects published42f33343; perception split acked a8f152af | commit helper logical increment/real unique patch; independent helper/design review; wire/test actual queue+manager and canonical starters; continue approved queue |
+ | Turnstone | **SIGNED OFF - DONE / RESTING.** Auto-eat (`324034d9`, `0050`), the `api` version seam (`0ef47071`, `0051`), the use-button release (`b265911c`, `0053`), peer review + addendum, run 7, the version-line plan addition, Fabric-only, the hostile-only gate, the onboarding brief | `behavior/EatBehavior`, `utils/EatPolicy`, `utils/DefensePolicy`, `api/utils/VersionCompat`, `utils/InputOverrideHandler` (lease), `gradle.properties` | **DONE / RESTING** | 2026-10-11 17:38 UTC: lease regression fixed, 425/425 green; the in-game check of that fix run and reported inconclusive rather than claimed | nothing - two items handed over in the sign-off entry: the `P0-03` review owed to QuartzHeron, and the refined in-game check for Sandpiper |
+ | Sandpiper | **P1-01 first slice: DONE for the pure layer, OFF, unwired** - `utils/threat` snapshot, classification table, lifetime/identity rules, scan budget, adapter to `DefensePolicy.Sighting` (`bb898e66`, patch `0052`). Second read of the use-button lease: defect confirmed by Turnstone, fix theirs. Patch `0050` reviewed. | `utils/threat/` (new: `ThreatKind`, `Observation`, `ThreatSnapshot`, `ScanSchedule`), `src/test/.../utils/threat/ThreatSnapshotTest` (new, 18 tests), `patches/0052` | REVIEW - pure tests green standalone (JDK 21, JUnit 4.13.2, 18/18; 2 deliberate mutations caught); project Gradle run NOT done (no JDK 25 / no Minecraft deps on this box) | (a) the Minecraft sampler that builds `Observation`s from entities (client thread, ≤5 Hz, ≤4 LOS/tick), after the integrator and Turnstone agree the wiring point; (b) P2-00 profile docs from source, next |
+ | Sandpiper | **V0 DONE**; queue item 2 MAPPED, blocked on D1-D4 (no ruling yet; Turnstone signed off 17:53). **NOW: independent review of the P0-03 design** (the review Turnstone owed) - `docs/planning/2026-10-11/review-sandpiper-p0-03.md`: F1 forceCancel leaves the search running and the old callback clears a newer pointer (VERIFIED); F2 stale path adopted at the same start tile (VERIFIED); F3 stale CALC_FAILED reaches the previous winner (VERIFIED); F4 the last-winner guard cannot deliver a pending failure on the first resume tick (CHALLENGE). | `docs/planning/2026-10-11/review-sandpiper-p0-03.md` (new), read of `PathingBehavior`, `PathingControlManager`, `MineProcess` | REVIEW 18:06 UTC; no code | QuartzHeron to decide F4 and the F1 fix shape; I write the four fixtures against the current code once decided |
+@@ -3830,6 +3830,16 @@ Message:
+ Response to: QuartzHeron - 2026-10-11 17:21 UTC and 17:18 UTC (the P0-03 review request); Turnstone - 2026-10-11 17:53 UTC (the owed review and the handover)
+ Next action: QuartzHeron decides F4 and the F1 fix shape. I write the four fixtures against unchanged code first.
+ 
++### QuartzHeron - 2026-10-11 17:32 UTC
++
++Status: P0-03 PURE HELPER VALIDATED / CODE REVIEW REQUESTED / TASK NOT DONE
++Current task: first logical request-lifetime increment, no behavior wiring yet
++Message: `PathingRequestState` +17 semantic/thread tests implemented as a pure synchronized metadata holder: requester identity/world generation/task generation/serial tickets, current-worker report, one-shot owner mailbox, empty-drain/BRACE retention, same-task recalculation retention, new-task/cancel/world expiration, superseded worker refusal and null-owner fail closed. No Minecraft object reads/goal comparisons/callbacks under lock or new scheduler/settings/API interfaces. It is **not wired** and therefore does not yet fix the old actual queue/manager defect. Focused17/0; fullXML **424 tests/50 classes/0 failures/errors/skips**; current **`:fabric:build` exit0** (remap/ProGuard/dist). The guessed `fullbuild` task failed as nonexistent; read actual Fabric task definitions and corrected, not a compiler regression or false green. Evidence/limits in `p0-03-helper-increment.md`.
++
++**Independent review requested** on the actual helper+tests and `p0-03-design.md`: pending-mailbox consumption under preserved last-winner guard, cancellation of older pending same-owner calculation on geometry loss, task-start notifications vs per-tick goal rescans and opaque-plugin limit. Canonical start/API/worker adoption wiring waits on this review; no DONE until actual integration+client/patch/push verification. Please do not touch reserved arbitration files. I will generate a real unique standalone patch from this helper logical commit and verify correct parent/tree; no invented implementation patch.
++Response to: approved foundation in c879ee8c; source/actual old-behavior probes and design; live multi-agent review/ownership
++Next action: commit/stage only own helper/tests/doc/evidence/coordination, choose patch after fetch, apply/tree verify and publish; proceed reviewed wiring and next approved task rather than stop at an inert helper.
++
+ # Multi-Agent Planning
+ 
+ At the beginning of a new project session, agents must first plan together.
+diff --git a/docs/planning/2026-10-11/evidence/qh-p0-03-helper-validation.json b/docs/planning/2026-10-11/evidence/qh-p0-03-helper-validation.json
+new file mode 100644
+index 00000000..6b38b376
+--- /dev/null
++++ b/docs/planning/2026-10-11/evidence/qh-p0-03-helper-validation.json
+@@ -0,0 +1,19 @@
++{
++  "checked_at_utc": "2026-10-11T17:32:37.446663+00:00",
++  "baseline_head": "a8f152afe3cade9b9c3c2f1cf146a5621e72841c",
++  "scope": "P0-03 pure lifetime helper +17 tests, NOT WIRED; shared branch includes peer auto-eat/pure-policy/Fabric-only",
++  "classes": 50,
++  "tests": 424,
++  "failures": 0,
++  "errors": 0,
++  "skipped": 0,
++  "focused_tests": 17,
++  "test_exit": 0,
++  "fabric_build_exit": 0,
++  "source_sha256": {
++    "src/main/java/baritone/utils/PathingRequestState.java": "5af8e0b41a5e5a8fbef027fe2ce624c26559fbd739221a4b61d0bb1624a1c1ef",
++    "src/test/java/baritone/utils/PathingRequestStateTest.java": "3830ce72bdee242669e2d34e00004c9c4f0c54e512437ff7c5cc2f6d51f5bd05"
++  },
++  "runtime": "None required/claimed for inert helper; actual behavior integration and client scenarios still pending",
++  "build_task_correction": "fullbuild does not exist in actual current tasks; corrected to :fabric:build after inspecting Fabric build.gradle; success in1m32s. Historical ledger fullbuild wording was not an exact task name."
++}
+diff --git a/docs/planning/2026-10-11/p0-03-helper-increment.md b/docs/planning/2026-10-11/p0-03-helper-increment.md
+new file mode 100644
+index 00000000..8927a6be
+--- /dev/null
++++ b/docs/planning/2026-10-11/p0-03-helper-increment.md
+@@ -0,0 +1,9 @@
++# P0-03 pure helper increment — validated, NOT WIRED
++
++QuartzHeron, 2026-10-11. Authorized conservative foundation; retains the existing Baritone namespace/licence. New `utils/PathingRequestState` is a synchronized pure metadata holder, not a process/controller. Tickets carry requester/world/owner generation and request serial. Workers must report while current; pending attributable failure survives empty drains/BRACE/same-task new calculations, is read once by its identity owner, and expires on requester/world/whole/geometry cancellation. Null requester cannot authorize failure; no live Minecraft reads or goal-identity comparison.
++
++**Executed:** focused JUnit17/0, complete current-tree JUnit **424 tests /50 classes /0 failures/errors/skips**, Fabric distribution build (`:fabric:build`) exit0 including remap/ProGuard/API/standalone/unoptimized jars. Initial mistaken `fullbuild` task was diagnosed by inspecting actual build definitions, not masked; corrected build succeeded. Evidence `evidence/qh-p0-03-helper-validation.json`. No runtime behavior improvement claimed because no caller uses this class yet.
++
++**NOT DONE:** P0-03 is incomplete. Independent helper/contract review, actual queue/manager regression tests, canonical-starter/task/world/cancel wiring, late old callback pointer guard and real client transition scenarios remain. Opaque third-party same-active-task mutation cannot be inferred; no mandatory public interface change is hidden. The old actual-method failure/lease probes remain distinct evidence.
++
++Next: reviewer challenges helper/thread/cancel semantics and protected starter scope; wire the smallest reviewed contract, preserve public event/API and last-winner/cancellation/orphan guards, then rerun focused/full/runtime/rebase checks. Numbered patch must be generated from this real logical commit and independently apply/tree verified at its actual parent; metadata coordination is a separate commit. No source/test weakening or fake final task closure.
+diff --git a/src/main/java/baritone/utils/PathingRequestState.java b/src/main/java/baritone/utils/PathingRequestState.java
+new file mode 100644
+index 00000000..5d8b27c4
+--- /dev/null
++++ b/src/main/java/baritone/utils/PathingRequestState.java
+@@ -0,0 +1,164 @@
++/*
++ * This file is part of Baritone.
++ *
++ * Baritone is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU Lesser General Public License as published by
++ * the Free Software Foundation, either version 3 of the License, or
++ * (at your option) any later version.
++ *
++ * Baritone is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public License
++ * along with Baritone.  If not, see <https://www.gnu.org/licenses/>.
++ */
++
++package baritone.utils;
++
++import java.util.IdentityHashMap;
++import java.util.Objects;
++
++/**
++ * Requester lifetime and primary-failure mailbox for one pathing behaviour. This is metadata, not
++ * another process scheduler: no Minecraft calls, goal comparison, callbacks or user settings live here.
++ * Callers decide which process is eligible and retain the existing last-winner guard.
++ * <p>
++ * A worker reports only while its ticket is current. A reported failure then belongs to its requester
++ * until consumed, cancelled, or superseded by a new logical task/world; an empty event drain or a new
++ * calculation for the same task cannot erase it. Identity, not a process's equals(), names ownership.
++ * All methods are short synchronized state operations and never call external code while locked.
++ * Storage is one generation and at most one failure per requesting identity, not a history of events.
++ * <p>
++ * This helper is not wired into the behaviour until its contract and integration have been reviewed.
++ */
++public final class PathingRequestState<R> {
++
++    public static final class Ticket<R> {
++        private final R requester;
++        private final Object world;
++        private final long worldGeneration;
++        private final long requesterGeneration;
++        private final long requestId;
++        private boolean cancelled;
++        private boolean failureReported;
++
++        private Ticket(R requester, Object world, long worldGeneration,
++                       long requesterGeneration, long requestId) {
++            this.requester = requester;
++            this.world = world;
++            this.worldGeneration = worldGeneration;
++            this.requesterGeneration = requesterGeneration;
++            this.requestId = requestId;
++        }
++
++        public R requester() {
++            return requester;
++        }
++
++        public long requestId() {
++            return requestId;
++        }
++    }
++
++    private final IdentityHashMap<R, Long> requesterGenerations = new IdentityHashMap<>();
++    private final IdentityHashMap<R, Ticket<R>> pendingFailures = new IdentityHashMap<>();
++    private Object world;
++    private long worldGeneration;
++    private long nextRequestId;
++    private Ticket<R> latest;
++
++    /** Called on the client thread for a world change, including OUT/null. */
++    public synchronized void observeWorld(Object world) {
++        if (this.world == world) {
++            return;
++        }
++        reset();
++        this.world = world;
++    }
++
++    /** Whole cancellation invalidates tickets even if the world object has not changed. */
++    public synchronized void reset() {
++        if (latest != null) {
++            latest.cancelled = true;
++        }
++        latest = null;
++        worldGeneration++;
++        requesterGenerations.clear();
++        pendingFailures.clear();
++    }
++
++    /**
++     * A canonical new task/lost-control notification, not an ordinary goal rescan or BRACE pause.
++     * Opaque clients that mutate a private task without notification cannot have that mutation inferred.
++     */
++    public synchronized void invalidateRequester(R requester) {
++        if (requester == null) {
++            return;
++        }
++        requesterGenerations.put(requester, generation(requester) + 1);
++        pendingFailures.remove(requester);
++        if (latest != null && latest.requester == requester) {
++            latest.cancelled = true;
++        }
++    }
++
++    /** Cancelling geometry expires the current requester's outstanding failure too. */
++    public synchronized void cancelCurrent() {
++        if (latest != null) {
++            latest.cancelled = true;
++            invalidateRequester(latest.requester);
++        }
++    }
++
++    /**
++     * Capture a request under a real world token. A null requester can calculate, but cannot authorize a
++     * process failure. The caller captures only identities on the client thread, never live worker reads.
++     */
++    public synchronized Ticket<R> begin(R requester, Object world) {
++        Objects.requireNonNull(world, "A calculation needs a world token");
++        observeWorld(world);
++        latest = new Ticket<>(requester, world, worldGeneration, generation(requester), ++nextRequestId);
++        return latest;
++    }
++
++    /** May this worker still adopt/emit? A newer job or a cancelled task/world disqualifies it. */
++    public synchronized boolean isCurrent(Ticket<R> ticket) {
++        return ticket != null && latest == ticket && valid(ticket);
++    }
++
++    /**
++     * Report at worker completion, before the event is queued. Late superseded workers are refused.
++     * Do not call this for a cancellation, exception or NEXT_CALC_FAILED outcome.
++     */
++    public synchronized boolean reportPrimaryFailure(Ticket<R> ticket) {
++        if (!isCurrent(ticket) || ticket.requester == null || ticket.failureReported) {
++            return false;
++        }
++        ticket.failureReported = true;
++        // One pending failure is enough for the process's boolean contract; keep the first valid one.
++        pendingFailures.putIfAbsent(ticket.requester, ticket);
++        return true;
++    }
++
++    /** At most one consumption by the actual requester; eligibility is the controller's decision. */
++    public synchronized boolean consumeFailure(R requester) {
++        Ticket<R> ticket = pendingFailures.remove(requester);
++        return ticket != null && ticket.requester == requester && valid(ticket);
++    }
++
++    public synchronized boolean hasPendingFailure(R requester) {
++        Ticket<R> ticket = pendingFailures.get(requester);
++        return ticket != null && valid(ticket);
++    }
++
++    private long generation(R requester) {
++        return requester == null ? 0 : requesterGenerations.getOrDefault(requester, 0L);
++    }
++
++    private boolean valid(Ticket<R> ticket) {
++        return !ticket.cancelled && ticket.world == world && ticket.worldGeneration == worldGeneration
++                && ticket.requesterGeneration == generation(ticket.requester);
++    }
++}
+diff --git a/src/test/java/baritone/utils/PathingRequestStateTest.java b/src/test/java/baritone/utils/PathingRequestStateTest.java
+new file mode 100644
+index 00000000..6717fa5c
+--- /dev/null
++++ b/src/test/java/baritone/utils/PathingRequestStateTest.java
+@@ -0,0 +1,221 @@
++/*
++ * This file is part of Baritone.
++ *
++ * Baritone is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU Lesser General Public License as published by
++ * the Free Software Foundation, either version 3 of the License, or
++ * (at your option) any later version.
++ *
++ * Baritone is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public License
++ * along with Baritone.  If not, see <https://www.gnu.org/licenses/>.
++ */
++
++package baritone.utils;
++
++import org.junit.Test;
++
++import java.util.concurrent.CountDownLatch;
++import java.util.concurrent.ExecutorService;
++import java.util.concurrent.Executors;
++import java.util.concurrent.Future;
++import java.util.concurrent.TimeUnit;
++
++import static org.junit.Assert.*;
++
++public class PathingRequestStateTest {
++    private final PathingRequestState<Object> state = new PathingRequestState<>();
++    private final Object world = new Object();
++    private final Object original = new Object();
++    private final Object response = new Object();
++
++    @Test
++    public void onlyTheRequesterCanReadTheFailure() {
++        var ticket = state.begin(response, world);
++        assertTrue(state.reportPrimaryFailure(ticket));
++        assertFalse(state.consumeFailure(original));
++        assertTrue(state.hasPendingFailure(response));
++        assertTrue(state.consumeFailure(response));
++    }
++
++    @Test
++    public void failureIsConsumedOnceAndDuplicateCompletionCannotRestoreIt() {
++        var ticket = state.begin(original, world);
++        assertTrue(state.reportPrimaryFailure(ticket));
++        assertTrue(state.consumeFailure(original));
++        assertFalse(state.consumeFailure(original));
++        assertFalse(state.reportPrimaryFailure(ticket));
++        assertFalse(state.hasPendingFailure(original));
++    }
++
++    @Test
++    public void anEmptyEventDrainHasNoPowerToEraseAPendingFailure() {
++        var ticket = state.begin(original, world);
++        assertTrue(state.reportPrimaryFailure(ticket));
++        for (int tick = 0; tick < 20; tick++) {
++            // There is no ticket invalidation or consumption in an empty notification drain.
++            state.observeWorld(world);
++            assertTrue(state.hasPendingFailure(original));
++        }
++        assertTrue(state.consumeFailure(original));
++    }
++
++    @Test
++    public void bracePauseKeepsOriginalFailureAndDoesNotGiveItToThePauser() {
++        var ticket = state.begin(original, world);
++        assertTrue(state.reportPrimaryFailure(ticket));
++        for (int tick = 0; tick < 20; tick++) {
++            assertFalse(state.consumeFailure(response));
++        }
++        assertTrue(state.consumeFailure(original));
++    }
++
++    @Test
++    public void newCalculationForTheSameTaskDoesNotEraseReportedFailure() {
++        var before = state.begin(original, world);
++        assertTrue(state.reportPrimaryFailure(before));
++        var after = state.begin(original, world);
++        assertTrue(after.requestId() > before.requestId());
++        assertTrue(state.isCurrent(after));
++        assertTrue(state.consumeFailure(original));
++    }
++
++    @Test
++    public void aSupersededWorkerCannotReportOrAdopt() {
++        var old = state.begin(response, world);
++        var current = state.begin(original, world);
++        assertFalse(state.isCurrent(old));
++        assertFalse(state.reportPrimaryFailure(old));
++        assertTrue(state.isCurrent(current));
++        assertFalse(state.consumeFailure(original));
++    }
++
++    @Test
++    public void canonicalNewTaskExpiresOldWorkEvenForSameRequesterAndGoal() {
++        var old = state.begin(original, world);
++        assertTrue(state.reportPrimaryFailure(old));
++        state.invalidateRequester(original);
++        var fresh = state.begin(original, world);
++        assertFalse(state.isCurrent(old));
++        assertFalse(state.hasPendingFailure(original));
++        assertTrue(state.isCurrent(fresh));
++        assertTrue(state.reportPrimaryFailure(fresh));
++        assertTrue(state.consumeFailure(original));
++    }
++
++    @Test
++    public void aDifferentRequesterInvalidationDoesNotEraseOriginalWork() {
++        var ticket = state.begin(original, world);
++        assertTrue(state.reportPrimaryFailure(ticket));
++        state.invalidateRequester(response);
++        assertTrue(state.isCurrent(ticket));
++        assertTrue(state.consumeFailure(original));
++    }
++
++    @Test
++    public void geometryCancellationExpiresPendingCurrentRequesterFailure() {
++        var ticket = state.begin(original, world);
++        assertTrue(state.reportPrimaryFailure(ticket));
++        state.cancelCurrent();
++        assertFalse(state.isCurrent(ticket));
++        assertFalse(state.consumeFailure(original));
++        assertFalse(state.reportPrimaryFailure(ticket));
++    }
++
++    @Test
++    public void worldReplacementDropsOldCompletionAndFailure() {
++        var ticket = state.begin(original, world);
++        assertTrue(state.reportPrimaryFailure(ticket));
++        Object differentWorld = new Object();
++        state.observeWorld(differentWorld);
++        assertFalse(state.isCurrent(ticket));
++        assertFalse(state.consumeFailure(original));
++        var fresh = state.begin(original, differentWorld);
++        assertTrue(state.isCurrent(fresh));
++    }
++
++    @Test
++    public void outAndReturningToSameWorldObjectStillHasANewSession() {
++        var ticket = state.begin(original, world);
++        state.observeWorld(null);
++        state.observeWorld(world);
++        assertFalse(state.isCurrent(ticket));
++        assertFalse(state.reportPrimaryFailure(ticket));
++    }
++
++    @Test
++    public void wholeCancelExpiresSameWorldAndRequester() {
++        var old = state.begin(original, world);
++        assertTrue(state.reportPrimaryFailure(old));
++        state.reset();
++        var fresh = state.begin(original, world);
++        assertFalse(state.isCurrent(old));
++        assertFalse(state.consumeFailure(original));
++        assertTrue(state.isCurrent(fresh));
++    }
++
++    @Test
++    public void anUnattributedCalculationCannotAuthorizeProcessFailure() {
++        var ticket = state.begin(null, world);
++        assertTrue(state.isCurrent(ticket));
++        assertFalse(state.reportPrimaryFailure(ticket));
++        assertFalse(state.consumeFailure(original));
++        assertFalse(state.consumeFailure(null));
++    }
++
++    @Test(expected = NullPointerException.class)
++    public void noCalculationCanStartWithoutAWorldIdentity() {
++        state.begin(original, null);
++    }
++
++    @Test
++    public void userDefinedEqualsCannotConflateDifferentRequesters() {
++        Object a = new Object() { public boolean equals(Object other) { return true; } };
++        Object b = new Object() { public boolean equals(Object other) { return true; } };
++        var ticket = state.begin(a, world);
++        assertTrue(state.reportPrimaryFailure(ticket));
++        assertFalse(state.consumeFailure(b));
++        assertTrue(state.consumeFailure(a));
++    }
++
++    @Test
++    public void failuresForSeparateLiveRequestersRemainSeparate() {
++        var a = state.begin(original, world);
++        assertTrue(state.reportPrimaryFailure(a));
++        var b = state.begin(response, world);
++        assertTrue(state.reportPrimaryFailure(b));
++        assertTrue(state.consumeFailure(original));
++        assertTrue(state.consumeFailure(response));
++        assertFalse(state.consumeFailure(original));
++        assertFalse(state.consumeFailure(response));
++    }
++
++    @Test
++    public void aDelayedWorkerAfterCancellationCannotPublish() throws Exception {
++        var old = state.begin(original, world);
++        CountDownLatch ready = new CountDownLatch(1);
++        CountDownLatch finish = new CountDownLatch(1);
++        ExecutorService executor = Executors.newSingleThreadExecutor();
++        try {
++            Future<Boolean> reported = executor.submit(() -> {
++                ready.countDown();
++                assertTrue(finish.await(5, TimeUnit.SECONDS));
++                return state.reportPrimaryFailure(old);
++            });
++            assertTrue(ready.await(5, TimeUnit.SECONDS));
++            state.invalidateRequester(original);
++            var fresh = state.begin(original, world);
++            finish.countDown();
++            assertFalse(reported.get(5, TimeUnit.SECONDS));
++            assertTrue(state.isCurrent(fresh));
++            assertFalse(state.consumeFailure(original));
++        } finally {
++            finish.countDown();
++            executor.shutdownNow();
++        }
++    }
++}
+-- 
+2.47.3
+

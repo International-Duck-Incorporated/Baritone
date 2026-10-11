@@ -1,0 +1,11 @@
+{
+  "checked_at_utc": "2026-10-11T18:38:27.036203+00:00",
+  "patch": "patches/0054-requester-lifetime-metadata-and-tests.patch",
+  "logical_commit": "d4127cfeff772d02e85ed9558a4e28a8b36b4ae2",
+  "actual_parent": "b590b2cac3cb82f927d2f8f9e2e3f54e4ff5f20a",
+  "applied_tree": "2a93471cf7c64ead6a3ee2e484d4b900f207ddbf",
+  "expected_tree": "2a93471cf7c64ead6a3ee2e484d4b900f207ddbf",
+  "apply_check": true,
+  "exact_tree": true,
+  "scope": "real code+tests+docs/coordination, no self-patch; last rebase was peer source-review/doc-only"
+}

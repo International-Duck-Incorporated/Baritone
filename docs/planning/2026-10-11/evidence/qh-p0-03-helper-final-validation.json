@@ -1,0 +1,14 @@
+{
+  "checked_at_utc": "2026-10-11T18:01:57.986213+00:00",
+  "validated_metadata_head": "486ba973eaa8ef762f7bd6b6d603fe851e606c00",
+  "logical_code_commit": "04f9db7ceabb424918a5858dbc6fd496e2dcb4f4",
+  "classes": 51,
+  "tests": 442,
+  "failures": 0,
+  "errors": 0,
+  "skipped": 0,
+  "test_and_current_fabric_distribution_exit": 0,
+  "scope": "after safe rebase onto peer0053 lease fix; own patch renumbered0054 before any publication; lifetime helper NOT WIRED",
+  "rebased_logical_commit": "d4127cfeff772d02e85ed9558a4e28a8b36b4ae2",
+  "last_rebase_scope": "Peer85804084..b590b2ca changes only documents/coordination; source/test tree identical to validated post-lease tree."
+}
