@@ -155,7 +155,7 @@ Keep messages technical and useful.
 | Agent | Current task | Area | Status | Last action | Next action |
 |---|---|---|---|---|---|
 | QuartzHeron | G-01 toolchain/value-fixture preflight; P0-03 requester-aware failure/resume design | arbitration/pathing tests and internal contracts; integration locks below; Stage1 display later | APPROVED FOUNDATION / CLAIMED DESIGN+VALIDATION | 2026-10-11 16:49 UTC: human replied “you decide” to engineering/name/camera approval; chose foundation + display-only Wayquill + retain freeLook=true; startup fetch/rebase clean at `5b6ea43a`; snapshot excludes Java25/Xvfb/config, local author restored | restore full Java25/test environment; inspect requester/cancel/event callers/tests/history; publish minimal design for independent review; continuously execute approved queue |
-| Turnstone | **Version line (V0 measured: 6 symbols in 3 files), Fabric-only (first line landed), hostile-only defence gate (`DefensePolicy`, 16 tests)** | `gradle.properties` (`available_loaders`), `utils/DefensePolicy`; `docs/planning/2026-10-11/plan-addendum-versions-fabric-defend.md`; earlier: `behavior/EatBehavior`, `utils/EatPolicy`, `utils/InputOverrideHandler` | IMPLEMENTING | 2026-10-11 17:40 UTC: drift measured at six symbols in three files, all glue - multiversion build withdrawn; Fabric-only unblocks the version probe (`:forge` was pinned to 26.3); hostile-only classifier landed with 16 tests, not yet wired | probe 26.2/26.1.2, then the six-accessor seam; swing for `DefensePolicy` after that |
+| Turnstone | **SIGNED OFF - DONE / RESTING.** Auto-eat (`324034d9`, `0050`), the `api` version seam (`0ef47071`, `0051`), the use-button release (`b265911c`, `0053`), peer review + addendum, run 7, the version-line plan addition, Fabric-only, the hostile-only gate, the onboarding brief | `behavior/EatBehavior`, `utils/EatPolicy`, `utils/DefensePolicy`, `api/utils/VersionCompat`, `utils/InputOverrideHandler` (lease), `gradle.properties` | **DONE / RESTING** | 2026-10-11 17:38 UTC: lease regression fixed, 425/425 green; the in-game check of that fix run and reported inconclusive rather than claimed | nothing - two items handed over in the sign-off entry: the `P0-03` review owed to QuartzHeron, and the refined in-game check for Sandpiper |
 | Sandpiper | **P1-01 first slice: DONE for the pure layer, OFF, unwired** - `utils/threat` snapshot, classification table, lifetime/identity rules, scan budget, adapter to `DefensePolicy.Sighting` (`bb898e66`, patch `0052`). Second read of the use-button lease: defect confirmed by Turnstone, fix theirs. Patch `0050` reviewed. | `utils/threat/` (new: `ThreatKind`, `Observation`, `ThreatSnapshot`, `ScanSchedule`), `src/test/.../utils/threat/ThreatSnapshotTest` (new, 18 tests), `patches/0052` | REVIEW - pure tests green standalone (JDK 21, JUnit 4.13.2, 18/18; 2 deliberate mutations caught); project Gradle run NOT done (no JDK 25 / no Minecraft deps on this box) | (a) the Minecraft sampler that builds `Observation`s from entities (client thread, ≤5 Hz, ≤4 LOS/tick), after the integrator and Turnstone agree the wiring point; (b) P2-00 profile docs from source, next |
 | Sandpiper (taking the open slot's queue, item 1) | **CLAIMED: V0 - probe 26.2 and 26.1.2** (`compileJava compileLaunchJava -Pminecraft_version=...`, JDK 25 installed this session) | `gradle.properties` (read only), `docs/planning/2026-10-11/plan-addendum-versions-fabric-defend.md` (V0 section) | CLAIMED 17:53 UTC | - | run both probes; publish results in Chat and in that doc's V0 section; then item 2 only if the probes are clean and no one else has taken it |
 | Godwit | The elytra wiring's second reader and the untouched-area audit - **both reported 2026-10-08 14:25 UTC** (wiring: no defect, the guard changed and the timing did not; audit: explore's per-tick goal is value-equal, mining's switch is head-gated at the hand, and the two elytra port TODOs name a version this branch has passed) | `HUMANLIKE.md`; `utils/InventoryTransaction` + `process/elytra` (review, closed); `ElytraProcess`/`ExploreProcess`/`MineProcess` (audit, closed); `ElytraProcess:317`/`:336` (next) | CLAIMED 2026-10-08 13:20 UTC; REVIEWED + AUDITED 14:25 UTC; pool item 7 answered 14:50 UTC (do not port as written - evidence in `Known Problems`); **CLOSED BY RECOVERY 2026-10-08 15:35 UTC** (Bittern, at the operator's instruction: box quiet since its 15:45 entry; every item complete or declined with records, all seven of its commits ancestored on the remote, patch `0030` verified - tree `b432516d`; patch sweep `0030`-`0037` and tip suite 42/347/0 green in the same pass) | joined; environment up; fourth independent green baseline (307/0, 37 classes on `7868b74b`); tip runs 41 classes / 338 tests / 0 / 0 / 0 at `ba46bfcd` (`/home/user/logs/test-review.log`), 42 / 342 / 0 / 0 / 0 at `fbacf48e` (`/home/user/logs/test-final.log`, 27s, after Curlew's `KeyWritesTest`) and **42 classes / 345 tests / 0 / 0 / 0 at `ce717025`** (`/home/user/logs/test-tip.log`, 27s - Merlin's three new fuzz-wiring tests, run by a box that did not write them); the version's own class files are readable with `javap` from the unimined cache, so version questions do not need a client | nothing - recovered and closed (Chat 15:35 UTC); item 8 stays in the pool with his reason; the second reader for `0034`-`0037` stands for a fresh box |
@@ -3739,6 +3739,50 @@ Current task: V0 - probe 26.2 and 26.1.2 (item 1 of the open-slot queue)
 Message: Taking item 1 of the open slot's queue, as Turnstone asked. The probe is a compile only (`compileJava compileLaunchJava`) per version, using the same low-memory settings Turnstone recorded. JDK 25 is now installed on this box. Results will be published here, with raw logs committed under `docs/planning/2026-10-11/evidence/`, and I will not claim the versions run until a game run says so.
 Response to: Turnstone - 2026-10-11 17:31 UTC (the queue and its order)
 Next action: run the 26.2 probe, then 26.1.2, and record the exact result.
+
+### Turnstone - 2026-10-11 17:53 UTC
+
+Status: **SIGNING OFF - DONE / RESTING.** Nothing open of mine is half-finished; nothing of mine is unpushed.
+Current task: none. Two items are owed and both are handed over below, named, rather than left implied.
+Message:
+- **The in-game check of the lease fix: I ran it, and the honest result is INCONCLUSIVE - it did not confirm the
+  fix and it did not refute it, so I am not calling it either.** The scenario Sandpiper specified (idle bot,
+  hungry, bread in hand, watch the head) was set up and the meal happened (bread 5 -> 4, confirmed in the game's
+  own count). The observable was flat **on both sides of the meal**: over 2419 trace samples spanning 17:49:35 to
+  17:52:26 the yaw and pitch were **exactly 0.00 throughout - one distinct value each, before the meal and after
+  it** - and adding a passive mob four blocks to the side (`NoAI` chicken) changed nothing. So in this
+  configuration there is **no idle head movement to lose**, and the test cannot tell a latched bot from an
+  unlatched one.
+- **That is worth recording anyway, because it narrows the defect's real reach.** My own earlier runs today did
+  show idle movement - run 7's post-goal burst, pitch 39.8 -> 24.9 -> -20.1 -> -29.3 -> back to 40 - but that
+  came **right after a `#goto` ended**, not while standing with no job at all. The hypothesis that fits both
+  observations: the idle look produces movement at the **handover**, the moment a job gives the body back, and
+  not continuously while standing. If that is right, the discriminating test is not "eat, then watch" but "let a
+  short job END, then eat, then watch". **Sandpiper: that goes to you with my notes rather than my guess**,
+  because you designed the check and will know in one attempt whether the handover is the trigger. The source fix
+  stands regardless: the predicate no longer reads a key we are holding, and the suite is green.
+- **Delivered this session, with pointers so nobody has to dig:** the peer review and its lifecycle addendum
+  (`dd9ab8fd`, `071411ff`); run 7 with the fifty-block walk and the CI check (`e6b179e5`); **auto-eat**
+  (`324034d9`, patch `0050`), verified in game at the threshold; the version-line plan addition with Fabric-only
+  and the hostile-only gate (`15aacdc0`); **the version seam for the five `api` symbols** (`0ef47071`, patch
+  `0051`) with my own drift number retracted and the real one measured at 71 sites; **the use-button release**
+  (`b265911c`, patch `0053`); the onboarding brief for the two arrivals (`862a1b61`); and the answers Sandpiper
+  was blocked on (`e968dae6`).
+- **OWED, and this is the one that matters: QuartzHeron's `P0-03` review.** They asked twice, specifically for a
+  challenge to **paused-failure consumption under the last-winner guard** and the **opaque-plugin lifetime limit**
+  their own design calls unsolved. I did not do it, and I would rather say so here than let a sign-off imply it
+  was covered. It is the first thing I would pick up on a return, and it is what stands between the version work
+  and any response that takes the path over - DEFEND's second increment and AVOID both wait on it.
+- **Handed over, all unclaimed, all with evidence in the repo:** (1) the `main` half of the version seam, the
+  **19 non-renderer symbols**, grouped by cause in `evidence/turnstone-261-main-compile.log`; (2) the **renderer
+  port, 52 of the 71 sites**, its own axis and the largest single piece of the version work; (3) the **V0 probes
+  for 26.2 and 26.1.2**, minutes each, command in my 17:31 UTC entry; (4) wiring Sandpiper's perception snapshot
+  to `DefensePolicy`, which waits on `P0-03`; (5) the refined in-game check above.
+- **State at sign-off:** tree clean, local `26.3` matches the remote, patch pointers `0051` and `0053` rechecked
+  after the rebases that rewrote their commits (Lapwing's audit lesson), client and Xvfb stopped, credential
+  nowhere it should not be. **425 tests, 0 failures** on the tip.
+Response to: the operator - "alright if your part is done you can sign off" (2026-10-11)
+Next action: none. If the box comes back to me: the `P0-03` review first, then the 19 non-renderer symbols.
 
 # Multi-Agent Planning
 
