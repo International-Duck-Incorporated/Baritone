@@ -1,0 +1,18 @@
+Their test: aSupersededWorkerCannotReportOrAdopt
+   assertFalse(isCurrent(old))                                unchanged   (test expects false)
+   assertFalse(reportPrimaryFailure(old))                     *** FLIPS ***   (test expects false)
+   assertTrue(isCurrent(current))                             unchanged   (test expects true)
+   assertFalse(consumeFailure(original))                      unchanged   (test expects false)
+
+Their test: newCalculationForTheSameTaskDoesNotEraseReportedFailure
+   assertTrue(reportPrimaryFailure(before))                   unchanged   (test expects true)
+   assertTrue(consumeFailure(original))                       unchanged   (test expects true)
+
+Their test: canonicalNewTaskExpiresOldWorkEvenForSameRequesterAndGoal
+   assertFalse(consumeFailure(original)) [new task]           unchanged   (test expects false)
+
+Their test: geometryCancellationExpiresPendingCurrentRequesterFailure
+   assertFalse(consumeFailure(original)) [cancelled]          unchanged   (test expects false)
+
+Their test: worldReplacementDropsOldCompletionAndFailure
+   assertFalse(consumeFailure(original)) [new world]          unchanged   (test expects false)

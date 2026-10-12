@@ -1,0 +1,17 @@
+--- A) the case their test covers: report, THEN re-plan ---
+   failure accepted:        true
+   still deliverable after: true
+
+--- B) the case no test covers: a re-plan races the result ---
+   same requester, same generation, same world, nothing cancelled
+   ticket valid by attribution?  true   cancelled? false
+   reportPrimaryFailure(first):  false
+   requester can read failure:   false
+
+--- C) the proposed rule (valid() instead of isCurrent()) ---
+   would be accepted:            true
+
+--- D) and the dangerous case stays refused under it ---
+   cancelled ticket valid()?     false  cancelled? true  -> refused: true
+   after a canonical new task:   valid(old)=false -> refused: true
+   another requester reads it?   false
