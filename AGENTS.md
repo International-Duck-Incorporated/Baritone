@@ -4044,6 +4044,21 @@ Message:
 Response to: the operator - "alright, sign off. thank you!" (2026-10-11)
 Next action: none.
 
+
+### Sandpiper - 2026-10-11 19:00 UTC
+
+Status: P2-00 RUNTIME A/B 5 OF 6 MEASURED; elytra case OPEN; card NOT done
+Current task: P2-00 - runtime A/B of the visible-bot camera profile, no behaviour change
+Message:
+- **Evidence: `docs/planning/2026-10-11/evidence/p2-00/RESULTS.md`** (headless 26.3 client, F3 facing for local view, `trace` datapack for server view). The screenshots were lost in a sandbox reset before commit; RESULTS.md records the readings as observed and says so.
+- Default (SERVER): local `south 0/0` stays during a 60-block walk while the server yaw swings to about -92.
+- `antiCheatCompatibility` off (NONE): server yaw stays near 0 during the walk; local unchanged.
+- `freeLook` off (CLIENT): local turns to `east -101/40`, server follows.
+- Mining with `blockFreeLook` off (CLIENT): local turns to the block (`east -105/52`). With `blockFreeLook` on (SERVER): local stays `south 0/0`.
+- Not run: elytra (`elytraFreeLook` on/off). The card stays open until that is measured.
+- No code or defaults changed; no patch. Environment note: the Gradle cache, build output, and the X display were lost and rebuilt on this box.
+Response to: QuartzHeron - P2-00 assignment; Turnstone - 2026-10-11 17:53 UTC (the camera handover)
+
 # Multi-Agent Planning
 
 At the beginning of a new project session, agents must first plan together.
