@@ -155,7 +155,7 @@ Keep messages technical and useful.
 | Agent | Current task | Area | Status | Last action | Next action |
 |---|---|---|---|---|---|
 | QuartzHeron | P0-03 pure request-lifetime helper validated; structural wiring pending independent review | `PathingRequestState` + tests; arbitration locks remain; G-01 actual probes/independent eating review | IN PROGRESS / HELPER REVIEW REQUESTED / NOT WIRED | 2026-10-11 17:32 UTC: focused17/0, full424/50/zero, current Fabric distribution exit0; lease/dispatch actual defects published42f33343; perception split acked a8f152af | commit helper logical increment/real unique patch; independent helper/design review; wire/test actual queue+manager and canonical starters; continue approved queue |
-| Turnstone | **SIGNED OFF - DONE / RESTING.** Auto-eat (`324034d9`, `0050`), the `api` version seam (`0ef47071`, `0051`), the use-button release (`b265911c`, `0053`), peer review + addendum, run 7, the version-line plan addition, Fabric-only, the hostile-only gate, the onboarding brief | `behavior/EatBehavior`, `utils/EatPolicy`, `utils/DefensePolicy`, `api/utils/VersionCompat`, `utils/InputOverrideHandler` (lease), `gradle.properties` | **DONE / RESTING** | 2026-10-11 17:38 UTC: lease regression fixed, 425/425 green; the in-game check of that fix run and reported inconclusive rather than claimed | nothing - two items handed over in the sign-off entry: the `P0-03` review owed to QuartzHeron, and the refined in-game check for Sandpiper |
+| Turnstone | **SIGNED OFF - DONE / RESTING, nothing open, nothing unpushed.** Auto-eat (`324034d9`, `0050`), auto-fight `DefendBehavior` opt-in verified in game (`bf087aa8`, `0055`), the use-button lease release (`b265911c`, `0053`), the `api` version seam (`0ef47071`, `0051`), the hostile-only classifier, Fabric-only, the drift measurement with my own number retracted, the peer review, and the `P0-03` review with an executed finding | `behavior/EatBehavior`, `behavior/DefendBehavior`, `utils/EatPolicy`, `utils/DefensePolicy`, `api/utils/VersionCompat`, `utils/InputOverrideHandler`, `gradle.properties` | **DONE / RESTING** | 2026-10-11: `P0-03` review delivered (`peer-review-turnstone-p0-03.md`), Finding 1 demonstrated by execution; push verified tip-to-tip | nothing - handover list in the sign-off entry: renderer port, the 19 non-renderer version symbols, DEFEND's second increment (gated on `P0-03`), the swing cadence |
 | Sandpiper | **P1-01 first slice: DONE for the pure layer, OFF, unwired** - `utils/threat` snapshot, classification table, lifetime/identity rules, scan budget, adapter to `DefensePolicy.Sighting` (`bb898e66`, patch `0052`). Second read of the use-button lease: defect confirmed by Turnstone, fix theirs. Patch `0050` reviewed. | `utils/threat/` (new: `ThreatKind`, `Observation`, `ThreatSnapshot`, `ScanSchedule`), `src/test/.../utils/threat/ThreatSnapshotTest` (new, 18 tests), `patches/0052` | REVIEW - pure tests green standalone (JDK 21, JUnit 4.13.2, 18/18; 2 deliberate mutations caught); project Gradle run NOT done (no JDK 25 / no Minecraft deps on this box) | (a) the Minecraft sampler that builds `Observation`s from entities (client thread, ≤5 Hz, ≤4 LOS/tick), after the integrator and Turnstone agree the wiring point; (b) P2-00 profile docs from source, next |
 | Sandpiper | **V0 DONE**; queue item 2 MAPPED, blocked on D1-D4 (no ruling yet; Turnstone signed off 17:53). **NOW: independent review of the P0-03 design** (the review Turnstone owed) - `docs/planning/2026-10-11/review-sandpiper-p0-03.md`: F1 forceCancel leaves the search running and the old callback clears a newer pointer (VERIFIED); F2 stale path adopted at the same start tile (VERIFIED); F3 stale CALC_FAILED reaches the previous winner (VERIFIED); F4 the last-winner guard cannot deliver a pending failure on the first resume tick (CHALLENGE). | `docs/planning/2026-10-11/review-sandpiper-p0-03.md` (new), read of `PathingBehavior`, `PathingControlManager`, `MineProcess` | REVIEW 18:06 UTC; no code | QuartzHeron to decide F4 and the F1 fix shape; I write the four fixtures against the current code once decided |
 | Sandpiper | **P2-00 DOCUMENTED; runtime A/B OWED (not done).** Camera profile documented from `LookBehavior.Target.Mode.resolve`, `wiki/Settings.md` Camera section added, no behaviour change. | `docs/planning/2026-10-11/p2-00-camera-profiles.md` (new), `wiki/Settings.md` | DOC 18:20 UTC; A/B owed | Runtime A/B run (default, blockFreeLook, antiCheat off, freeLook off, elytra) and evidence under `evidence/` |
@@ -4009,6 +4009,40 @@ Response to: QuartzHeron 17:21 UTC and `p0-03-design.md` (the review, asked twic
 done" (2026-10-11)
 Next action: push the moment the credential is back. After that nothing of mine is outstanding - DEFEND's second
 increment, the renderer port and the swing cadence are named, evidenced and unclaimed.
+
+### Turnstone - 2026-10-11 12:01 UTC
+
+Status: **SIGNED OFF - DONE / RESTING.** The operator asked for a sign-off and there is nothing of mine open,
+unpushed or half-finished.
+Message:
+- **Everything I claimed is delivered and on the remote, and everything I owe is paid.** The last outstanding
+  item was the `P0-03` review QuartzHeron asked for twice; it is at
+  `docs/planning/2026-10-11/peer-review-turnstone-p0-03.md` with Finding 1 **executed rather than argued**, and
+  the harness beside it in `evidence/`. The two things I had previously listed as owed - that review, and the
+  in-game check of my lease fix - are respectively done and reported, the second honestly as inconclusive
+  rather than dressed up.
+- **What is on this branch because of this window, with pointers:** auto-eat (`324034d9`, patch `0050`);
+  **auto-fight - `DefendBehavior`, opt-in, verified in game** (`bf087aa8`, patch `0055`); the use-button lease
+  release (`b265911c`, patch `0053`); the `api` version seam (`0ef47071`, patch `0051`); the hostile-only
+  classifier; Fabric-only; the onboarding brief; the drift measurement with my own earlier number retracted;
+  the peer review; and the `P0-03` review.
+- **Handed over, unclaimed, each with its evidence already in the repo:** the **renderer port** (52 of the 71
+  version sites - the thing that would actually make 26.1 and 26.2 load for a player); the `main` half of the
+  version seam (the 19 non-renderer symbols, grouped in
+  `evidence/turnstone-261-main-compile.log`); **DEFEND's second increment**, which needs `P0-03` closed because
+  pursuit takes the path; the swing-cadence measurement; and the refined in-game check of the lease fix, which
+  needs a job to *end* rather than an idle bot to stand.
+- **Where the ball is, for whoever reads this next:** `P0-03` Finding 1 is a decision for QuartzHeron, not a
+  task - their strict form and my narrow form both work, and the fixture should land either way. That decision
+  gates anything that takes the path over, which is the same gate as DEFEND's second increment.
+- **State at sign-off:** local `26.3` matches the remote, tree clean, no stray worktree, patch pointers
+  rechecked after every rebase that moved them, client and Xvfb stopped, and the credential was used only for
+  the push and removed afterwards - it appears in no file, no commit and no patch in this tree.
+- Thank you - to QuartzHeron for a design honest enough to review and for taking the strict-versus-narrow
+  question on the chin, to Sandpiper for finding a real regression in my eating code within an hour of
+  arriving, and to the operator for the scope calls that made auto-fight and the version line possible.
+Response to: the operator - "alright, sign off. thank you!" (2026-10-11)
+Next action: none.
 
 # Multi-Agent Planning
 
