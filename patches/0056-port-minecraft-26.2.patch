@@ -1,0 +1,532 @@
+From 82ede1bf67231a86dca5dd384ed315f9a8f6832c Mon Sep 17 00:00:00 2001
+From: 0xFFshell <pieterr.games@gmail.com>
+Date: Sun, 18 Oct 2026 19:12:44 +0200
+Subject: [PATCH] port: Minecraft 26.2 (down from 26.3)
+
+Revert the upstream 26.2->26.3 port commit 30176ed9 onto the 26.3 tip,
+keeping the fork's version-independent work:
+
+- keep VersionCompat seam call sites and Pair (Settings, BaritoneToast,
+  BlockOptionalMeta, api Pair users untouched)
+- keep available_loaders=fabric and mod_version=1.20.0; only swap versions
+- gradle.properties tail (nether_pathfinder/mixin/asm) restored, required
+  by build.gradle
+- era metadata: fabric.mod.json minecraft [26.2] / fabricloader >=0.19.3,
+  mods.toml versionRange=[26.2]
+- swing form restored to era: LocalPlayer#swing(InteractionHand), which on
+  26.2 sends ServerboundSwingPacket itself (no ServerboundPunchPacket exists)
+- ButtonWritesTest adapted: SHAPES pins the swing call site, BUTTONS watches
+  ServerboundSwingPacket, fidget skip renamed
+
+Validation: compileJava/compileLaunchJava/compileTestJava EXIT=0;
+./gradlew test 442 tests, 441 pass, 1 failure = ClickGatesTest
+(pre-existing Windows path-separator bug, file byte-identical to 26.3).
+---
+ fabric/src/main/resources/fabric.mod.json     |  4 +--
+ forge/src/main/resources/META-INF/mods.toml   |  2 +-
+ gradle.properties                             |  8 ++---
+ .../resources/META-INF/neoforge.mods.toml     |  2 +-
+ .../mixins/MixinClientPlayNetHandler.java     |  4 +--
+ .../launch/mixins/MixinRenderPipelines.java   |  2 +-
+ .../launch/mixins/MixinWorldRenderer.java     | 10 ++++---
+ .../java/baritone/behavior/LookBehavior.java  | 14 ++++-----
+ .../command/ExampleBaritoneControl.java       |  5 ++--
+ .../java/baritone/process/BuilderProcess.java |  2 +-
+ .../java/baritone/process/FarmProcess.java    | 15 ++++++++--
+ .../process/elytra/ElytraBehavior.java        |  3 +-
+ .../java/baritone/utils/BlockBreakHelper.java | 18 +++++------
+ .../java/baritone/utils/BlockPlaceHelper.java |  5 ++--
+ src/main/java/baritone/utils/IRenderer.java   | 30 +++++++------------
+ .../java/baritone/utils/PathRenderer.java     |  2 +-
+ .../utils/accessor/IRenderPipelines.java      |  2 +-
+ .../baritone/utils/pathing/Avoidance.java     |  4 +--
+ .../java/baritone/utils/ButtonWritesTest.java | 13 +++++---
+ 19 files changed, 72 insertions(+), 73 deletions(-)
+
+diff --git a/fabric/src/main/resources/fabric.mod.json b/fabric/src/main/resources/fabric.mod.json
+index 38ed3e5b..76da7a32 100644
+--- a/fabric/src/main/resources/fabric.mod.json
++++ b/fabric/src/main/resources/fabric.mod.json
+@@ -24,8 +24,8 @@
+       "mixins.baritone.json"
+   ],
+   "depends": {
+-    "fabricloader": ">=0.19.5",
+-    "minecraft": "~26.3"
++    "fabricloader": ">=0.19.3",
++    "minecraft": ["26.2"]
+   },
+   "custom": {
+     "modmenu": {
+diff --git a/forge/src/main/resources/META-INF/mods.toml b/forge/src/main/resources/META-INF/mods.toml
+index c6d1f267..5328e7bb 100644
+--- a/forge/src/main/resources/META-INF/mods.toml
++++ b/forge/src/main/resources/META-INF/mods.toml
+@@ -35,6 +35,6 @@ A Minecraft pathfinder bot.
+ modId="minecraft"
+ mandatory=true
+ # This version range declares a minimum of the current minecraft version up to but not including the next major version
+-versionRange="[26.3, 26.4)"
++versionRange="[26.2]"
+ ordering="NONE"
+ side="BOTH"
+diff --git a/gradle.properties b/gradle.properties
+index 15fcf952..b8fcdd92 100644
+--- a/gradle.properties
++++ b/gradle.properties
+@@ -8,13 +8,13 @@ archives_base_name=baritone
+ 
+ java_version=25
+ 
+-minecraft_version=26.3
++minecraft_version=26.2
+ 
+-forge_version=66.0.2
++forge_version=65.0.3
+ 
+-neoforge_version=6-beta
++neoforge_version=11-beta
+ 
+-fabric_version=0.19.5
++fabric_version=0.19.3
+ 
+ nether_pathfinder_version=1.6
+ 
+diff --git a/neoforge/src/main/resources/META-INF/neoforge.mods.toml b/neoforge/src/main/resources/META-INF/neoforge.mods.toml
+index 567bd7ab..4eec7768 100644
+--- a/neoforge/src/main/resources/META-INF/neoforge.mods.toml
++++ b/neoforge/src/main/resources/META-INF/neoforge.mods.toml
+@@ -35,7 +35,7 @@ A Minecraft pathfinder bot.
+ modId="minecraft"
+ type="required"
+ # This version range declares a minimum of the current minecraft version up to but not including the next major version
+-versionRange="[26.3, 26.4)"
++versionRange="[26.2]"
+ ordering="NONE"
+ side="BOTH"
+ 
+diff --git a/src/launch/java/baritone/launch/mixins/MixinClientPlayNetHandler.java b/src/launch/java/baritone/launch/mixins/MixinClientPlayNetHandler.java
+index 729e397f..1985b315 100644
+--- a/src/launch/java/baritone/launch/mixins/MixinClientPlayNetHandler.java
++++ b/src/launch/java/baritone/launch/mixins/MixinClientPlayNetHandler.java
+@@ -108,8 +108,8 @@ public abstract class MixinClientPlayNetHandler extends ClientCommonPacketListen
+                         new ChunkEvent(
+                                 EventState.POST,
+                                 !packetIn.isSkippable() ? ChunkEvent.Type.POPULATE_FULL : ChunkEvent.Type.POPULATE_PARTIAL,
+-                                packetIn.x(),
+-                                packetIn.z()
++                                packetIn.getX(),
++                                packetIn.getZ()
+                         )
+                 );
+             }
+diff --git a/src/launch/java/baritone/launch/mixins/MixinRenderPipelines.java b/src/launch/java/baritone/launch/mixins/MixinRenderPipelines.java
+index 4f07497a..f5a8a6e9 100644
+--- a/src/launch/java/baritone/launch/mixins/MixinRenderPipelines.java
++++ b/src/launch/java/baritone/launch/mixins/MixinRenderPipelines.java
+@@ -18,7 +18,7 @@
+ package baritone.launch.mixins;
+ 
+ import baritone.utils.accessor.IRenderPipelines;
+-import com.mojang.renderpearl.api.pipeline.RenderPipeline;
++import com.mojang.blaze3d.pipeline.RenderPipeline;
+ import net.minecraft.client.renderer.RenderPipelines;
+ import org.spongepowered.asm.mixin.Final;
+ import org.spongepowered.asm.mixin.Mixin;
+diff --git a/src/launch/java/baritone/launch/mixins/MixinWorldRenderer.java b/src/launch/java/baritone/launch/mixins/MixinWorldRenderer.java
+index ee93e521..51bb7e3e 100644
+--- a/src/launch/java/baritone/launch/mixins/MixinWorldRenderer.java
++++ b/src/launch/java/baritone/launch/mixins/MixinWorldRenderer.java
+@@ -20,11 +20,13 @@ package baritone.launch.mixins;
+ import baritone.api.BaritoneAPI;
+ import baritone.api.IBaritone;
+ import baritone.api.event.events.RenderEvent;
++import com.mojang.blaze3d.buffers.GpuBufferSlice;
+ import com.mojang.blaze3d.resource.GraphicsResourceAllocator;
+ import com.mojang.blaze3d.vertex.PoseStack;
+-import com.mojang.renderpearl.api.buffers.GpuBufferSlice;
++import net.minecraft.client.DeltaTracker;
+ import net.minecraft.client.renderer.LevelRenderer;
+ import net.minecraft.client.renderer.state.level.CameraRenderState;
++import org.joml.Matrix4fc;
+ import org.joml.Vector4f;
+ import org.spongepowered.asm.mixin.Mixin;
+ import org.spongepowered.asm.mixin.injection.At;
+@@ -42,11 +44,11 @@ public class MixinWorldRenderer {
+             method = "render",
+             at = @At("RETURN")
+     )
+-    private void onStartHand(final GraphicsResourceAllocator resourceAllocator, final boolean renderOutline, final CameraRenderState cameraState, final GpuBufferSlice terrainFog, final Vector4f fogColor, final boolean shouldRenderSky, final boolean consistentDepthRequired, final CallbackInfo ci) {
++    private void onStartHand(final GraphicsResourceAllocator allocator, final DeltaTracker deltaTracker, final boolean outline, final CameraRenderState camera, final Matrix4fc modelViewMatrix, final GpuBufferSlice fog, final Vector4f fogColor, final boolean sky, final CallbackInfo ci) {
+         for (IBaritone ibaritone : BaritoneAPI.getProvider().getAllBaritones()) {
+             PoseStack poseStack = new PoseStack();
+-            poseStack.mulPose(cameraState.viewRotationMatrix);
+-            ibaritone.getGameEventHandler().onRenderPass(new RenderEvent(cameraState.cameraEntityPartialTicks, poseStack, cameraState.projectionMatrix));
++            poseStack.mulPose(modelViewMatrix);
++            ibaritone.getGameEventHandler().onRenderPass(new RenderEvent(deltaTracker.getGameTimeDeltaPartialTick(false), poseStack, camera.projectionMatrix));
+         }
+     }
+ }
+diff --git a/src/main/java/baritone/behavior/LookBehavior.java b/src/main/java/baritone/behavior/LookBehavior.java
+index fab34401..a7185b56 100644
+--- a/src/main/java/baritone/behavior/LookBehavior.java
++++ b/src/main/java/baritone/behavior/LookBehavior.java
+@@ -43,13 +43,11 @@ import baritone.behavior.look.TurnPace;
+ import baritone.behavior.look.Unattended;
+ import baritone.behavior.look.WalkGlance;
+ import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
+-import net.minecraft.network.protocol.game.ServerboundPunchPacket;
+ import net.minecraft.world.InteractionHand;
+ import net.minecraft.world.entity.Entity;
+ import net.minecraft.world.entity.LivingEntity;
+ import net.minecraft.world.entity.monster.Enemy;
+ import net.minecraft.world.entity.player.Player;
+-import net.minecraft.world.item.component.SwingAnimation;
+ import net.minecraft.world.phys.BlockHitResult;
+ import net.minecraft.world.phys.HitResult;
+ import net.minecraft.world.phys.Vec3;
+@@ -776,13 +774,11 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
+                 // idle body nobody comes back for is the same body that was waiting for the job.
+                 this.idleExpected = theirs ? camera : applied;
+                 if (this.idleFidget.take()) {
+-                    // A swing at nothing. It is sent as the animation packet and nothing else - no click goes
+-                    // out with it, so it cannot mine, place or break anything however the crosshair happens
+-                    // to be pointing, which is what makes it safe to do while Baritone is holding still on
+-                    // someone's behalf. The same two lines the block break helper sends for the arm that
+-                    // never moves while it mines.
+-                    ctx.player().swing(InteractionHand.MAIN_HAND, SwingAnimation.DEFAULT, false);
+-                    ctx.player().connection.send(ServerboundPunchPacket.INSTANCE);
++                    // A swing at nothing. Only the swing goes out with it - no click, so it cannot mine,
++                    // place or break anything however the crosshair happens to be pointing, which is what
++                    // makes it safe to do while Baritone is holding still on someone's behalf. The same
++                    // line the block break helper swings for the arm that never moves while it mines.
++                    ctx.player().swing(InteractionHand.MAIN_HAND);
+                 }
+                 break;
+             }
+diff --git a/src/main/java/baritone/command/ExampleBaritoneControl.java b/src/main/java/baritone/command/ExampleBaritoneControl.java
+index 12d9149f..82f1cc57 100644
+--- a/src/main/java/baritone/command/ExampleBaritoneControl.java
++++ b/src/main/java/baritone/command/ExampleBaritoneControl.java
+@@ -34,14 +34,13 @@ import baritone.behavior.Behavior;
+ import baritone.command.argument.ArgConsumer;
+ import baritone.command.argument.CommandArguments;
+ import baritone.command.manager.CommandManager;
+-import com.mojang.blaze3d.Blaze3D;
+ import net.minecraft.ChatFormatting;
+ import net.minecraft.network.chat.ClickEvent;
+ import net.minecraft.network.chat.Component;
+ import net.minecraft.network.chat.HoverEvent;
+ import net.minecraft.network.chat.MutableComponent;
++import net.minecraft.util.Util;
+ 
+-import java.net.URI;
+ import java.util.List;
+ import java.util.Locale;
+ import java.util.stream.Stream;
+@@ -97,7 +96,7 @@ public class ExampleBaritoneControl extends Behavior implements Helper {
+             return false;
+         } else if (msg.trim().equalsIgnoreCase("orderpizza")) {
+             try {
+-                Blaze3D.openUri(URI.create("https://www.dominos.com/en/pages/order/"));
++                Util.getPlatform().openUri("https://www.dominos.com/en/pages/order/");
+             } catch (Exception ignored) {}
+             return false;
+         }
+diff --git a/src/main/java/baritone/process/BuilderProcess.java b/src/main/java/baritone/process/BuilderProcess.java
+index 464de95e..fbe19c7a 100644
+--- a/src/main/java/baritone/process/BuilderProcess.java
++++ b/src/main/java/baritone/process/BuilderProcess.java
+@@ -586,7 +586,7 @@ public final class BuilderProcess extends BaritoneProcessHelper implements IBuil
+             }
+             // build repeat time
+             layer = 0;
+-            origin = new BlockPos(origin.getX(), origin.getY(), origin.getZ()).offset(repeat);
++            origin = new BlockPos(origin).offset(repeat);
+             if (!Baritone.settings().buildRepeatSneaky.value) {
+                 schematic.reset();
+             }
+diff --git a/src/main/java/baritone/process/FarmProcess.java b/src/main/java/baritone/process/FarmProcess.java
+index ff043e69..4bac085c 100644
+--- a/src/main/java/baritone/process/FarmProcess.java
++++ b/src/main/java/baritone/process/FarmProcess.java
+@@ -21,8 +21,8 @@ import baritone.Baritone;
+ import baritone.api.BaritoneAPI;
+ import baritone.api.pathing.goals.Goal;
+ import baritone.api.pathing.goals.GoalBlock;
+-import baritone.api.pathing.goals.GoalComposite;
+ import baritone.api.pathing.goals.GoalGetToBlock;
++import baritone.api.pathing.goals.GoalComposite;
+ import baritone.api.process.IFarmProcess;
+ import baritone.api.process.PathingCommand;
+ import baritone.api.process.PathingCommandType;
+@@ -43,7 +43,16 @@ import net.minecraft.world.item.Item;
+ import net.minecraft.world.item.ItemStack;
+ import net.minecraft.world.item.Items;
+ import net.minecraft.world.level.Level;
+-import net.minecraft.world.level.block.*;
++import net.minecraft.world.level.block.AirBlock;
++import net.minecraft.world.level.block.BambooStalkBlock;
++import net.minecraft.world.level.block.Block;
++import net.minecraft.world.level.block.Blocks;
++import net.minecraft.world.level.block.BonemealableBlock;
++import net.minecraft.world.level.block.CactusBlock;
++import net.minecraft.world.level.block.CocoaBlock;
++import net.minecraft.world.level.block.CropBlock;
++import net.minecraft.world.level.block.NetherWartBlock;
++import net.minecraft.world.level.block.SugarCaneBlock;
+ import net.minecraft.world.level.block.state.BlockState;
+ import net.minecraft.world.phys.HitResult;
+ import net.minecraft.world.phys.Vec3;
+@@ -263,7 +272,7 @@ public final class FarmProcess extends BaritoneProcessHelper implements IFarmPro
+             }
+             if (state.getBlock() instanceof BonemealableBlock) {
+                 BonemealableBlock ig = (BonemealableBlock) state.getBlock();
+-                if (ig.isValidBonemealTarget(ctx.world(), pos, state, BonemealSource.INTERACTION) && ig.isBonemealSuccess(ctx.world(), ctx.world().getRandom(), pos, state, BonemealSource.INTERACTION)) {
++                if (ig.isValidBonemealTarget(ctx.world(), pos, state) && ig.isBonemealSuccess(ctx.world(), ctx.world().getRandom(), pos, state)) {
+                     bonemealable.add(pos);
+                 }
+             }
+diff --git a/src/main/java/baritone/process/elytra/ElytraBehavior.java b/src/main/java/baritone/process/elytra/ElytraBehavior.java
+index 59d3c440..4dac1050 100644
+--- a/src/main/java/baritone/process/elytra/ElytraBehavior.java
++++ b/src/main/java/baritone/process/elytra/ElytraBehavior.java
+@@ -48,7 +48,6 @@ import net.minecraft.world.inventory.ContainerInput;
+ import net.minecraft.world.item.ItemStack;
+ import net.minecraft.world.item.Items;
+ import net.minecraft.world.item.component.Fireworks;
+-import net.minecraft.world.item.component.SwingAnimation;
+ import net.minecraft.world.level.ChunkPos;
+ import net.minecraft.world.level.ClipContext;
+ import net.minecraft.world.level.Level;
+@@ -802,7 +801,7 @@ public final class ElytraBehavior implements Helper {
+             }
+             // Firing a rocket is an item use, and vanilla's use path swings the arm on the way through.
+             // Nothing else here needs it - the flight itself is a control loop and stays one.
+-            ctx.player().swing(fireworkHand, SwingAnimation.DEFAULT, false);
++            ctx.player().swing(fireworkHand);
+             this.minimumBoostTicks = boostTicks;
+             this.remainingFireworkTicks = 10;
+             this.deployedFireworkLastTick = true;
+diff --git a/src/main/java/baritone/utils/BlockBreakHelper.java b/src/main/java/baritone/utils/BlockBreakHelper.java
+index 08e3056b..4257666a 100644
+--- a/src/main/java/baritone/utils/BlockBreakHelper.java
++++ b/src/main/java/baritone/utils/BlockBreakHelper.java
+@@ -20,9 +20,7 @@ package baritone.utils;
+ import baritone.api.BaritoneAPI;
+ import baritone.api.utils.IPlayerContext;
+ import baritone.utils.accessor.IPlayerControllerMP;
+-import net.minecraft.network.protocol.game.ServerboundPunchPacket;
+ import net.minecraft.world.InteractionHand;
+-import net.minecraft.world.item.component.SwingAnimation;
+ import net.minecraft.world.phys.BlockHitResult;
+ import net.minecraft.world.phys.HitResult;
+ 
+@@ -74,15 +72,17 @@ public final class BlockBreakHelper {
+     /**
+      * Swings the arm at the block being broken, and tells the server about it.
+      * <p>
+-     * The swing on its own animates the hand locally and nothing else: the server is what shows the arm to
+-     * the players around us, and it learns about a swing from the punch packet, not from the swing. Vanilla
+-     * sends one on both of the paths this class mirrors - the tick a block is started on, and every tick it
+-     * keeps being hit - so a bot without it breaks blocks in front of an arm that never moves, which is the
+-     * one part of a person that no amount of camera work can stand in for.
++     * On 26.2 the swing is what reaches the server: the client's own swing call carries the swing packet
++     * to the players around us, so the arm shows to everyone rather than only to us. Vanilla swings on
++     * both of the paths this class mirrors - the tick a block is started on, and every tick it keeps being
++     * hit - so a bot without it breaks blocks in front of an arm that never moves, which is the one part of
++     * a person that no amount of camera work can stand in for.
++     *
++     * (On 26.3 this was a local swing plus an explicit punch packet, because the swing stopped reaching the
++     * server in that version; that is the whole of the difference this method carries between the two.)
+      */
+     private void swingArm() {
+-        ctx.player().swing(InteractionHand.MAIN_HAND, SwingAnimation.DEFAULT, false);
+-        ctx.player().connection.send(ServerboundPunchPacket.INSTANCE);
++        ctx.player().swing(InteractionHand.MAIN_HAND);
+     }
+ 
+     public void tick(boolean isLeftClick) {
+diff --git a/src/main/java/baritone/utils/BlockPlaceHelper.java b/src/main/java/baritone/utils/BlockPlaceHelper.java
+index 0c54fe5a..a5e81849 100644
+--- a/src/main/java/baritone/utils/BlockPlaceHelper.java
++++ b/src/main/java/baritone/utils/BlockPlaceHelper.java
+@@ -21,7 +21,6 @@ import baritone.Baritone;
+ import baritone.api.utils.IPlayerContext;
+ import net.minecraft.world.InteractionHand;
+ import net.minecraft.world.InteractionResult;
+-import net.minecraft.world.item.component.SwingAnimation;
+ import net.minecraft.world.phys.BlockHitResult;
+ import net.minecraft.world.phys.HitResult;
+ 
+@@ -70,7 +69,7 @@ public class BlockPlaceHelper {
+                 Baritone.settings().rightClickSpeed.value - BASE_PLACE_DELAY);
+         for (InteractionHand hand : InteractionHand.values()) {
+             if (ctx.playerController().processRightClickBlock(ctx.player(), ctx.world(), hand, (BlockHitResult) mouseOver) == InteractionResult.SUCCESS) {
+-                ctx.player().swing(hand, SwingAnimation.DEFAULT, false);
++                ctx.player().swing(hand);
+                 return;
+             }
+             if (!ctx.player().getItemInHand(hand).isEmpty() && ctx.playerController().processRightClick(ctx.player(), ctx.world(), hand) == InteractionResult.SUCCESS) {
+@@ -78,7 +77,7 @@ public class BlockPlaceHelper {
+                 // used is an arm, the same as a block being placed is, and it is the arm that carries the
+                 // gesture. The swing only animates the hand the player is watching; the server broadcasts one
+                 // for a successful use by itself, so nothing else is needed here.
+-                ctx.player().swing(hand, SwingAnimation.DEFAULT, false);
++                ctx.player().swing(hand);
+                 return;
+             }
+         }
+diff --git a/src/main/java/baritone/utils/IRenderer.java b/src/main/java/baritone/utils/IRenderer.java
+index 59d8005a..4cf39bda 100644
+--- a/src/main/java/baritone/utils/IRenderer.java
++++ b/src/main/java/baritone/utils/IRenderer.java
+@@ -22,14 +22,17 @@ import baritone.api.Settings;
+ import baritone.utils.accessor.IEntityRenderManager;
+ import baritone.utils.accessor.IRenderPipelines;
+ import baritone.utils.accessor.IRenderType;
+-import com.mojang.blaze3d.systems.RenderSystem;
+-import com.mojang.blaze3d.vertex.BufferBuilder;
+-import com.mojang.blaze3d.vertex.DefaultVertexFormat;
+-import com.mojang.blaze3d.vertex.PoseStack;
+-import com.mojang.renderpearl.api.pipeline.*;
++import com.mojang.blaze3d.pipeline.BlendFunction;
++import com.mojang.blaze3d.pipeline.ColorTargetState;
++import com.mojang.blaze3d.pipeline.DepthStencilState;
++import com.mojang.blaze3d.pipeline.RenderPipeline;
++import com.mojang.blaze3d.platform.CompareOp;
++import com.mojang.blaze3d.platform.BlendFactor;
++import com.mojang.blaze3d.PrimitiveTopology;
++import com.mojang.blaze3d.vertex.*;
+ import net.minecraft.client.Minecraft;
+-import net.minecraft.client.renderer.BindGroupLayouts;
+ import net.minecraft.client.renderer.RenderPipelines;
++import net.minecraft.client.renderer.BindGroupLayouts;
+ import net.minecraft.client.renderer.StagedVertexBuffer;
+ import net.minecraft.client.renderer.blockentity.BeaconRenderer;
+ import net.minecraft.client.renderer.rendertype.RenderSetup;
+@@ -42,8 +45,6 @@ import net.minecraft.world.phys.AABB;
+ import net.minecraft.world.phys.Vec3;
+ 
+ import java.awt.*;
+-import java.util.Optional;
+-import java.util.OptionalDouble;
+ import java.util.function.BiFunction;
+ 
+ public interface IRenderer {
+@@ -72,7 +73,6 @@ public interface IRenderer {
+ 
+     RenderPipeline BEACON_BEAM_OPAQUE = ((IRenderPipelines) new RenderPipelines()).baritone$registerPipeline(RenderPipeline.builder(BARITONE_BEACON_BEAM_SNIPPET)
+             .withLocation("pipeline/baritone_beacon_beam_opaque")
+-            .withColorTargetState(new ColorTargetState(BlendFunction.TRANSLUCENT))
+             .withDepthStencilState(new DepthStencilState(CompareOp.ALWAYS_PASS, false))
+             .withCull(true)
+             .build());
+@@ -145,17 +145,7 @@ public interface IRenderer {
+         stagedVertexBuffer.upload();
+         StagedVertexBuffer.ExecuteInfo info = stagedVertexBuffer.getExecuteInfo(draw[0]);
+         if (info != null) {
+-            var preparedRenderType = renderType.prepare();
+-            var renderTarget = Minecraft.getInstance().gameRenderer.mainRenderTarget();
+-            try (var renderPass = RenderSystem.getDevice().createCommandEncoder().createRenderPass(
+-                () -> "Baritone Render Pass",
+-                renderTarget.getColorTextureView(),
+-                Optional.empty(),
+-                renderTarget.getDepthTextureView(),
+-                OptionalDouble.empty())
+-            ) {
+-                preparedRenderType.drawFromBuffer(info, renderPass);
+-            }
++            renderType.prepare().drawFromBuffer(info);
+         }
+         stagedVertexBuffer.endFrame();
+     }
+diff --git a/src/main/java/baritone/utils/PathRenderer.java b/src/main/java/baritone/utils/PathRenderer.java
+index 6dd1fc06..83f3d7a1 100644
+--- a/src/main/java/baritone/utils/PathRenderer.java
++++ b/src/main/java/baritone/utils/PathRenderer.java
+@@ -364,7 +364,7 @@ public final class PathRenderer implements IRenderer {
+         stack.translate(0.5D, 0.0D, 0.5D);
+         if (!translucent) {
+             stack.pushPose();
+-            stack.rotateDegrees(Axis.YP, time * 2.25F - 45.0F);
++            stack.mulPose(Axis.YP.rotationDegrees(time * 2.25F - 45.0F));
+         }
+ 
+         float v0 = -1.0F + scroll;
+diff --git a/src/main/java/baritone/utils/accessor/IRenderPipelines.java b/src/main/java/baritone/utils/accessor/IRenderPipelines.java
+index 6ef174f1..35ebca33 100644
+--- a/src/main/java/baritone/utils/accessor/IRenderPipelines.java
++++ b/src/main/java/baritone/utils/accessor/IRenderPipelines.java
+@@ -17,7 +17,7 @@
+ 
+ package baritone.utils.accessor;
+ 
+-import com.mojang.renderpearl.api.pipeline.RenderPipeline;
++import com.mojang.blaze3d.pipeline.RenderPipeline;
+ 
+ public interface IRenderPipelines {
+     RenderPipeline.Snippet getLinesSnippet();
+diff --git a/src/main/java/baritone/utils/pathing/Avoidance.java b/src/main/java/baritone/utils/pathing/Avoidance.java
+index 5e5f171c..dcaf6e8a 100644
+--- a/src/main/java/baritone/utils/pathing/Avoidance.java
++++ b/src/main/java/baritone/utils/pathing/Avoidance.java
+@@ -23,7 +23,7 @@ import baritone.api.utils.IPlayerContext;
+ import it.unimi.dsi.fastutil.longs.Long2DoubleOpenHashMap;
+ import net.minecraft.core.BlockPos;
+ import net.minecraft.world.entity.Mob;
+-import net.minecraft.world.entity.monster.Enderman;
++import net.minecraft.world.entity.monster.EnderMan;
+ import net.minecraft.world.entity.monster.spider.Spider;
+ import net.minecraft.world.entity.monster.zombie.ZombifiedPiglin;
+ 
+@@ -76,7 +76,7 @@ public class Avoidance {
+                     .filter(entity -> entity instanceof Mob)
+                     .filter(entity -> (!(entity instanceof Spider)) || ctx.player().getLightLevelDependentMagicValue() < 0.5)
+                     .filter(entity -> !(entity instanceof ZombifiedPiglin) || ((ZombifiedPiglin) entity).getLastHurtByMob() != null)
+-                    .filter(entity -> !(entity instanceof Enderman) || ((Enderman) entity).isCreepy())
++                    .filter(entity -> !(entity instanceof EnderMan) || ((EnderMan) entity).isCreepy())
+                     .forEach(entity -> res.add(new Avoidance(entity.blockPosition(), mobCoeff, Baritone.settings().mobAvoidanceRadius.value)));
+         }
+         return res;
+diff --git a/src/test/java/baritone/utils/ButtonWritesTest.java b/src/test/java/baritone/utils/ButtonWritesTest.java
+index 3f2d7e64..c7157946 100644
+--- a/src/test/java/baritone/utils/ButtonWritesTest.java
++++ b/src/test/java/baritone/utils/ButtonWritesTest.java
+@@ -115,8 +115,10 @@ public class ButtonWritesTest {
+             {"src/main/java/baritone/behavior/EatBehavior.java", "baritone.getInventoryBehavior().switchingHands()"},
+             {"src/main/java/baritone/behavior/EatBehavior.java", "player.getInventory().getSelectedSlot() == targetSlot"},
+             {"src/main/java/baritone/behavior/InventoryBehavior.java", "this.swap.tick()"},
+-            // the arm that swings at nothing: the packet and the swing, and no click in the file at all
+-            {"src/main/java/baritone/behavior/LookBehavior.java", "ServerboundPunchPacket.INSTANCE"},
++            // the arm that swings at nothing: the swing itself, and no click in the file at all. On 26.2 the
++            // swing is LocalPlayer#swing(InteractionHand), which sends ServerboundSwingPacket for us - there
++            // is no ServerboundPunchPacket in this version, so the line pinned here is the call site.
++            {"src/main/java/baritone/behavior/LookBehavior.java", "ctx.player().swing("},
+             // the firework is not clicked until the hand has finished changing
+             {"src/main/java/baritone/process/elytra/ElytraBehavior.java", "getInventoryBehavior().switchingHands()"},
+             // the auto-swap's clicks wait for the player's own inventory: the window they were written for
+@@ -153,7 +155,10 @@ public class ButtonWritesTest {
+             "processRightClickBlock(",
+             "processRightClick(",
+             "windowClick(",
+-            "ServerboundPunchPacket",
++            // the manual animation packet. 26.2 sends ServerboundSwingPacket (from LocalPlayer#swing);
++            // 26.3 replaced it with ServerboundPunchPacket. Watching the current version's name keeps a
++            // future manual send from slipping in ungated. Matches nothing on 26.2 by construction.
++            "ServerboundSwingPacket",
+             ".swing(",
+             "startDestroyBlock(",
+             "continueDestroyBlock(",
+@@ -233,7 +238,7 @@ public class ButtonWritesTest {
+         assumeTrue("the sources are not next to this test run", root != null);
+         final List<String> fidget = read(root.resolve(THE_FIDGET));
+         for (String button : BUTTONS) {
+-            if (button.equals(".swing(") || button.equals("ServerboundPunchPacket")) {
++            if (button.equals(".swing(") || button.equals("ServerboundSwingPacket")) {
+                 continue; // a swing is what this file is allowed to do
+             }
+             assertTrue("the fidget's file " + THE_FIDGET + " has grown a \"" + button + "\" call: the swing"
+-- 
+2.55.0.windows.3
+
