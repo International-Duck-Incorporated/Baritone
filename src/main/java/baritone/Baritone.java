@@ -249,7 +249,7 @@ public class Baritone implements IBaritone {
         new Thread(() -> {
             try {
                 Thread.sleep(100);
-                mc.execute(() -> mc.gui.setScreen(new GuiClick()));
+                mc.execute(() -> mc.setScreen(new GuiClick()));
             } catch (Exception ignored) {}
         }).start();
     }

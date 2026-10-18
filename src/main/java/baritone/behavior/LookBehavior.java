@@ -1111,7 +1111,7 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
      * game's input is Baritone's, which is exactly why this is not asked there.
      */
     private boolean thePersonIsAtTheKeyboard() {
-        if (ctx.minecraft().gui.screen() != null) {
+        if (ctx.minecraft().screen != null) {
             return true;
         }
         // The use button is the one key a behaviour of ours sets: eating holds it for the length of a
