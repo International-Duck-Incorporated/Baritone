@@ -1,0 +1,505 @@
+From 33b001511d0b79b959ccd0bd55b0d8072acbf414 Mon Sep 17 00:00:00 2001
+From: 0xFFshell <pieterr.games@gmail.com>
+Date: Sun, 18 Oct 2026 19:46:04 +0200
+Subject: [PATCH] port: Minecraft 26.1.2 (down from 26.2)
+
+---
+ fabric/src/main/resources/fabric.mod.json     |  2 +-
+ forge/src/main/resources/META-INF/mods.toml   |  2 +-
+ gradle.properties                             |  6 +--
+ .../resources/META-INF/neoforge.mods.toml     |  2 +-
+ .../mixins/MixinFireworkRocketEntity.java     |  4 +-
+ .../launch/mixins/MixinMinecraft.java         | 17 ++++---
+ .../launch/mixins/MixinWorldRenderer.java     |  5 +-
+ src/main/java/baritone/Baritone.java          |  2 +-
+ .../java/baritone/behavior/LookBehavior.java  |  2 +-
+ src/main/java/baritone/cache/CachedChunk.java | 39 +++++++++++++--
+ .../command/defaults/RenderCommand.java       |  2 +-
+ .../java/baritone/process/ElytraProcess.java  |  4 +-
+ .../process/elytra/ElytraBehavior.java        |  2 +-
+ .../elytra/NetherPathfinderContext.java       |  3 +-
+ src/main/java/baritone/utils/GuiClick.java    |  4 +-
+ src/main/java/baritone/utils/IRenderer.java   | 47 ++++++++++---------
+ .../java/baritone/utils/PathRenderer.java     |  4 +-
+ 17 files changed, 89 insertions(+), 58 deletions(-)
+
+diff --git a/fabric/src/main/resources/fabric.mod.json b/fabric/src/main/resources/fabric.mod.json
+index 76da7a32..1dc97cfd 100644
+--- a/fabric/src/main/resources/fabric.mod.json
++++ b/fabric/src/main/resources/fabric.mod.json
+@@ -25,7 +25,7 @@
+   ],
+   "depends": {
+     "fabricloader": ">=0.19.3",
+-    "minecraft": ["26.2"]
++    "minecraft": ["26.1.*"]
+   },
+   "custom": {
+     "modmenu": {
+diff --git a/forge/src/main/resources/META-INF/mods.toml b/forge/src/main/resources/META-INF/mods.toml
+index 5328e7bb..6a91b27c 100644
+--- a/forge/src/main/resources/META-INF/mods.toml
++++ b/forge/src/main/resources/META-INF/mods.toml
+@@ -35,6 +35,6 @@ A Minecraft pathfinder bot.
+ modId="minecraft"
+ mandatory=true
+ # This version range declares a minimum of the current minecraft version up to but not including the next major version
+-versionRange="[26.2]"
++versionRange="[26.1, 26.1.2]"
+ ordering="NONE"
+ side="BOTH"
+diff --git a/gradle.properties b/gradle.properties
+index b8fcdd92..eb3295e9 100644
+--- a/gradle.properties
++++ b/gradle.properties
+@@ -8,11 +8,11 @@ archives_base_name=baritone
+ 
+ java_version=25
+ 
+-minecraft_version=26.2
++minecraft_version=26.1.2
+ 
+-forge_version=65.0.3
++forge_version=64.0.11
+ 
+-neoforge_version=11-beta
++neoforge_version=78
+ 
+ fabric_version=0.19.3
+ 
+diff --git a/neoforge/src/main/resources/META-INF/neoforge.mods.toml b/neoforge/src/main/resources/META-INF/neoforge.mods.toml
+index 4eec7768..6500a18e 100644
+--- a/neoforge/src/main/resources/META-INF/neoforge.mods.toml
++++ b/neoforge/src/main/resources/META-INF/neoforge.mods.toml
+@@ -35,7 +35,7 @@ A Minecraft pathfinder bot.
+ modId="minecraft"
+ type="required"
+ # This version range declares a minimum of the current minecraft version up to but not including the next major version
+-versionRange="[26.2]"
++versionRange="[26.1, 26.1.2]"
+ ordering="NONE"
+ side="BOTH"
+ 
+diff --git a/src/launch/java/baritone/launch/mixins/MixinFireworkRocketEntity.java b/src/launch/java/baritone/launch/mixins/MixinFireworkRocketEntity.java
+index 17321cca..b4c8e05b 100644
+--- a/src/launch/java/baritone/launch/mixins/MixinFireworkRocketEntity.java
++++ b/src/launch/java/baritone/launch/mixins/MixinFireworkRocketEntity.java
+@@ -20,7 +20,7 @@ package baritone.launch.mixins;
+ import baritone.utils.accessor.IFireworkRocketEntity;
+ import net.minecraft.network.syncher.EntityDataAccessor;
+ import net.minecraft.world.entity.Entity;
+-import net.minecraft.world.entity.EntityTypes;
++import net.minecraft.world.entity.EntityType;
+ import net.minecraft.world.entity.LivingEntity;
+ import net.minecraft.world.entity.projectile.FireworkRocketEntity;
+ import net.minecraft.world.level.Level;
+@@ -44,7 +44,7 @@ public abstract class MixinFireworkRocketEntity extends Entity implements IFirew
+     public abstract boolean isAttachedToEntity();
+ 
+     private MixinFireworkRocketEntity(Level level) {
+-        super(EntityTypes.FIREWORK_ROCKET, level);
++        super(EntityType.FIREWORK_ROCKET, level);
+     }
+ 
+     @Override
+diff --git a/src/launch/java/baritone/launch/mixins/MixinMinecraft.java b/src/launch/java/baritone/launch/mixins/MixinMinecraft.java
+index 5762e05d..d8eb7cbf 100644
+--- a/src/launch/java/baritone/launch/mixins/MixinMinecraft.java
++++ b/src/launch/java/baritone/launch/mixins/MixinMinecraft.java
+@@ -24,7 +24,6 @@ import baritone.api.event.events.TickEvent;
+ import baritone.api.event.events.WorldEvent;
+ import baritone.api.event.events.type.EventState;
+ import net.minecraft.client.Minecraft;
+-import net.minecraft.client.gui.Gui;
+ import net.minecraft.client.gui.screens.Screen;
+ import net.minecraft.client.multiplayer.ClientLevel;
+ import net.minecraft.client.player.LocalPlayer;
+@@ -68,7 +67,7 @@ public class MixinMinecraft {
+             at = @At(
+                     value = "FIELD",
+                     opcode = Opcodes.GETFIELD,
+-                    target = "net/minecraft/client/Minecraft.gui:Lnet/minecraft/client/gui/Gui;",
++                    target = "net/minecraft/client/Minecraft.screen:Lnet/minecraft/client/gui/screens/Screen;",
+                     ordinal = 0,
+                     shift = At.Shift.BEFORE
+             ),
+@@ -166,14 +165,14 @@ public class MixinMinecraft {
+     @Redirect(
+             method = "tick",
+             at = @At(
+-                    value = "INVOKE",
+-                    target = "Lnet/minecraft/client/gui/Gui;screen()Lnet/minecraft/client/gui/screens/Screen;"
++                    value = "FIELD",
++                    opcode = Opcodes.GETFIELD,
++                    target = "Lnet/minecraft/client/Minecraft;screen:Lnet/minecraft/client/gui/screens/Screen;"
+             ),
+             slice = @Slice(
+                     from = @At(
+-                            value = "FIELD",
+-                            opcode = Opcodes.PUTFIELD,
+-                            target = "net/minecraft/client/Minecraft.missTime:I"
++                            value = "INVOKE",
++                            target = "Lnet/minecraft/client/gui/components/DebugScreenOverlay;showDebugScreen()Z"
+                     ),
+                     to = @At(
+                             value = "CONSTANT",
+@@ -181,12 +180,12 @@ public class MixinMinecraft {
+                     )
+             )
+     )
+-    private Screen passEvents(Gui gui) {
++    private Screen passEvents(Minecraft instance) {
+         // allow user input is only the primary baritone
+         if (BaritoneAPI.getProvider().getPrimaryBaritone().getPathingBehavior().isPathing() && player != null) {
+             return null;
+         }
+-        return gui.screen();
++        return instance.screen;
+     }
+ 
+     // TODO
+diff --git a/src/launch/java/baritone/launch/mixins/MixinWorldRenderer.java b/src/launch/java/baritone/launch/mixins/MixinWorldRenderer.java
+index 51bb7e3e..1384e41e 100644
+--- a/src/launch/java/baritone/launch/mixins/MixinWorldRenderer.java
++++ b/src/launch/java/baritone/launch/mixins/MixinWorldRenderer.java
+@@ -25,6 +25,7 @@ import com.mojang.blaze3d.resource.GraphicsResourceAllocator;
+ import com.mojang.blaze3d.vertex.PoseStack;
+ import net.minecraft.client.DeltaTracker;
+ import net.minecraft.client.renderer.LevelRenderer;
++import net.minecraft.client.renderer.chunk.ChunkSectionsToRender;
+ import net.minecraft.client.renderer.state.level.CameraRenderState;
+ import org.joml.Matrix4fc;
+ import org.joml.Vector4f;
+@@ -41,10 +42,10 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+ public class MixinWorldRenderer {
+ 
+     @Inject(
+-            method = "render",
++            method = "renderLevel",
+             at = @At("RETURN")
+     )
+-    private void onStartHand(final GraphicsResourceAllocator allocator, final DeltaTracker deltaTracker, final boolean outline, final CameraRenderState camera, final Matrix4fc modelViewMatrix, final GpuBufferSlice fog, final Vector4f fogColor, final boolean sky, final CallbackInfo ci) {
++    private void onStartHand(final GraphicsResourceAllocator allocator, final DeltaTracker deltaTracker, final boolean outline, final CameraRenderState camera, final Matrix4fc modelViewMatrix, final GpuBufferSlice fog, final Vector4f fogColor, final boolean sky, final ChunkSectionsToRender chunkSectionsToRender, final CallbackInfo ci) {
+         for (IBaritone ibaritone : BaritoneAPI.getProvider().getAllBaritones()) {
+             PoseStack poseStack = new PoseStack();
+             poseStack.mulPose(modelViewMatrix);
+diff --git a/src/main/java/baritone/Baritone.java b/src/main/java/baritone/Baritone.java
+index bce21b4b..d43be82c 100755
+--- a/src/main/java/baritone/Baritone.java
++++ b/src/main/java/baritone/Baritone.java
+@@ -249,7 +249,7 @@ public class Baritone implements IBaritone {
+         new Thread(() -> {
+             try {
+                 Thread.sleep(100);
+-                mc.execute(() -> mc.gui.setScreen(new GuiClick()));
++                mc.execute(() -> mc.setScreen(new GuiClick()));
+             } catch (Exception ignored) {}
+         }).start();
+     }
+diff --git a/src/main/java/baritone/behavior/LookBehavior.java b/src/main/java/baritone/behavior/LookBehavior.java
+index a7185b56..6cbf1c0b 100644
+--- a/src/main/java/baritone/behavior/LookBehavior.java
++++ b/src/main/java/baritone/behavior/LookBehavior.java
+@@ -1111,7 +1111,7 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
+      * game's input is Baritone's, which is exactly why this is not asked there.
+      */
+     private boolean thePersonIsAtTheKeyboard() {
+-        if (ctx.minecraft().gui.screen() != null) {
++        if (ctx.minecraft().screen != null) {
+             return true;
+         }
+         // The use button is the one key a behaviour of ours sets: eating holds it for the length of a
+diff --git a/src/main/java/baritone/cache/CachedChunk.java b/src/main/java/baritone/cache/CachedChunk.java
+index 375b2570..283681e0 100644
+--- a/src/main/java/baritone/cache/CachedChunk.java
++++ b/src/main/java/baritone/cache/CachedChunk.java
+@@ -40,8 +40,7 @@ import java.util.Map;
+  */
+ public final class CachedChunk {
+ 
+-    public static final ImmutableSet<Block> BLOCKS_TO_KEEP_TRACK_OF = new ImmutableSet.Builder<Block>()
+-        .add(
++    public static final ImmutableSet<Block> BLOCKS_TO_KEEP_TRACK_OF = ImmutableSet.of(
+             Blocks.ENDER_CHEST,
+             Blocks.FURNACE,
+             Blocks.CHEST,
+@@ -51,6 +50,22 @@ public final class CachedChunk {
+             Blocks.SPAWNER,
+             Blocks.BARRIER,
+             Blocks.OBSERVER,
++            Blocks.WHITE_SHULKER_BOX,
++            Blocks.ORANGE_SHULKER_BOX,
++            Blocks.MAGENTA_SHULKER_BOX,
++            Blocks.LIGHT_BLUE_SHULKER_BOX,
++            Blocks.YELLOW_SHULKER_BOX,
++            Blocks.LIME_SHULKER_BOX,
++            Blocks.PINK_SHULKER_BOX,
++            Blocks.GRAY_SHULKER_BOX,
++            Blocks.LIGHT_GRAY_SHULKER_BOX,
++            Blocks.CYAN_SHULKER_BOX,
++            Blocks.PURPLE_SHULKER_BOX,
++            Blocks.BLUE_SHULKER_BOX,
++            Blocks.BROWN_SHULKER_BOX,
++            Blocks.GREEN_SHULKER_BOX,
++            Blocks.RED_SHULKER_BOX,
++            Blocks.BLACK_SHULKER_BOX,
+             Blocks.NETHER_PORTAL,
+             Blocks.HOPPER,
+             Blocks.BEACON,
+@@ -72,6 +87,22 @@ public final class CachedChunk {
+             Blocks.WITHER_SKELETON_WALL_SKULL,
+             Blocks.ENCHANTING_TABLE,
+             Blocks.ANVIL,
++            Blocks.WHITE_BED,
++            Blocks.ORANGE_BED,
++            Blocks.MAGENTA_BED,
++            Blocks.LIGHT_BLUE_BED,
++            Blocks.YELLOW_BED,
++            Blocks.LIME_BED,
++            Blocks.PINK_BED,
++            Blocks.GRAY_BED,
++            Blocks.LIGHT_GRAY_BED,
++            Blocks.CYAN_BED,
++            Blocks.PURPLE_BED,
++            Blocks.BLUE_BED,
++            Blocks.BROWN_BED,
++            Blocks.GREEN_BED,
++            Blocks.RED_BED,
++            Blocks.BLACK_BED,
+             Blocks.DRAGON_EGG,
+             Blocks.JUKEBOX,
+             Blocks.END_GATEWAY,
+@@ -79,9 +110,7 @@ public final class CachedChunk {
+             Blocks.NETHER_WART,
+             Blocks.LADDER,
+             Blocks.VINE
+-        ).addAll(Blocks.DYED_SHULKER_BOX.asList())
+-        .addAll(Blocks.BED.asList())
+-        .build();
++    );
+ 
+     public final int height;
+ 
+diff --git a/src/main/java/baritone/command/defaults/RenderCommand.java b/src/main/java/baritone/command/defaults/RenderCommand.java
+index a8a35948..37d70b42 100644
+--- a/src/main/java/baritone/command/defaults/RenderCommand.java
++++ b/src/main/java/baritone/command/defaults/RenderCommand.java
+@@ -38,7 +38,7 @@ public class RenderCommand extends Command {
+         args.requireMax(0);
+         BetterBlockPos origin = ctx.playerFeet();
+         int renderDistance = (ctx.minecraft().options.renderDistance().get() + 1) * 16;
+-        ctx.minecraft().levelExtractor.setBlocksDirty(
++        ctx.minecraft().levelRenderer.setBlocksDirty(
+                 origin.x - renderDistance,
+                 ctx.world().getMinY(),
+                 origin.z - renderDistance,
+diff --git a/src/main/java/baritone/process/ElytraProcess.java b/src/main/java/baritone/process/ElytraProcess.java
+index 3f28a5a2..aba577e8 100644
+--- a/src/main/java/baritone/process/ElytraProcess.java
++++ b/src/main/java/baritone/process/ElytraProcess.java
+@@ -193,7 +193,7 @@ public class ElytraProcess extends BaritoneProcessHelper implements IBaritonePro
+         }
+         if (ctx.player().isFallFlying() && this.state != State.LANDING && (this.behavior.pathManager.isComplete() || safetyLanding)) {
+             final BetterBlockPos last = this.behavior.pathManager.path.getLast();
+-            if (last != null && (last.distToCenterSqr(ctx.player().position()) < (48 * 48) || safetyLanding) && (!goingToLandingSpot || (safetyLanding && this.landingSpot == null))) {
++            if (last != null && (ctx.player().position().distanceToSqr(last.getCenter()) < (48 * 48) || safetyLanding) && (!goingToLandingSpot || (safetyLanding && this.landingSpot == null))) {
+                 if (this.landingSearchState == null) {
+                     logDirect("Path complete, searching for safe landing spot...");
+                 }
+@@ -209,7 +209,7 @@ public class ElytraProcess extends BaritoneProcessHelper implements IBaritonePro
+                 }
+             }
+ 
+-            if (last != null && last.distToCenterSqr(ctx.player().position()) < 1) {
++            if (last != null && ctx.player().position().distanceToSqr(last.getCenter()) < 1) {
+                 if (Baritone.settings().notificationOnPathComplete.value && !reachedGoal) {
+                     logNotification("Pathing complete", false);
+                 }
+diff --git a/src/main/java/baritone/process/elytra/ElytraBehavior.java b/src/main/java/baritone/process/elytra/ElytraBehavior.java
+index 4dac1050..95163d25 100644
+--- a/src/main/java/baritone/process/elytra/ElytraBehavior.java
++++ b/src/main/java/baritone/process/elytra/ElytraBehavior.java
+@@ -265,7 +265,7 @@ public final class ElytraBehavior implements Helper {
+                             final Throwable cause = ex.getCause();
+                             if (cause instanceof PathCalculationException) {
+                                 logDirect("Failed to compute next segment");
+-                                if (pathStart.distToCenterSqr(ctx.player().position()) < 16 * 16) {
++                                if (ctx.player().distanceToSqr(pathStart.getCenter()) < 16 * 16) {
+                                     logVerbose("Player is near the segment start, therefore repeating this calculation is pointless. Marking as complete");
+                                     completePath = true;
+                                 }
+diff --git a/src/main/java/baritone/process/elytra/NetherPathfinderContext.java b/src/main/java/baritone/process/elytra/NetherPathfinderContext.java
+index 3ed1e191..280366d9 100644
+--- a/src/main/java/baritone/process/elytra/NetherPathfinderContext.java
++++ b/src/main/java/baritone/process/elytra/NetherPathfinderContext.java
+@@ -47,6 +47,8 @@ import java.util.concurrent.TimeUnit;
+ import java.util.concurrent.locks.Lock;
+ import java.util.concurrent.locks.ReentrantReadWriteLock;
+ 
++import static net.minecraft.world.level.chunk.LevelChunkSection.SECTION_SIZE;
++
+ /**
+  * @author Brady
+  */
+@@ -63,7 +65,6 @@ public final class NetherPathfinderContext implements IElytraPathFinder {
+         }
+     }
+     private static final BlockState AIR_BLOCK_STATE = Blocks.AIR.defaultBlockState();
+-    private static final int SECTION_SIZE = 16;
+     // This lock must be held while there are active pointers to chunks in java,
+     // but we just hold it for the entire tick so we don't have to think much about it.
+     public final ReentrantReadWriteLock rwl = new ReentrantReadWriteLock();
+diff --git a/src/main/java/baritone/utils/GuiClick.java b/src/main/java/baritone/utils/GuiClick.java
+index 369104a1..991cc6f1 100644
+--- a/src/main/java/baritone/utils/GuiClick.java
++++ b/src/main/java/baritone/utils/GuiClick.java
+@@ -72,8 +72,8 @@ public class GuiClick extends Screen implements Helper {
+         my = mc.getWindow().getScreenHeight() - my;
+         my *= mc.getWindow().getHeight() / (double) mc.getWindow().getScreenHeight();
+         mx *= mc.getWindow().getWidth() / (double) mc.getWindow().getScreenWidth();
+-        Vec3 near = toWorld(mx, my, 1);
+-        Vec3 far = toWorld(mx, my, 0); // "Use 0.945 that's what stack overflow says" - leijurv
++        Vec3 near = toWorld(mx, my, 0);
++        Vec3 far = toWorld(mx, my, 1); // "Use 0.945 that's what stack overflow says" - leijurv
+ 
+         if (near != null && far != null) {
+             Vec3 viewerPos = new Vec3(PathRenderer.posX(), PathRenderer.posY(), PathRenderer.posZ());
+diff --git a/src/main/java/baritone/utils/IRenderer.java b/src/main/java/baritone/utils/IRenderer.java
+index 4cf39bda..1c9b6398 100644
+--- a/src/main/java/baritone/utils/IRenderer.java
++++ b/src/main/java/baritone/utils/IRenderer.java
+@@ -27,13 +27,11 @@ import com.mojang.blaze3d.pipeline.ColorTargetState;
+ import com.mojang.blaze3d.pipeline.DepthStencilState;
+ import com.mojang.blaze3d.pipeline.RenderPipeline;
+ import com.mojang.blaze3d.platform.CompareOp;
+-import com.mojang.blaze3d.platform.BlendFactor;
+-import com.mojang.blaze3d.PrimitiveTopology;
++import com.mojang.blaze3d.platform.DestFactor;
++import com.mojang.blaze3d.platform.SourceFactor;
+ import com.mojang.blaze3d.vertex.*;
+ import net.minecraft.client.Minecraft;
+ import net.minecraft.client.renderer.RenderPipelines;
+-import net.minecraft.client.renderer.BindGroupLayouts;
+-import net.minecraft.client.renderer.StagedVertexBuffer;
+ import net.minecraft.client.renderer.blockentity.BeaconRenderer;
+ import net.minecraft.client.renderer.rendertype.RenderSetup;
+ import net.minecraft.client.renderer.rendertype.RenderType;
+@@ -49,15 +47,15 @@ import java.util.function.BiFunction;
+ 
+ public interface IRenderer {
+ 
+-    StagedVertexBuffer stagedVertexBuffer = new StagedVertexBuffer(() -> "Baritone Render", 256);
++    Tesselator tessellator = Tesselator.getInstance();
+     IEntityRenderManager renderManager = (IEntityRenderManager) Minecraft.getInstance().getEntityRenderDispatcher();
+     Settings settings = BaritoneAPI.getSettings();
+     RenderPipeline.Snippet BARITONE_LINES_SNIPPET = RenderPipeline.builder(((IRenderPipelines) new RenderPipelines()).getLinesSnippet())
+         .withColorTargetState(new ColorTargetState(new BlendFunction(
+-            BlendFactor.SRC_ALPHA,
+-            BlendFactor.ONE_MINUS_SRC_ALPHA,
+-            BlendFactor.ONE,
+-            BlendFactor.ZERO
++            SourceFactor.SRC_ALPHA,
++            DestFactor.ONE_MINUS_SRC_ALPHA,
++            SourceFactor.ONE,
++            DestFactor.ZERO
+         )))
+         .withDepthStencilState(new DepthStencilState(CompareOp.LESS_THAN_OR_EQUAL, false))
+         .withCull(false)
+@@ -66,9 +64,8 @@ public interface IRenderer {
+     RenderPipeline.Snippet BARITONE_BEACON_BEAM_SNIPPET = RenderPipeline.builder(((IRenderPipelines) new RenderPipelines()).getMatricesFogSnippet())
+             .withVertexShader("core/rendertype_beacon_beam")
+             .withFragmentShader("core/rendertype_beacon_beam")
+-            .withBindGroupLayout(BindGroupLayouts.SAMPLER0)
+-            .withVertexBinding(0, DefaultVertexFormat.BLOCK)
+-            .withPrimitiveTopology(PrimitiveTopology.QUADS)
++            .withSampler("Sampler0")
++            .withVertexFormat(DefaultVertexFormat.BLOCK, VertexFormat.Mode.QUADS)
+             .buildSnippet();
+ 
+     RenderPipeline BEACON_BEAM_OPAQUE = ((IRenderPipelines) new RenderPipelines()).baritone$registerPipeline(RenderPipeline.builder(BARITONE_BEACON_BEAM_SNIPPET)
+@@ -90,6 +87,7 @@ public interface IRenderer {
+             .withLocation("pipelines/baritone_lines_with_depth")
+             .withDepthStencilState(new DepthStencilState(CompareOp.LESS_THAN_OR_EQUAL, false))
+             .build())
++            .bufferSize(256)
+             .createRenderSetup()
+     );
+     RenderType linesNoDepthRenderType = ((IRenderType) RenderTypes.lines()).createRenderType(
+@@ -98,6 +96,7 @@ public interface IRenderer {
+                 .withLocation("pipelines/baritone_lines_no_depth")
+                 .withDepthStencilState(new DepthStencilState(CompareOp.ALWAYS_PASS, false))
+                 .build())
++            .bufferSize(256)
+             .createRenderSetup()
+     );
+ 
+@@ -111,7 +110,6 @@ public interface IRenderer {
+                     .createRenderSetup())
+     );
+ 
+-    StagedVertexBuffer.Draw[] draw = {null};
+     float[] color = new float[]{1.0F, 1.0F, 1.0F, 255.0F};
+ 
+     static void glColor(Color color, float alpha) {
+@@ -124,8 +122,7 @@ public interface IRenderer {
+ 
+     static BufferBuilder startLines(Color color, float alpha) {
+         glColor(color, alpha);
+-        draw[0] = stagedVertexBuffer.appendDraw(DefaultVertexFormat.POSITION_COLOR_NORMAL_LINE_WIDTH, PrimitiveTopology.LINES);
+-        return (BufferBuilder) stagedVertexBuffer.getVertexBuilder(draw[0]);
++        return tessellator.begin(VertexFormat.Mode.LINES, DefaultVertexFormat.POSITION_COLOR_NORMAL_LINE_WIDTH);
+     }
+ 
+     static BufferBuilder startLines(Color color) {
+@@ -133,21 +130,25 @@ public interface IRenderer {
+     }
+ 
+     static void endLines(BufferBuilder bufferBuilder, boolean ignoredDepth) {
+-        endBuffer(bufferBuilder, ignoredDepth ? linesNoDepthRenderType : linesWithDepthRenderType);
++        MeshData meshData = bufferBuilder.build();
++        if (meshData != null) {
++            if (ignoredDepth) {
++                linesNoDepthRenderType.draw(meshData);
++            } else {
++                linesWithDepthRenderType.draw(meshData);
++            }
++        }
+     }
+ 
+     static BufferBuilder startBlockQuads() {
+-        draw[0] = stagedVertexBuffer.appendDraw(DefaultVertexFormat.BLOCK, PrimitiveTopology.QUADS);
+-        return (BufferBuilder) stagedVertexBuffer.getVertexBuilder(draw[0]);
++        return tessellator.begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.BLOCK);
+     }
+ 
+     static void endBuffer(BufferBuilder bufferBuilder, RenderType renderType) {
+-        stagedVertexBuffer.upload();
+-        StagedVertexBuffer.ExecuteInfo info = stagedVertexBuffer.getExecuteInfo(draw[0]);
+-        if (info != null) {
+-            renderType.prepare().drawFromBuffer(info);
++        MeshData meshData = bufferBuilder.build();
++        if (meshData != null) {
++            renderType.draw(meshData);
+         }
+-        stagedVertexBuffer.endFrame();
+     }
+ 
+     static void emitLine(BufferBuilder bufferBuilder, PoseStack stack, double x1, double y1, double z1, double x2, double y2, double z2, float lineWidth) {
+diff --git a/src/main/java/baritone/utils/PathRenderer.java b/src/main/java/baritone/utils/PathRenderer.java
+index 83f3d7a1..deec58d8 100644
+--- a/src/main/java/baritone/utils/PathRenderer.java
++++ b/src/main/java/baritone/utils/PathRenderer.java
+@@ -74,8 +74,8 @@ public final class PathRenderer implements IRenderer {
+         if (ctx.world() == null) {
+             return;
+         }
+-        if (ctx.minecraft().gui.screen() instanceof GuiClick) {
+-            ((GuiClick) ctx.minecraft().gui.screen()).onRender(event.getModelViewStack(), event.getProjectionMatrix());
++        if (ctx.minecraft().screen instanceof GuiClick) {
++            ((GuiClick) ctx.minecraft().screen).onRender(event.getModelViewStack(), event.getProjectionMatrix());
+         }
+ 
+         final float partialTicks = event.getPartialTicks();
+-- 
+2.55.0.windows.3
+
