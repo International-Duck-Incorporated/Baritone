@@ -20,9 +20,7 @@ package baritone.utils;
 import baritone.api.BaritoneAPI;
 import baritone.api.utils.IPlayerContext;
 import baritone.utils.accessor.IPlayerControllerMP;
-import net.minecraft.network.protocol.game.ServerboundPunchPacket;
 import net.minecraft.world.InteractionHand;
-import net.minecraft.world.item.component.SwingAnimation;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 
@@ -74,15 +72,17 @@ public final class BlockBreakHelper {
     /**
      * Swings the arm at the block being broken, and tells the server about it.
      * <p>
-     * The swing on its own animates the hand locally and nothing else: the server is what shows the arm to
-     * the players around us, and it learns about a swing from the punch packet, not from the swing. Vanilla
-     * sends one on both of the paths this class mirrors - the tick a block is started on, and every tick it
-     * keeps being hit - so a bot without it breaks blocks in front of an arm that never moves, which is the
-     * one part of a person that no amount of camera work can stand in for.
+     * On 26.2 the swing is what reaches the server: the client's own swing call carries the swing packet
+     * to the players around us, so the arm shows to everyone rather than only to us. Vanilla swings on
+     * both of the paths this class mirrors - the tick a block is started on, and every tick it keeps being
+     * hit - so a bot without it breaks blocks in front of an arm that never moves, which is the one part of
+     * a person that no amount of camera work can stand in for.
+     *
+     * (On 26.3 this was a local swing plus an explicit punch packet, because the swing stopped reaching the
+     * server in that version; that is the whole of the difference this method carries between the two.)
      */
     private void swingArm() {
-        ctx.player().swing(InteractionHand.MAIN_HAND, SwingAnimation.DEFAULT, false);
-        ctx.player().connection.send(ServerboundPunchPacket.INSTANCE);
+        ctx.player().swing(InteractionHand.MAIN_HAND);
     }
 
     public void tick(boolean isLeftClick) {

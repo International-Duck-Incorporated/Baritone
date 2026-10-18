@@ -115,8 +115,10 @@ public class ButtonWritesTest {
             {"src/main/java/baritone/behavior/EatBehavior.java", "baritone.getInventoryBehavior().switchingHands()"},
             {"src/main/java/baritone/behavior/EatBehavior.java", "player.getInventory().getSelectedSlot() == targetSlot"},
             {"src/main/java/baritone/behavior/InventoryBehavior.java", "this.swap.tick()"},
-            // the arm that swings at nothing: the packet and the swing, and no click in the file at all
-            {"src/main/java/baritone/behavior/LookBehavior.java", "ServerboundPunchPacket.INSTANCE"},
+            // the arm that swings at nothing: the swing itself, and no click in the file at all. On 26.2 the
+            // swing is LocalPlayer#swing(InteractionHand), which sends ServerboundSwingPacket for us - there
+            // is no ServerboundPunchPacket in this version, so the line pinned here is the call site.
+            {"src/main/java/baritone/behavior/LookBehavior.java", "ctx.player().swing("},
             // the firework is not clicked until the hand has finished changing
             {"src/main/java/baritone/process/elytra/ElytraBehavior.java", "getInventoryBehavior().switchingHands()"},
             // the auto-swap's clicks wait for the player's own inventory: the window they were written for
@@ -153,7 +155,10 @@ public class ButtonWritesTest {
             "processRightClickBlock(",
             "processRightClick(",
             "windowClick(",
-            "ServerboundPunchPacket",
+            // the manual animation packet. 26.2 sends ServerboundSwingPacket (from LocalPlayer#swing);
+            // 26.3 replaced it with ServerboundPunchPacket. Watching the current version's name keeps a
+            // future manual send from slipping in ungated. Matches nothing on 26.2 by construction.
+            "ServerboundSwingPacket",
             ".swing(",
             "startDestroyBlock(",
             "continueDestroyBlock(",
@@ -233,7 +238,7 @@ public class ButtonWritesTest {
         assumeTrue("the sources are not next to this test run", root != null);
         final List<String> fidget = read(root.resolve(THE_FIDGET));
         for (String button : BUTTONS) {
-            if (button.equals(".swing(") || button.equals("ServerboundPunchPacket")) {
+            if (button.equals(".swing(") || button.equals("ServerboundSwingPacket")) {
                 continue; // a swing is what this file is allowed to do
             }
             assertTrue("the fidget's file " + THE_FIDGET + " has grown a \"" + button + "\" call: the swing"

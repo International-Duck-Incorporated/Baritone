@@ -364,7 +364,7 @@ public final class PathRenderer implements IRenderer {
         stack.translate(0.5D, 0.0D, 0.5D);
         if (!translucent) {
             stack.pushPose();
-            stack.rotateDegrees(Axis.YP, time * 2.25F - 45.0F);
+            stack.mulPose(Axis.YP.rotationDegrees(time * 2.25F - 45.0F));
         }
 
         float v0 = -1.0F + scroll;

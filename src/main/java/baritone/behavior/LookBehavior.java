@@ -43,13 +43,11 @@ import baritone.behavior.look.TurnPace;
 import baritone.behavior.look.Unattended;
 import baritone.behavior.look.WalkGlance;
 import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
-import net.minecraft.network.protocol.game.ServerboundPunchPacket;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.monster.Enemy;
 import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.item.component.SwingAnimation;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
@@ -776,13 +774,11 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
                 // idle body nobody comes back for is the same body that was waiting for the job.
                 this.idleExpected = theirs ? camera : applied;
                 if (this.idleFidget.take()) {
-                    // A swing at nothing. It is sent as the animation packet and nothing else - no click goes
-                    // out with it, so it cannot mine, place or break anything however the crosshair happens
-                    // to be pointing, which is what makes it safe to do while Baritone is holding still on
-                    // someone's behalf. The same two lines the block break helper sends for the arm that
-                    // never moves while it mines.
-                    ctx.player().swing(InteractionHand.MAIN_HAND, SwingAnimation.DEFAULT, false);
-                    ctx.player().connection.send(ServerboundPunchPacket.INSTANCE);
+                    // A swing at nothing. Only the swing goes out with it - no click, so it cannot mine,
+                    // place or break anything however the crosshair happens to be pointing, which is what
+                    // makes it safe to do while Baritone is holding still on someone's behalf. The same
+                    // line the block break helper swings for the arm that never moves while it mines.
+                    ctx.player().swing(InteractionHand.MAIN_HAND);
                 }
                 break;
             }

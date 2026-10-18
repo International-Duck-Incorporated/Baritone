@@ -21,7 +21,6 @@ import baritone.Baritone;
 import baritone.api.utils.IPlayerContext;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
-import net.minecraft.world.item.component.SwingAnimation;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 
@@ -70,7 +69,7 @@ public class BlockPlaceHelper {
                 Baritone.settings().rightClickSpeed.value - BASE_PLACE_DELAY);
         for (InteractionHand hand : InteractionHand.values()) {
             if (ctx.playerController().processRightClickBlock(ctx.player(), ctx.world(), hand, (BlockHitResult) mouseOver) == InteractionResult.SUCCESS) {
-                ctx.player().swing(hand, SwingAnimation.DEFAULT, false);
+                ctx.player().swing(hand);
                 return;
             }
             if (!ctx.player().getItemInHand(hand).isEmpty() && ctx.playerController().processRightClick(ctx.player(), ctx.world(), hand) == InteractionResult.SUCCESS) {
@@ -78,7 +77,7 @@ public class BlockPlaceHelper {
                 // used is an arm, the same as a block being placed is, and it is the arm that carries the
                 // gesture. The swing only animates the hand the player is watching; the server broadcasts one
                 // for a successful use by itself, so nothing else is needed here.
-                ctx.player().swing(hand, SwingAnimation.DEFAULT, false);
+                ctx.player().swing(hand);
                 return;
             }
         }

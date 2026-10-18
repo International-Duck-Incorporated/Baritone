@@ -586,7 +586,7 @@ public final class BuilderProcess extends BaritoneProcessHelper implements IBuil
             }
             // build repeat time
             layer = 0;
-            origin = new BlockPos(origin.getX(), origin.getY(), origin.getZ()).offset(repeat);
+            origin = new BlockPos(origin).offset(repeat);
             if (!Baritone.settings().buildRepeatSneaky.value) {
                 schematic.reset();
             }

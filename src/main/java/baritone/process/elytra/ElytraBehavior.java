@@ -48,7 +48,6 @@ import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.component.Fireworks;
-import net.minecraft.world.item.component.SwingAnimation;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.Level;
@@ -802,7 +801,7 @@ public final class ElytraBehavior implements Helper {
             }
             // Firing a rocket is an item use, and vanilla's use path swings the arm on the way through.
             // Nothing else here needs it - the flight itself is a control loop and stays one.
-            ctx.player().swing(fireworkHand, SwingAnimation.DEFAULT, false);
+            ctx.player().swing(fireworkHand);
             this.minimumBoostTicks = boostTicks;
             this.remainingFireworkTicks = 10;
             this.deployedFireworkLastTick = true;
