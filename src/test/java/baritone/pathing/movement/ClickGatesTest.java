@@ -385,7 +385,9 @@ public class ClickGatesTest {
                             continue;
                         }
                         final int from = Math.max(0, i - WINDOW);
-                        sites.add(new Site(baritone.relativize(file).toString(), i + 1, lines.get(i),
+                        // normalise the separator, as the other counted-edge tests do: the expected
+                        // rows above are written with '/', and a '\' key would fail the count on Windows
+                        sites.add(new Site(baritone.relativize(file).toString().replace('\\', '/'), i + 1, lines.get(i),
                                 lines.subList(from, i + 1)));
                     }
                 }
