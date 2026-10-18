@@ -1,0 +1,28 @@
+From 56fea3c2d3eebd2a0cac4f20c4fd5c75dd6520de Mon Sep 17 00:00:00 2001
+From: 0xFFshell <pieterr.games@gmail.com>
+Date: Sun, 18 Oct 2026 20:14:49 +0200
+Subject: [PATCH] test: normalise ClickGatesTest site paths so the click count
+ passes on Windows
+
+---
+ src/test/java/baritone/pathing/movement/ClickGatesTest.java | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/src/test/java/baritone/pathing/movement/ClickGatesTest.java b/src/test/java/baritone/pathing/movement/ClickGatesTest.java
+index 5b7482eb..0f58bbae 100644
+--- a/src/test/java/baritone/pathing/movement/ClickGatesTest.java
++++ b/src/test/java/baritone/pathing/movement/ClickGatesTest.java
+@@ -385,7 +385,9 @@ public class ClickGatesTest {
+                             continue;
+                         }
+                         final int from = Math.max(0, i - WINDOW);
+-                        sites.add(new Site(baritone.relativize(file).toString(), i + 1, lines.get(i),
++                        // normalise the separator, as the other counted-edge tests do: the expected
++                        // rows above are written with '/', and a '\' key would fail the count on Windows
++                        sites.add(new Site(baritone.relativize(file).toString().replace('\\', '/'), i + 1, lines.get(i),
+                                 lines.subList(from, i + 1)));
+                     }
+                 }
+-- 
+2.55.0.windows.3
+
