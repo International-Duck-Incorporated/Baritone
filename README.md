@@ -10,9 +10,14 @@ This is a fork of [Baritone](https://github.com/cabaletta/baritone) focused on m
 
 | Branch | Minecraft | Mod Loader | Status |
 |--------|-----------|------------|--------|
-| `26.1` | 26.1, 26.1.1, 26.1.2 | Fabric | [Release v26.1](https://gitlab.com/international-duck-incorporated/Baritone/-/releases/v26.1) |
-| `26.2` | 26.2 | Fabric | [Release v26.2](https://gitlab.com/international-duck-incorporated/Baritone/-/releases/v26.2) |
+| `26.1x` | 26.1, 26.1.1, 26.1.2 | Fabric | [Release v26.1](https://gitlab.com/international-duck-incorporated/Baritone/-/releases/v26.1) |
+| `26.2-local` | 26.2 | Fabric | [Release v26.2](https://gitlab.com/international-duck-incorporated/Baritone/-/releases/v26.2) |
 | `26.3` | 26.3 | Fabric | [Release v26.3](https://gitlab.com/international-duck-incorporated/Baritone/-/releases/v26.3) |
+
+> **Use the branch names in the table, not `26.1` and `26.2`.** The remote also carries
+> `26.1` and `26.2` refs that mirror [upstream Cabaletta](https://github.com/cabaletta/baritone)
+> and do **not** contain any of the work described below. Checking out `26.2` instead of
+> `26.2-local` builds upstream Baritone, not this fork.
 
 ## Quick Start
 
@@ -98,7 +103,7 @@ Download from the [Releases](https://gitlab.com/international-duck-incorporated/
 ```bash
 git clone https://gitlab.com/international-duck-incorporated/Baritone.git
 cd Baritone
-git checkout 26.3   # or 26.1, 26.2
+git checkout 26.3   # or 26.1x, 26.2-local
 ./gradlew build
 ```
 
