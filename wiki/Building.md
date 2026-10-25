@@ -21,9 +21,14 @@ Artifacts are in `dist/`.
 
 | Branch | Minecraft | Checkout |
 |--------|-----------|----------|
-| `26.1` | 26.1, 26.1.1, 26.1.2 | `git checkout 26.1` |
-| `26.2` | 26.2 | `git checkout 26.2` |
+| `26.1x` | 26.1, 26.1.1, 26.1.2 | `git checkout 26.1x` |
+| `26.2-local` | 26.2 | `git checkout 26.2-local` |
 | `26.3` | 26.3 | `git checkout 26.3` |
+
+> Use the branch names above. The remote's `26.1` and `26.2` refs mirror upstream
+> [cabaletta/baritone](https://github.com/cabaletta/baritone) and contain none of this
+> fork's work. The output jar is also named after the Minecraft version it was built for,
+> e.g. `baritone-fabric-26.1.2-<build>.jar`, so check the file name matches your version.
 
 ## Memory-Constrained Builds
 
