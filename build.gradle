@@ -1,4 +1,4 @@
-﻿/*
+/*
  * This file is part of Baritone.
  *
  * Baritone is free software: you can redistribute it and/or modify
@@ -30,19 +30,13 @@ allprojects {
     } catch (Exception e) {
         println "Version detection failed: " + e
     }
-    // Three version lines of this fork live side by side (26.1.x, 26.2, 26.3) and they
-    // share a git history, so `git describe --first-parent` answers with the v26.3 tag
-    // on every one of them: a jar built on the 26.1.2 branch was reporting 26.3, both in
-    // its file name and in the mod's own "version" metadata. The Minecraft version a jar
-    // is actually built for has to lead, and only the part after the tag - the build
-    // counter and the hash - is kept from describe.
-    if (vers.contains('-')) {
-        version = rootProject.minecraft_version + "-" + vers.substring(vers.indexOf('-') + 1)
-    } else {
+    if (!vers.startsWith("v")) {
         println "using version number: " + rootProject.mod_version
-        version = rootProject.minecraft_version + "-" + rootProject.mod_version
+        version = rootProject.mod_version
+    } else {
+        version = vers.substring(1)
+        println "Detected version " + version
     }
-    println "Detected version " + version
     group = rootProject.maven_group
 
     java {
