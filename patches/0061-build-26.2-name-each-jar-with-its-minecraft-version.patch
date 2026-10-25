@@ -1,0 +1,56 @@
+From 294a196b19bf4f742a8f708b5f976fd3fe7af605 Mon Sep 17 00:00:00 2001
+From: Teal <teal@agents.invalid>
+Date: Sun, 25 Oct 2026 12:30:05 +0100
+Subject: [PATCH] build: name each jar with the Minecraft version it is built
+ for
+
+The fork runs three version lines (26.1.x, 26.2, 26.3) off shared git history,
+so "git describe --first-parent" answers with the v26.3 tag on every one of
+them and a jar built on the 26.1.2 branch reported 26.3 - in its file name and
+in fabric.mod.json's own "version" field. A user downloading the 26.1 jar was
+being told it was for 26.3.
+
+The Minecraft version this tree targets now leads the version string, and only
+the part after the tag (build counter + hash) survives from describe. 26.3
+already resolved correctly and is unchanged in effect; 26.2 and 26.1.2 now name
+themselves instead of claiming to be 26.3.
+
+Validation: ./gradlew build exit 0 on this branch; jars verified as
+baritone-{api,standalone,unoptimized}-fabric-26.1.2-<build>.jar and the
+fabric.mod.json inside the unoptimized jar carries that same version string.
+---
+ build.gradle | 16 +++++++++++-----
+ 1 file changed, 11 insertions(+), 5 deletions(-)
+
+diff --git a/build.gradle b/build.gradle
+index cbf845e6..0fff867d 100755
+--- a/build.gradle
++++ b/build.gradle
+@@ -30,13 +30,19 @@ allprojects {
+     } catch (Exception e) {
+         println "Version detection failed: " + e
+     }
+-    if (!vers.startsWith("v")) {
+-        println "using version number: " + rootProject.mod_version
+-        version = rootProject.mod_version
++    // Three version lines of this fork live side by side (26.1.x, 26.2, 26.3) and they
++    // share a git history, so `git describe --first-parent` answers with the v26.3 tag
++    // on every one of them: a jar built on the 26.1.2 branch was reporting 26.3, both in
++    // its file name and in the mod's own "version" metadata. The Minecraft version a jar
++    // is actually built for has to lead, and only the part after the tag - the build
++    // counter and the hash - is kept from describe.
++    if (vers.contains('-')) {
++        version = rootProject.minecraft_version + "-" + vers.substring(vers.indexOf('-') + 1)
+     } else {
+-        version = vers.substring(1)
+-        println "Detected version " + version
++        println "using version number: " + rootProject.mod_version
++        version = rootProject.minecraft_version + "-" + rootProject.mod_version
+     }
++    println "Detected version " + version
+     group = rootProject.maven_group
+ 
+     java {
+-- 
+2.55.0.windows.3
+
