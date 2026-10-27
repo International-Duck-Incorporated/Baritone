@@ -603,7 +603,16 @@ public final class BuilderProcess extends BaritoneProcessHelper implements IBuil
             // only change look direction if it's safe (don't want to fuck up an in progress parkour for example
             Rotation rot = toBreak.get().second();
             BetterBlockPos pos = toBreak.get().first();
-            baritone.getLookBehavior().updateTarget(rot, true);
+            // Don't re-aim every tick while the head is still travelling toward the current target:
+            // a new target every tick makes the aim restart its spin-up each time and the camera
+            // swings side to side between blocks. Only re-aim when the head has arrived or the
+            // new target is more than a few degrees off the one being aimed at.
+            Rotation currentRot = baritone.getLookBehavior().headRotation();
+            if (baritone.getLookBehavior().hasArrivedAt(rot)
+                    || Math.abs(Rotation.normalizeYaw(currentRot.getYaw() - rot.getYaw())) > 15f
+                    || Math.abs(currentRot.getPitch() - rot.getPitch()) > 15f) {
+                baritone.getLookBehavior().updateTarget(rot, true);
+            }
             MovementHelper.switchToBestToolFor(ctx, bcc.get(pos));
             if (ctx.player().isCrouching()) {
                 // really horrible bug where a block is visible for breaking while sneaking but not otherwise
@@ -620,7 +629,16 @@ public final class BuilderProcess extends BaritoneProcessHelper implements IBuil
         Optional<Placement> toPlace = searchForPlacables(bcc, desirableOnHotbar);
         if (toPlace.isPresent() && isSafeToCancel && ctx.player().onGround() && !this.placeHoldOff.running()) {
             Rotation rot = toPlace.get().rot;
-            baritone.getLookBehavior().updateTarget(rot, true);
+            // Don't re-aim every tick while the head is still travelling toward the current target:
+            // a new target every tick makes the aim restart its spin-up each time and the camera
+            // swings side to side between blocks. Only re-aim when the head has arrived or the
+            // new target is more than a few degrees off the one being aimed at.
+            Rotation currentRot = baritone.getLookBehavior().headRotation();
+            if (baritone.getLookBehavior().hasArrivedAt(rot)
+                    || Math.abs(Rotation.normalizeYaw(currentRot.getYaw() - rot.getYaw())) > 15f
+                    || Math.abs(currentRot.getPitch() - rot.getPitch()) > 15f) {
+                baritone.getLookBehavior().updateTarget(rot, true);
+            }
             baritone.getInventoryBehavior().hold(toPlace.get().hotbarSelection);
             baritone.getInputOverrideHandler().setInputForceState(Input.SNEAK, true);
             // The block goes against the side the trace is on, so the side is half the question: see

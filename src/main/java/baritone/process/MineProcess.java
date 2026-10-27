@@ -131,7 +131,16 @@ public final class MineProcess extends BaritoneProcessHelper implements IMinePro
             if (!MovementHelper.avoidBreaking(baritone.bsi, pos.getX(), pos.getY(), pos.getZ(), state)) {
                 Optional<Rotation> rot = RotationUtils.reachable(ctx, pos);
                 if (rot.isPresent() && isSafeToCancel) {
-                    baritone.getLookBehavior().updateTarget(rot.get(), true);
+                    // Don't re-aim every tick while the head is still travelling toward the current
+                    // target: a new target every tick makes the aim restart its spin-up each time and
+                    // the camera stutters between blocks. Only re-aim when the head has arrived or the
+                    // new target is more than a few degrees off the one being aimed at.
+                    Rotation current = baritone.getLookBehavior().headRotation();
+                    if (baritone.getLookBehavior().hasArrivedAt(rot.get())
+                            || Math.abs(Rotation.normalizeYaw(current.getYaw() - rot.get().getYaw())) > 15f
+                            || Math.abs(current.getPitch() - rot.get().getPitch()) > 15f) {
+                        baritone.getLookBehavior().updateTarget(rot.get(), true);
+                    }
                     MovementHelper.switchToBestToolFor(ctx, ctx.world().getBlockState(pos));
                     if (ctx.isLookingAt(pos) || baritone.getLookBehavior().hasArrivedAt(rot.get())) {
                         baritone.getInputOverrideHandler().setInputForceState(Input.CLICK_LEFT, true);
